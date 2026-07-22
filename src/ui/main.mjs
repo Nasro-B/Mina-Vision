@@ -86,6 +86,9 @@ import { composeSelfBrief, createSelfModel } from '../core/self-model.mjs';
 import { createActivityJournal } from '../diagnostics/activity-journal.mjs';
 import { createSensitiveJournalStore } from '../diagnostics/sensitive-journal-store.mjs';
 import { composeInstructionState } from '../core/capability-brief.mjs';
+import { composeCapabilityCatalog } from '../core/capability-catalog.mjs';
+import { composeOperationalBudgets } from '../core/operational-budgets.mjs';
+import { createVersionedJsonStore } from '../core/versioned-json-store.mjs';
 import {
   createDentalVision,
   createGeminiDentalProvider,
@@ -764,13 +767,23 @@ const getRuntime = async () => {
   return runtime;
 };
 
+// Arrêt d'urgence TRANSVERSAL (amélioration E) : l'ordre coupe TOUT ce qui parle ou agit —
+// caméra, voix Gemini, repli Deepgram, audio déjà envoyé au renderer, mission active (code
+// compris via l'orchestrateur), exécuteur desktop, runtime de sessions. Les portes vocales
+// sont remises à zéro : après une urgence, Mina n'est ni muette ni en pause fantôme.
 const stopEverything = async () => {
   await stopLiveCamera();
   voice?.close();
   voice = null;
+  deepgramFallback?.close();
+  deepgramFallback = null;
+  sendRaw('mina:voice-stop-speech');
+  speechGate.noteTurnComplete();
+  pauseGate.resume();
   if (activeOrchestrator) await activeOrchestrator.emergencyStop();
   else if (runtime?.desktop) await runtime.desktop.emergencyStop().catch(() => {});
   if (minaCore) await minaCore.emergencyStop();
+  void activityJournal?.append('emergency_stop', { transversal: true });
   send('mina:event', { type: 'emergency_stop' });
   return { stopped: true };
 };
@@ -1606,6 +1619,16 @@ const registerIpc = () => {
   // Deterministic replies come back through the natural Gemini voice ("[DIS]" verbatim readback);
   // spoken:false lets the renderer fall back to local TTS only when no live session exists.
   ipcMain.handle('mina:capabilities', () => capabilitySnapshot());
+  // Catalogue structuré (amélioration A) : readiness / health / capabilities séparés, budgets
+  // opérationnels inclus (amélioration D) — même snapshot réel que le brief vocal.
+  ipcMain.handle('mina:capability-catalog', async () => {
+    const config = currentConfig();
+    return composeCapabilityCatalog(await capabilitySnapshot().catch(() => ({})), {
+      budgets: composeOperationalBudgets({
+        mission: { maxActions: config.maxActions, timeoutMs: config.missionTimeoutMs },
+      }),
+    });
+  });
   // « Trouve-moi un article » : réponse web directe (API avec recherche intégrée), jamais de
   // navigateur — la clé Gemini existante suffit, le service borne requête, délai et sources.
   ipcMain.handle('mina:web-answer', async (_event, payload) => getWebAnswerService().answer({ query: payload?.query }));
@@ -2245,20 +2268,26 @@ app.whenReady().then(async () => {
     // Le Samsung en mode tcpip ne s'annonce pas en mDNS (prouvé 2026-07-22) : la dernière
     // endpoint qui a passé la vérification d'identité est mémorisée et resservie en fallback.
     const samsungEndpointFile = path.join(app.getPath('userData'), 'samsung-adb-wifi.json');
+    // Amélioration C : état versionné fail-closed — une version inconnue part en quarantaine
+    // .perdu-<date>, jamais interprétée ni écrasée. Le fichier legacy {version:1,endpoint} migre.
+    const samsungEndpointStore = createVersionedJsonStore({
+      filename: samsungEndpointFile,
+      schemaVersion: 1,
+      readFile,
+      writeFile,
+      rename,
+      migrateLegacy: (raw) => (typeof raw?.endpoint === 'string' ? { endpoint: raw.endpoint } : null),
+    });
     samsungAdbWifiKeeper = createAdbMdnsPeerKeeper({
       adbPath: currentConfig().adbPath,
       serial: samsungSerial,
       role: 'samsung',
       recallEndpoint: async () => {
-        try {
-          const record = JSON.parse(await readFile(samsungEndpointFile, 'utf8'));
-          return typeof record?.endpoint === 'string' ? record.endpoint : null;
-        } catch {
-          return null;
-        }
+        const { data } = await samsungEndpointStore.load({ defaults: null });
+        return typeof data?.endpoint === 'string' ? data.endpoint : null;
       },
       rememberEndpoint: async (endpoint) => {
-        await writeFile(samsungEndpointFile, JSON.stringify({ version: 1, endpoint, savedAt: Date.now() }), 'utf8');
+        await samsungEndpointStore.save({ endpoint });
       },
       onStatus: (status) => {
         send('mina:event', { type: 'adb_wifi_status', ...status });
