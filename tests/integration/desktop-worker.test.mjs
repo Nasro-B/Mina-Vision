@@ -33,6 +33,9 @@ describe('desktop worker integration', () => {
     expect(response.ok).toBe(true);
     expect(response.result.width).toBeGreaterThan(0);
     expect(response.result.height).toBeGreaterThan(0);
-    expect(Buffer.from(response.result.imageBase64, 'base64').subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    // Contrat d'observation depuis l'optimisation latence : JPEG (magic ffd8ff), plus PNG —
+    // le worker encode en sharp JPEG qualité 80 redimensionné 1280 (voir desktop-worker.mjs).
+    expect(response.result.mimeType).toBe('image/jpeg');
+    expect(Buffer.from(response.result.imageBase64, 'base64').subarray(0, 3).toString('hex')).toBe('ffd8ff');
   });
 });
