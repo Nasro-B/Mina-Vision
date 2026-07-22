@@ -30,7 +30,6 @@
   "dependencies": {
     "@azure/msal-node": "5.4.0",
     "@google/genai": "2.11.0",
-    "@google/generative-ai": "^0.24.1",
     "@huggingface/transformers": "4.2.0",
     "@nut-tree-fork/nut-js": "4.2.6",
     "@scure/bip39": "2.2.0",
@@ -48,7 +47,6 @@
     "imapflow": "1.4.7",
     "kokoro-js": "^1.2.1",
     "mailparser": "3.9.14",
-    "mqtt": "5.15.2",
     "nodemailer": "9.0.3",
     "officeparser": "7.3.0",
     "onnxruntime-node": "1.27.0",
@@ -58,7 +56,6 @@
     "playwright": "^1.61.1",
     "pngjs": "7.0.0",
     "sharp": "0.35.3",
-    "ws": "8.21.1",
     "yaml": "2.9.0",
     "zod": "4.4.3"
   },
