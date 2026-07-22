@@ -68,7 +68,10 @@ describe('code-services — projet Mina Vision réel', () => {
     expect(context.minaMd).toContain('Mina Vision');
     expect(context.framework).toBe('Electron');
     expect(context.frameworks).toContain('Vitest');
-    expect(context.scripts.test).toContain('vitest');
+    // npm test est le gate complet (unitaire + intégration) depuis Task 18 ; la boucle vitest
+    // rapide vit dans test:unit.
+    expect(context.scripts.test).toContain('test:unit');
+    expect(context.scripts['test:unit']).toContain('vitest');
   }, 15_000);
 
   it('le vrai projet est un dépôt git depuis la réconciliation 2026-07-22 (fait vérifié)', async () => {
