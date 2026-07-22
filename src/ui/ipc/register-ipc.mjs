@@ -57,6 +57,9 @@ function assertValidChannel(channel, seen) {
 export function registerMinaIpc({
   ipcMain, controllers = {}, coreChannels = CORE_CHANNELS,
   isValidSender = () => true, maxPayloadBytes = null,
+  // Limites PAR canal (Task 9) : un canal listé ici remplace la limite générique — aucun canal
+  // n'est jamais illimité quand maxPayloadBytes est posé (ex. enrôlement caméra à 16 MiB).
+  payloadLimits = {},
 } = {}) {
   if (!ipcMain?.handle) throw new TypeError('register_ipc_dependencies_required');
   if (typeof isValidSender !== 'function') throw new TypeError('register_ipc_sender_validator_invalid');
@@ -69,9 +72,10 @@ export function registerMinaIpc({
   function guarded(channel, handler) {
     return async (event, ...args) => {
       if (!isValidSender(event)) throw new Error(`ipc_sender_frame_rejected:${channel}`);
-      if (maxPayloadBytes !== null) {
+      const limit = payloadLimits[channel] ?? maxPayloadBytes;
+      if (limit !== null && limit !== undefined) {
         const size = Buffer.byteLength(JSON.stringify(args[0] ?? null) ?? '', 'utf8');
-        if (size > maxPayloadBytes) throw new Error(`ipc_payload_too_large:${channel}`);
+        if (size > limit) throw new Error(`ipc_payload_too_large:${channel}`);
       }
       return handler(event, ...args);
     };

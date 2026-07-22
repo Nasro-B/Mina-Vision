@@ -13,9 +13,15 @@ export function registerDocumentIpc({ ipcMain, controller } = {}) {
   ipcMain.handle('mina:documents:commit-form-copy', (_event, payload) => controller.commitFormCopy(payload?.proposalId, payload?.options));
   ipcMain.handle('mina:documents:convert', (_event, payload) => controller.convertDocument(payload));
   ipcMain.handle('mina:documents:download', (_event, payload) => controller.downloadDocument(payload));
-  ipcMain.handle('mina:printing:discover', () => controller.discoverPrinters());
-  ipcMain.handle('mina:printing:approve', (_event, payload) => controller.approvePrinter(payload));
-  ipcMain.handle('mina:printing:propose', (_event, payload) => controller.proposePrint(payload));
-  ipcMain.handle('mina:printing:submit', (_event, payload) => controller.submitPrint(payload));
-  ipcMain.handle('mina:printing:reconcile', (_event, payload) => controller.reconcilePrint(payload));
+  // Les canaux d'impression sont débrayables : main.mjs garde ses handlers historiques qui
+  // portent la CONFIRMATION locale (approbation d'imprimante, confirmation avant impression) —
+  // les enregistrer ici en doublon ferait crasher l'app (second handler) et perdrait la
+  // confirmation. registerPrinting: false dans le controller composé les laisse à main.mjs.
+  if (controller.registerPrinting !== false) {
+    ipcMain.handle('mina:printing:discover', () => controller.discoverPrinters());
+    ipcMain.handle('mina:printing:approve', (_event, payload) => controller.approvePrinter(payload));
+    ipcMain.handle('mina:printing:propose', (_event, payload) => controller.proposePrint(payload));
+    ipcMain.handle('mina:printing:submit', (_event, payload) => controller.submitPrint(payload));
+    ipcMain.handle('mina:printing:reconcile', (_event, payload) => controller.reconcilePrint(payload));
+  }
 }
