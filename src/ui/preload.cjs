@@ -119,6 +119,17 @@ function createPreloadApi(ipcRenderer) {
     guideMission: (text) => ipcRenderer.invoke('mina:mission-guide', String(text ?? '').slice(0, 4_000)),
     capabilities: () => ipcRenderer.invoke('mina:capabilities'),
     capabilityCatalog: () => ipcRenderer.invoke('mina:capability-catalog'),
+    // Catalogue de vérité runtime (Task 8) : état réel de chaque domaine avec raison.
+    capabilitiesList: () => ipcRenderer.invoke('mina:capabilities:list'),
+    // Domaines composés par la réconciliation (T11-T13).
+    personalBriefing: (payload) => ipcRenderer.invoke('mina:personal:briefing', payload),
+    personalTasks: () => ipcRenderer.invoke('mina:personal:tasks'),
+    routinesList: () => ipcRenderer.invoke('mina:routines:list'),
+    graphSubgraph: (payload) => ipcRenderer.invoke('mina:graph:subgraph', payload),
+    graphListContacts: () => ipcRenderer.invoke('mina:graph:list-contacts'),
+    documentIntake: (payload) => ipcRenderer.invoke('mina:documents:intake', payload),
+    documentGet: (payload) => ipcRenderer.invoke('mina:documents:get', payload),
+    personalityGet: () => ipcRenderer.invoke('mina:personality:get'),
     smsPolicyStatus: () => ipcRenderer.invoke('mina:sms-policy-status'),
     smsStatus: () => ipcRenderer.invoke('mina:sms-status'),
     smsPolicyRevoke: () => ipcRenderer.invoke('mina:sms-policy-revoke'),

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { createHash, hkdfSync, randomUUID } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { access, appendFile, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { access, appendFile, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage, screen, session } from 'electron';
@@ -89,6 +89,20 @@ import { composeInstructionState } from '../core/capability-brief.mjs';
 import { composeCapabilityCatalog } from '../core/capability-catalog.mjs';
 import { composeOperationalBudgets } from '../core/operational-budgets.mjs';
 import { createVersionedJsonStore } from '../core/versioned-json-store.mjs';
+import { createRuntimeCapabilityCatalog } from '../runtime/capability-catalog.mjs';
+import { registerMinaIpc } from './ipc/register-ipc.mjs';
+import { createRoutineRegistry } from '../routines/routine-registry.mjs';
+import { createDailyBriefingService } from '../personal/daily-briefing-service.mjs';
+import { applyPersonalGraphMigrations, createGraphRepository } from '../graph/graph-repository.mjs';
+import { createPersonalGraph } from '../graph/personal-graph.mjs';
+import { createEntityResolver } from '../graph/entity-resolver.mjs';
+import { createTodayController } from './pages/today-controller.mjs';
+import { createGraphController } from './pages/graph-controller.mjs';
+import { createDocumentQuarantineStore } from '../documents/document-quarantine.mjs';
+import { createDocumentIntake } from '../documents/document-intake.mjs';
+import { createDocumentController } from './pages/document-controller.mjs';
+import { createPersonalityService } from '../personality/personality-service.mjs';
+import { createPersonalityController } from './pages/personality-controller.mjs';
 import {
   createDentalVision,
   createGeminiDentalProvider,
@@ -220,6 +234,12 @@ let browserExecutor = null;
 let desktopCursorOverlay = null;
 let shutdownStarted = false;
 let mailController = null;
+// Catalogue de capacités runtime (Task 8) + domaines composés par la réconciliation (T11-T13).
+let runtimeCapabilityCatalog = null;
+let personalGraphDatabase = null;
+let personalControllers = null;
+let documentController = null;
+let personalityController = null;
 let mailDatabase = null;
 let mailAccountStoreRef = null;
 let mailSyncServiceRef = null;
@@ -1732,12 +1752,32 @@ const registerIpc = () => {
     const status = await printService.reconcile(job.jobId);
     return Object.freeze({ ...job, ...status });
   });
-  registerSkillsSandboxIpc({ ipcMain, controller: skillsSandboxController });
-  registerSettingsIpc({ ipcMain, controller: settingsController });
-  registerAnalyticsIpc({ ipcMain, controller: analyticsController });
-  if (mailController) registerMailIpc({ ipcMain, controller: mailController });
-  if (homeController) registerHomeIpc({ ipcMain, controller: homeController });
-  if (cameraController) registerCameraIpc({ ipcMain, controller: cameraController });
+  // Task 9 : UN SEUL point d'enregistrement des domaines — garde sender-frame (seule la fenêtre
+  // principale peut invoquer) + limite de payload générique 1 MiB, 16 MiB pour l'enrôlement
+  // caméra. Les canaux directs de main.mjs (au-dessus) restent en place ; la consolidation
+  // complète vit dans CORE_CHANNELS de register-ipc.mjs.
+  registerMinaIpc({
+    ipcMain,
+    controllers: {
+      skillsSandbox: skillsSandboxController,
+      settings: settingsController,
+      analytics: analyticsController,
+      ...(mailController ? { mail: mailController } : {}),
+      ...(homeController ? { home: homeController } : {}),
+      ...(cameraController ? { camera: cameraController } : {}),
+      ...(personalControllers ? { personal: personalControllers } : {}),
+      ...(documentController ? { document: documentController } : {}),
+      ...(personalityController ? { personality: personalityController } : {}),
+    },
+    isValidSender: (event) => {
+      const frame = mainWindow?.webContents?.mainFrame;
+      return Boolean(frame) && event.senderFrame === frame;
+    },
+    maxPayloadBytes: 1024 * 1024,
+    payloadLimits: { 'mina:camera:enroll': 16 * 1024 * 1024 },
+  });
+  // Catalogue de vérité (Task 8) : lecture seule, état réel de CHAQUE domaine avec raison.
+  ipcMain.handle('mina:capabilities:list', () => runtimeCapabilityCatalog?.list() ?? []);
   ipcMain.on('mina:voice-input', (_event, payload) => {
     const buffer = Buffer.from(payload ?? []);
     if (buffer.length === 0 || buffer.length > 1_000_000) return;
@@ -2224,6 +2264,110 @@ app.whenReady().then(async () => {
   } catch (error) {
     send('mina:event', { type: 'domain_degraded', domain: 'camera', reason: String(error?.message ?? error).slice(0, 200) });
   }
+
+  // ===== Réconciliation Tasks 8-16 : composition des domaines restants + catalogue de vérité =====
+  runtimeCapabilityCatalog = createRuntimeCapabilityCatalog();
+  const reportCapability = (id, status, reason = null, evidence = []) => {
+    try {
+      runtimeCapabilityCatalog.report({ id, status, reason, evidence });
+    } catch { /* le catalogue ne casse jamais le boot */ }
+  };
+
+  // Task 11 — domaine personnel : briefing du jour + routines + graphe personnel (composition
+  // réelle ; les services Google restent optionnels — sections absentes si non connectés, honnête).
+  try {
+    const routineRegistry = createRoutineRegistry({
+      repository: createJsonRepository({ filename: path.join(app.getPath('userData'), 'mina-personal-routines.sqlite'), table: 'routines', nativeBinding }),
+      clock: Date.now,
+    });
+    const dailyBriefingService = createDailyBriefingService({
+      calendarService: googleCalendarService,
+      routineRegistry,
+      clock: Date.now,
+    });
+    personalGraphDatabase = new BetterSqlite3(path.join(app.getPath('userData'), 'mina-personal-graph.sqlite'), { nativeBinding });
+    applyPersonalGraphMigrations(personalGraphDatabase);
+    const graphRepository = createGraphRepository({ db: personalGraphDatabase, clock: Date.now });
+    const personalGraph = createPersonalGraph({ repository: graphRepository, clock: Date.now });
+    personalControllers = {
+      today: createTodayController({ dailyBriefingService, calendarService: googleCalendarService, routineRegistry }),
+      graph: createGraphController({
+        personalGraph,
+        entityResolver: createEntityResolver({ repository: graphRepository }),
+        contactService: googleContactService,
+      }),
+    };
+    reportCapability('personal', googleCalendarService ? 'available' : 'degraded', googleCalendarService ? null : 'google_personnel_non_connecte');
+  } catch (error) {
+    reportCapability('personal', 'unavailable', String(error?.message ?? error).slice(0, 200));
+    send('mina:event', { type: 'domain_degraded', domain: 'personal', reason: String(error?.message ?? error).slice(0, 200) });
+  }
+
+  // Task 12 — documents : réception en quarantaine + impression réelle ; les services sans
+  // implémentation runtime (conversion sandbox, formulaires, téléchargement) restent absents.
+  try {
+    const documentIntake = createDocumentIntake({
+      quarantineStore: createDocumentQuarantineStore({
+        filesystem: { writeFile, readFile, mkdir, rm },
+        repository: createJsonRepository({ filename: path.join(app.getPath('userData'), 'mina-document-quarantine.sqlite'), table: 'documents', nativeBinding }),
+        quarantineDir: path.join(app.getPath('userData'), 'document-quarantine'),
+      }),
+      filesystem: { readFile },
+      realpathProvider: { resolve: (target) => realpath(target) },
+      clock: Date.now,
+    });
+    documentController = {
+      ...createDocumentController({
+        intake: documentIntake,
+        printService,
+        printerRegistry,
+      }),
+      // Les canaux mina:printing:* restent aux handlers historiques de main.mjs — ce sont eux
+      // qui portent la confirmation locale (voir document-ipc.mjs).
+      registerPrinting: false,
+    };
+    reportCapability('documents', 'available');
+  } catch (error) {
+    reportCapability('documents', 'unavailable', String(error?.message ?? error).slice(0, 200));
+    send('mina:event', { type: 'domain_degraded', domain: 'documents', reason: String(error?.message ?? error).slice(0, 200) });
+  }
+
+  // Task 13 — personnalité : service réel scellé par le coffre (dégradé tant que le coffre
+  // n'est pas ouvrable). Aucune élévation : proposer ne mutera jamais sans confirmation locale.
+  try {
+    const personalityService = createPersonalityService({
+      keyring,
+      configRepository: createJsonRepository({ filename: path.join(app.getPath('userData'), 'mina-personality.sqlite'), table: 'personality', nativeBinding }),
+      clock: Date.now,
+    });
+    personalityController = createPersonalityController({ personalityService });
+    reportCapability('personality', 'available');
+  } catch (error) {
+    reportCapability('personality', 'unavailable', String(error?.message ?? error).slice(0, 200));
+  }
+
+  // Tasks 10/13/14/15/16 — domaines dont une dépendance runtime N'EXISTE PAS dans le code :
+  // publiés indisponibles avec la dépendance manquante NOMMÉE — jamais composés sur des
+  // simulacres, jamais masqués. (Task 14 home et Task 15 biométrie : composés plus haut en
+  // dégradé réel ; Task 16 backup : état de configuration réel.)
+  reportCapability('automation', 'unavailable', 'dependances_absentes:domain_registry.invoke,budget_estimator,disclosure_classifier');
+  reportCapability('recovery', 'unavailable', 'dependance_absente:automation_runner');
+  reportCapability('evaluation', 'unavailable', 'dependance_absente:model_router.route');
+  reportCapability('emergency', 'unavailable', 'dependances_absentes:network_policy,device_guard');
+  reportCapability('approvals', 'unavailable', 'dependance_absente:state_observer (les approbations distantes Telegram restent servies par la passerelle Android)');
+  reportCapability('connectors', 'unavailable', 'dependances_absentes:zip_inspector,dependency_scanner');
+  reportCapability('mail', mailOperational ? 'available' : (mailController ? 'degraded' : 'unavailable'), mailOperational ? null : 'aucun_compte_operationnel');
+  reportCapability('home', 'degraded', 'aucun_connecteur_configure');
+  reportCapability('camera', cameraController ? 'degraded' : 'unavailable', 'flux_reel_disponible_biometrie_non_implementee');
+  reportCapability('biometrics.face', 'unavailable', 'face_embedding_pipeline_not_implemented');
+  reportCapability('backup', process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_STORAGE_BUCKET ? 'degraded' : 'unavailable', process.env.FIREBASE_PROJECT_ID ? 'configure_non_verifie' : 'firebase_non_configure');
+  reportCapability('computer_use.browser', 'available');
+  reportCapability('computer_use.desktop', 'available');
+  reportCapability('computer_use.android', 'available');
+  reportCapability('code', 'available');
+  reportCapability('voice', 'available');
+  reportCapability('sandbox', 'degraded', 'sonde_a_la_demande_via_capabilities');
+  reportCapability('memory', memoryController?.status?.()?.locked === false ? 'available' : 'degraded', memoryController?.status?.()?.locked === false ? null : 'coffre_verrouille');
 
   minaCore = createMinaRuntime({
     sessionManager,
