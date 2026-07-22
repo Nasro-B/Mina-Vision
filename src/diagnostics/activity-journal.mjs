@@ -152,22 +152,7 @@ export function createActivityJournal({
   });
 }
 
-// Résumé parlable pour la couche vocale déterministe (mode Deepgram sans function calling).
-export function composeJournalBrief(entries = []) {
-  if (!entries.length) return "Mon journal d'activité est vide pour aujourd'hui.";
-  const labels = {
-    mission_started: 'mission lancée',
-    mission_completed: 'mission terminée',
-    mission_error: 'mission en erreur',
-    action_error: 'action en erreur',
-    voice_engine: 'bascule vocale',
-    crash: 'incident interne',
-  };
-  const counts = new Map();
-  for (const entry of entries) {
-    const label = labels[entry.kind] ?? entry.kind;
-    counts.set(label, (counts.get(label) ?? 0) + 1);
-  }
-  const summary = [...counts.entries()].map(([label, count]) => `${count} ${label}`).join(', ');
-  return `Journal récent : ${summary}. Dernier événement : ${entries[0].kind}.`;
-}
+// Résumé parlable : extrait dans journal-brief.mjs (module PUR importable par le renderer —
+// ce fichier-ci importe node:crypto, que la CSP du renderer bloque). Réexporté pour les
+// consommateurs côté main et les tests existants.
+export { composeJournalBrief } from './journal-brief.mjs';
