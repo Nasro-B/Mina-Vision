@@ -10,6 +10,7 @@ import { createTombstoneRepository } from './tombstone-repository.mjs';
 import { createFilePolicy } from '../research/file-policy.mjs';
 import { createFileReader } from '../research/file-reader.mjs';
 import { createResearchService } from '../research/research-service.mjs';
+import { createResearchUrlPolicy } from '../research/url-policy.mjs';
 import { createWebReader } from '../research/web-reader.mjs';
 import { createVectorStore } from '../rag/vector-store.mjs';
 
@@ -61,8 +62,11 @@ export async function createMemoryServices({
     });
     const policy = await createFilePolicy({ approvedRoots });
     const fileReader = createFileReader({ policy });
+    // SSRF (R-07) : la recherche Web réelle passe toujours par la politique d'URL — IP privées,
+    // loopback et noms locaux refusés avant la moindre requête, URL finale revérifiée.
+    const urlPolicy = createResearchUrlPolicy();
     const webReader = Object.freeze({
-      read: async (input) => createWebReader({ page: await getWebPage() }).read(input),
+      read: async (input) => createWebReader({ page: await getWebPage(), urlPolicy }).read(input),
     });
     const researchService = createResearchService({ fileReader, webReader });
     let closed = false;

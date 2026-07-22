@@ -41,6 +41,9 @@ export function createWebReader({
   fetchImpl = fetch,
   clock = Date.now,
   maxNetworkBodyBytes = 1024 * 1024,
+  // Politique SSRF (R-07) : injectée par la composition — vérifie l'URL demandée ET l'URL
+  // finale après navigation. null = comportement historique (tests unitaires isolés).
+  urlPolicy = null,
 } = {}) {
   if (!page?.goto || !page?.evaluate) throw new TypeError('playwright_page_required');
 
@@ -65,6 +68,7 @@ export function createWebReader({
   } = {}) {
     const requested = new URL(url);
     if (!['http:', 'https:'].includes(requested.protocol)) throw new Error('unsupported_web_protocol');
+    if (urlPolicy) await urlPolicy.authorize(requested.toString());
     await checkIndexing(requested, { operation, indexingAuthorized, authenticated });
 
     const pendingResponses = [];
@@ -77,6 +81,9 @@ export function createWebReader({
       await page.goto(requested.toString(), { waitUntil: 'domcontentloaded', timeout: 60_000 });
       await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {});
       await page.waitForTimeout(50);
+      // Une redirection publique → privée est refusée ICI : la destination effective compte,
+      // pas seulement l'URL demandée.
+      if (urlPolicy) await urlPolicy.authorize(page.url());
       const finalUrl = sanitizePublicUrl(page.url());
       const finalOrigin = new URL(page.url()).origin;
       const capturedAt = new Date(Number(typeof clock === 'function' ? clock() : clock.now())).toISOString();

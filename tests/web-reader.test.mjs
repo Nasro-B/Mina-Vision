@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   redactSensitiveText,
   redactSensitiveValue,
@@ -6,6 +6,41 @@ import {
   sanitizePublicUrl,
 } from '../src/research/network-evidence.mjs';
 import { createResearchService } from '../src/research/research-service.mjs';
+import { createWebReader } from '../src/research/web-reader.mjs';
+
+describe('web reader url policy (R-07)', () => {
+  const fakePage = (finalUrl) => ({
+    goto: vi.fn(async () => {}),
+    evaluate: vi.fn(async () => ({ title: '', visibleText: '' })),
+    waitForLoadState: vi.fn(async () => {}),
+    waitForTimeout: vi.fn(async () => {}),
+    url: () => finalUrl,
+    on: vi.fn(),
+    off: vi.fn(),
+  });
+
+  it('refuse l\'URL demandée AVANT toute navigation quand la politique la rejette', async () => {
+    const page = fakePage('http://127.0.0.1/');
+    const urlPolicy = { authorize: vi.fn(async () => { throw new Error('private_network_forbidden'); }) };
+    const reader = createWebReader({ page, urlPolicy });
+    await expect(reader.read({ url: 'http://127.0.0.1:1234/admin' })).rejects.toThrow('private_network_forbidden');
+    expect(page.goto).not.toHaveBeenCalled();
+  });
+
+  it('refuse une navigation publique qui aboutit sur une destination privée (redirection)', async () => {
+    const page = fakePage('http://192.168.1.10/interne');
+    const urlPolicy = {
+      authorize: vi.fn(async (url) => {
+        if (String(url).includes('192.168.')) throw new Error('private_network_forbidden');
+        return { url, origin: new URL(url).origin, addresses: [] };
+      }),
+    };
+    const reader = createWebReader({ page, urlPolicy });
+    await expect(reader.read({ url: 'https://public.test/' })).rejects.toThrow('private_network_forbidden');
+    expect(page.goto).toHaveBeenCalledTimes(1);
+    expect(urlPolicy.authorize).toHaveBeenCalledTimes(2);
+  });
+});
 
 describe('web evidence redaction', () => {
   it('redacts sensitive URL parameters, headers and nested JSON values', () => {
