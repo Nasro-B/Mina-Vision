@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, hkdfSync, randomUUID } from 'node:crypto';
 import { cpSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { access, appendFile, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -81,6 +81,7 @@ import { createLocalVoiceClient } from '../voice/local-voice-client.mjs';
 import { createDeepgramStt } from '../voice/deepgram-stt.mjs';
 import { composeSelfBrief, createSelfModel } from '../core/self-model.mjs';
 import { createActivityJournal } from '../diagnostics/activity-journal.mjs';
+import { createSensitiveJournalStore } from '../diagnostics/sensitive-journal-store.mjs';
 import { composeInstructionState } from '../core/capability-brief.mjs';
 import {
   createDentalVision,
@@ -267,6 +268,8 @@ const technicalLog = createTechnicalLog({
 const technicalLogReader = createTechnicalLogReader({ technicalLog });
 let selfModel = null;
 let activityJournal = null;
+// Couche 2 du journal (Task 5) : textes chiffrés, armée au déverrouillage du coffre.
+let sensitiveJournalStore = null;
 // Porte du mot d'arrêt vocal : après « stop », les chunks audio restants du tour interrompu
 // sont jetés jusqu'à la fin de tour (sinon Mina reprend sa phrase coupée depuis le buffer).
 const speechGate = createSpeechGate();
@@ -461,6 +464,29 @@ const requireRotatedCredentials = () => {
     throw new Error('Clés API verrouillées : renouvelez Gemini/OpenRouter/Modal puis définissez MINA_KEYS_ROTATED=true.');
   }
   return config;
+};
+
+// Jointure des deux couches du journal (Task 5) : la couche 1 donne les faits épurés
+// (charCount + digest), la couche 2 restitue le texte exact SI le coffre est déverrouillé.
+// Coffre verrouillé → les métadonnées sortent quand même, avec l'état dit honnêtement —
+// la « règle de vérité sur le passé » ne devine jamais.
+const readJournalWithSensitiveText = async ({ limit, kinds } = {}) => {
+  const entries = await (activityJournal?.read({ limit, kinds }) ?? Promise.resolve([]));
+  const digests = entries
+    .map((entry) => entry?.payload?.digest)
+    .filter((digest) => typeof digest === 'string' && digest.startsWith('sha256:'));
+  if (!digests.length || !sensitiveJournalStore) return entries;
+  if (!sensitiveJournalStore.isUnlocked()) {
+    return entries.map((entry) => (entry?.payload?.digest
+      ? Object.freeze({ ...entry, payload: { ...entry.payload, texte: '[coffre verrouillé — texte disponible après déverrouillage]' } })
+      : entry));
+  }
+  const texts = await sensitiveJournalStore.read({ digests }).catch(() => new Map());
+  return entries.map((entry) => {
+    const digest = entry?.payload?.digest;
+    if (!digest || !texts.has(digest)) return entry;
+    return Object.freeze({ ...entry, payload: { ...entry.payload, texte: texts.get(digest).slice(0, 400) } });
+  });
 };
 
 const confirmSensitiveAction = async ({ reason, action }) => {
@@ -1306,7 +1332,7 @@ const startGeminiVoice = async () => {
         return;
       }
       if (call.name === 'lire_journal') {
-        void (activityJournal?.read({ limit: Math.min(Math.max(Number(call.args?.limite) || 20, 1), 50) }) ?? Promise.resolve([]))
+        void readJournalWithSensitiveText({ limit: Math.min(Math.max(Number(call.args?.limite) || 20, 1), 50) })
           .then((entries) => voice?.sendToolResponse({
             id: call.id,
             name: call.name,
@@ -1570,7 +1596,7 @@ const registerIpc = () => {
   // pas. Le PCM revient par le canal audio normal ; ici on ne renvoie que l'accusé.
   // Le journal complet, lisible par la voix (outil lire_journal) ET par l'interface.
   ipcMain.handle('mina:journal-read', async (_event, payload) => (
-    activityJournal?.read({ limit: payload?.limit, kinds: payload?.kinds }) ?? []
+    readJournalWithSensitiveText({ limit: payload?.limit, kinds: payload?.kinds })
   ));
   // Domaine Mina Code : UN SEUL jeu de services, construit PARESSEUSEMENT au premier usage
   // (zéro coût au boot), partagé entre l'IPC du tableau de bord et les outils vocaux. Racine
@@ -1721,11 +1747,17 @@ app.whenReady().then(async () => {
     writeFile,
   });
   await selfModel.load();
-  activityJournal = createActivityJournal({
+  sensitiveJournalStore = createSensitiveJournalStore({
     directory: path.join(app.getPath('userData'), 'logs'),
     appendFile, readFile, readdir, rm, mkdir,
   });
+  activityJournal = createActivityJournal({
+    directory: path.join(app.getPath('userData'), 'logs'),
+    appendFile, readFile, readdir, rm, mkdir,
+    sensitiveSink: sensitiveJournalStore,
+  });
   void activityJournal.purge();
+  void sensitiveJournalStore.purge();
   void activityJournal.append('boot', { version: app.getVersion?.() ?? 'dev' });
   // Deny-by-default stays the rule. 'media' is the microphone (voice). 'fullscreen' is the voice
   // animation filling the screen on an explicit owner click — it grants access to nothing, only
@@ -1873,6 +1905,13 @@ app.whenReady().then(async () => {
     keyring,
     confirmLocal: confirmSensitiveAction,
     buildServices: (masterKey) => {
+      // Le déverrouillage du coffre arme AUSSI la couche 2 du journal : clé dédiée dérivée par
+      // HKDF (jamais la clé maître elle-même). Le tampon accumulé pendant le verrouillage est
+      // chiffré et vidé ici.
+      try {
+        const journalKey = Buffer.from(hkdfSync('sha256', Buffer.from(masterKey), Buffer.from('Mina Vision local memory v1', 'utf8'), Buffer.from('journal-sensible', 'utf8'), 32));
+        sensitiveJournalStore?.enableEncryption(journalKey);
+      } catch { /* la couche 2 ne bloque jamais le déverrouillage mémoire */ }
       const config = currentConfig();
       const embedder = config.providers.lmStudio.enabled && config.providers.lmStudio.embeddingModel
         ? createLmStudioEmbeddingProvider({

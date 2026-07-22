@@ -34,6 +34,36 @@ describe("createActivityJournal — journal persistant, borné, jamais bloquant"
     expect(entries[1].payload).toMatchObject({ goal: 'ouvrir YouTube' });
   });
 
+  it('aucun transcript en clair ne touche le disque : couche 1 épurée, texte vers la couche 2 (Task 5)', async () => {
+    const files = new Map();
+    const sink = [];
+    const journal = createActivityJournal({
+      directory: 'logs',
+      appendFile: vi.fn(async (path, line) => files.set(path, (files.get(path) ?? '') + line)),
+      readFile: vi.fn(async (path) => files.get(path) ?? ''),
+      readdir: vi.fn(async () => []),
+      rm: vi.fn(async () => {}),
+      mkdir: vi.fn(async () => {}),
+      now: () => NOW,
+      sensitiveSink: { store: (entry) => sink.push(entry) },
+    });
+    await journal.append('voice_voice_transcript', { text: 'phrase privée unique', providerId: 'local', isFinal: true });
+
+    expect([...files.values()].join('')).not.toContain('phrase privée unique');
+    const [entry] = await journal.read({ limit: 1 });
+    expect(entry.payload).toMatchObject({ charCount: 20, providerId: 'local', isFinal: true });
+    expect(entry.payload.digest).toMatch(/^sha256:/u);
+    expect(sink).toHaveLength(1);
+    expect(sink[0]).toMatchObject({ kind: 'voice_voice_transcript', text: 'phrase privée unique', digest: entry.payload.digest });
+  });
+
+  it('sans couche 2 branchée, le texte est simplement expurgé (jamais écrit en clair)', async () => {
+    const { journal, files } = harness();
+    await journal.append('voice-dialogue', { role: 'user', text: 'secret parlé' });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect([...files.values()].join('')).not.toContain('secret parlé');
+  });
+
   it('REDACTS secrets before anything touches the disk', async () => {
     const { journal, files } = harness();
     await journal.append('voice_error', {
