@@ -5,7 +5,6 @@ const trustedRoots = [
   'C:\\Serveurs\\Mina Vision',
   'C:\\Users\\Nasro\\AppData\\Roaming\\agentvisionsourire',
   'G:\\Programmes Installés\\caches\\MinaVision',
-  'G:\\Serveurs\\Mina AI',
 ];
 
 describe('host write policy', () => {
@@ -13,9 +12,19 @@ describe('host write policy', () => {
     const policy = createHostWritePolicy({ trustedRoots, confirmLocal: vi.fn() });
 
     expect(policy.classify('C:\\Serveurs\\Mina Vision\\notes\\session.md')).toBe('allow');
-    expect(policy.classify('G:\\Serveurs\\Mina AI\\output.json')).toBe('allow');
     expect(policy.classify('C:\\Users\\Nasro\\Desktop\\note.md')).toBe('confirm');
     expect(policy.classify('G:\\Docs\\rapport.pdf')).toBe('confirm');
+  });
+
+  it('les racines de l\'ancien Mina AI ne sont plus des racines de confiance (R-06)', async () => {
+    const policy = createHostWritePolicy({ trustedRoots, confirmLocal: vi.fn(async () => false) });
+
+    expect(policy.classify('G:\\Serveurs\\Mina AI\\output.json')).toBe('confirm');
+    expect(policy.classify('G:\\Serveurs\\Mina API\\out.json')).toBe('confirm');
+    expect(policy.classify('G:\\Serveurs\\Mina APP\\out.json')).toBe('confirm');
+    expect(policy.classify('G:\\Serveurs\\Mina Modal\\out.json')).toBe('confirm');
+    await expect(policy.authorize('G:\\Serveurs\\Mina AI\\output.json'))
+      .rejects.toThrow('host_write_confirmation_refused');
   });
 
   it('requires a path-specific local confirmation outside Mina Vision roots', async () => {
@@ -44,7 +53,7 @@ describe('host write policy', () => {
     })).toBe(true);
     expect(policy.requiresMissionConfirmation({
       environment: 'desktop', goal: 'Crée G:\\Serveurs\\Mina AI\\note.md',
-    })).toBe(false);
+    })).toBe(true);
     expect(policy.requiresMissionConfirmation({
       environment: 'desktop', goal: 'Crée un fichier Markdown sur le PC',
     })).toBe(true);

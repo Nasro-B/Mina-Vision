@@ -1769,10 +1769,8 @@ app.whenReady().then(async () => {
       path.join(app.getPath('documents'), 'Mina Vision'),
       'G:\\Programmes Installés\\caches\\MinaVision',
       'G:\\MinaTests',
-      'G:\\Serveurs\\Mina AI',
-      'G:\\Serveurs\\Mina API',
-      'G:\\Serveurs\\Mina APP',
-      'G:\\Serveurs\\Mina Modal',
+      // Les racines de l'ancien projet (Mina AI/API/APP/Modal) sont définitivement retirées :
+      // l'ancien projet ne doit jamais être une cible d'écriture de confiance (R-06).
     ],
     confirmLocal: confirmSensitiveAction,
   });
