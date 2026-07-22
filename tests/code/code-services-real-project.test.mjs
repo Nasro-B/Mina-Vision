@@ -71,8 +71,11 @@ describe('code-services — projet Mina Vision réel', () => {
     expect(context.scripts.test).toContain('vitest');
   }, 15_000);
 
-  it('le vrai dépôt n\'est pas un dépôt git (fait vérifié) et le client le dit proprement', async () => {
-    expect(await services.gitClient.isRepository()).toBe(false);
+  it('le vrai projet est un dépôt git depuis la réconciliation 2026-07-22 (fait vérifié)', async () => {
+    expect(await services.gitClient.isRepository()).toBe(true);
+    const branch = await services.gitClient.currentBranch();
+    expect(typeof branch).toBe('string');
+    expect(branch.length).toBeGreaterThan(0);
   });
 
   it('la revue de vrais fichiers du domaine code ne trouve aucun secret', async () => {
