@@ -1,7 +1,7 @@
 import { applyEnvironmentSelection, computeVoiceStartTime, formatGroundingLabel } from './controller.mjs';
 import { createMinaDialogue, SELF_KNOWLEDGE_FALLBACK } from '../personality/mina-dialogue.mjs';
 import { composeCapabilityBrief } from '../core/capability-brief.mjs';
-import { composeJournalBrief } from '../diagnostics/activity-journal.mjs';
+import { composeJournalBrief } from '../diagnostics/journal-brief.mjs';
 import { assessFrameQuality, decideLensFlip, frameStatsFromGrayscale } from '../perception/frame-quality.mjs';
 import {
   cloudzirPaletteColors, createBargeInDetector, createCloudzirPalettePreference,
