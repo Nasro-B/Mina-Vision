@@ -10,7 +10,7 @@
     "models:install": "node scripts/install-models.mjs",
     "smoke:sqlite:electron": "node scripts/run-sqlite-electron-smoke.mjs",
     "start": "electron .",
-    "test": "vitest run --exclude tests/integration/**",
+    "test": "npm run test:unit && npm run test:integration",
     "test:watch": "vitest",
     "test:integration": "vitest run tests/integration --no-file-parallelism",
     "test:critical": "vitest run tests/secret-handling.test.mjs tests/audit-log.test.mjs tests/audit-diagnostics.test.mjs tests/audit-export.test.mjs tests/channel-router.test.mjs tests/conversation-service.test.mjs tests/rate-limiter.test.mjs tests/backpressure.test.mjs tests/emergency-stop-v2.test.mjs tests/ui-security-contract.test.mjs tests/electron-hardening.test.mjs tests/keyring.test.mjs tests/crypto.test.mjs tests/oauth-loopback-server.test.mjs tests/google-account-connector.test.mjs tests/gmail-adapter.test.mjs",
@@ -20,7 +20,8 @@
     "start:auto": "powershell -NoProfile -File scripts/start-mina.ps1 -Mode Auto",
     "start:local-first": "powershell -NoProfile -File scripts/start-mina.ps1 -Mode LocalFirst",
     "start:local-only": "powershell -NoProfile -File scripts/start-mina.ps1 -Mode LocalOnly -Offline",
-    "connect:google": "electron scripts/connect-google-account.mjs"
+    "connect:google": "electron scripts/connect-google-account.mjs",
+    "test:unit": "vitest run --exclude tests/integration/**"
   },
   "keywords": [],
   "author": "",
