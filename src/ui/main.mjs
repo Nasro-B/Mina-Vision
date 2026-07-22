@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { createHash, hkdfSync, randomUUID } from 'node:crypto';
-import { cpSync, existsSync, readdirSync, readFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { access, appendFile, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -10,6 +10,7 @@ import { createMinaOrchestrator } from '../core/orchestrator.mjs';
 import { createMinaRuntime } from '../core/mina-runtime.mjs';
 import { createCapabilityBroker } from '../safety/capability-broker.mjs';
 import { createComputerActionAuthorizer } from '../safety/computer-action-authorizer.mjs';
+import { createLocalPathPermissions } from '../security/local-path-permissions.mjs';
 import { createClaimLedger } from '../grounding/claim-ledger.mjs';
 import { createSessionManager } from '../sessions/session-manager.mjs';
 import { createSessionStore } from '../sessions/session-store.mjs';
@@ -1763,6 +1764,15 @@ app.whenReady().then(async () => {
     writeFile,
   });
   await selfModel.load();
+  // R-04 : le dossier du journal (couches 1 ET 2) est restreint au seul utilisateur courant —
+  // fire-and-forget, un échec est signalé au journal technique, jamais bloquant.
+  void createLocalPathPermissions().harden(path.join(app.getPath('userData'), 'logs'))
+    .then((result) => {
+      if (!result.hardened) {
+        technicalLog.record({ severity: 'warning', scope: 'security', code: 'journal_acl_harden_failed', message: result.error ?? 'inconnu' });
+      }
+    })
+    .catch(() => {});
   sensitiveJournalStore = createSensitiveJournalStore({
     directory: path.join(app.getPath('userData'), 'logs'),
     appendFile, readFile, readdir, rm, mkdir,
@@ -1791,10 +1801,22 @@ app.whenReady().then(async () => {
     .find((candidate) => existsSync(candidate));
   if (!nativeBinding) throw new Error(`Binding SQLite Electron ABI ${process.versions.modules} introuvable.`);
   sqliteNativeBinding = nativeBinding;
+  // R-04 : les racines de lecture APPROUVÉES (sans confirmation) se limitent au projet et au
+  // workspace documents. Tout autre chemin reste lisible en one-shot CONFIRMÉ (mécanique
+  // file-policy existante) ; l'indexation hors racine reste interdite. Des racines
+  // supplémentaires ne s'ajoutent que par choix explicite : MINA_APPROVED_READ_ROOTS
+  // (séparateur « ; »).
+  const extraReadRoots = String(process.env.MINA_APPROVED_READ_ROOTS ?? '')
+    .split(';')
+    .map((root) => root.trim())
+    .filter(Boolean);
+  try {
+    mkdirSync(path.join(app.getPath('documents'), 'Mina Vision'), { recursive: true });
+  } catch { /* le workspace sera créé par ensure() ; la racine entrera au prochain boot */ }
   const approvedRoots = [...new Set([
-    path.parse(app.getPath('home')).root,
-    path.parse(ROOT_DIR).root,
-    'G:\\',
+    ROOT_DIR,
+    path.join(app.getPath('documents'), 'Mina Vision'),
+    ...extraReadRoots,
   ])].filter((root) => existsSync(root));
   minaFileWorkspace = createMinaFileWorkspace({ root: path.join(app.getPath('documents'), 'Mina Vision') });
   printerRepository = createJsonRepository({
