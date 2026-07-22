@@ -25,11 +25,22 @@ function isWithin(root, candidate) {
   return fromRoot === '' || (!fromRoot.startsWith(`..${sep}`) && fromRoot !== '..' && !isAbsolute(fromRoot));
 }
 
+// Task 4 (R-03) : motifs credentials supplémentaires — clients OAuth, comptes de service,
+// clés privées et caches de tokens sont interdits par leur chemin, où qu'ils soient.
+const FORBIDDEN_NAME_PATTERNS = [
+  /^client_secret.*\.json$/u,
+  /service[-_]?account.*\.json$/u,
+  /^(?:token[-_]?cache|refresh[-_]?token).*\.json$/u,
+];
+const FORBIDDEN_PATH_EXTENSIONS = new Set(['.kdbx', '.pem', '.pfx', '.p12', '.key']);
+
 function rejectSensitivePath(path) {
   const parts = path.split(/[\\/]/u).filter(Boolean).map((part) => part.toLocaleLowerCase('en-US'));
   const name = parts.at(-1) ?? '';
   if (name === '.env' || name.startsWith('.env.') || FORBIDDEN_NAMES.has(name)
     || FORBIDDEN_EXTENSIONS.has(name.slice(name.lastIndexOf('.')))
+    || FORBIDDEN_PATH_EXTENSIONS.has(name.slice(name.lastIndexOf('.')))
+    || FORBIDDEN_NAME_PATTERNS.some((pattern) => pattern.test(name))
     || parts.some((part) => FORBIDDEN_SEGMENTS.has(part))) {
     throw new Error('sensitive_file_forbidden');
   }

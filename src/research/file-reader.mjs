@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { extname } from 'node:path';
+import { classifyCredentialDocument } from '../security/credential-document.mjs';
 import { createPdfTextExtractor } from './pdf-text-extractor.mjs';
 
 const TEXT_FORMATS = new Map([
@@ -58,6 +59,11 @@ export function createFileReader({
     const after = await fileSystem.stat(canonical);
     if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || bytes.length !== before.size) {
       throw new Error('file_changed_during_read');
+    }
+    // Task 4 (R-03) : détection par CONTENU après lecture bornée, avant tout décodage/retour —
+    // un credential renommé en .txt reste interdit.
+    if (classifyCredentialDocument({ path: canonical, bytes }).sensitive) {
+      throw new Error('sensitive_file_forbidden');
     }
 
     let text;
