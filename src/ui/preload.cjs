@@ -118,6 +118,7 @@ function createPreloadApi(ipcRenderer) {
     sayVoice: (text) => ipcRenderer.invoke('mina:voice-say', String(text ?? '').slice(0, 1_200)),
     guideMission: (text) => ipcRenderer.invoke('mina:mission-guide', String(text ?? '').slice(0, 4_000)),
     capabilities: () => ipcRenderer.invoke('mina:capabilities'),
+    capabilityCatalog: () => ipcRenderer.invoke('mina:capability-catalog'),
     smsPolicyStatus: () => ipcRenderer.invoke('mina:sms-policy-status'),
     smsStatus: () => ipcRenderer.invoke('mina:sms-status'),
     smsPolicyRevoke: () => ipcRenderer.invoke('mina:sms-policy-revoke'),
