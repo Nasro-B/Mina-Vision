@@ -44,9 +44,24 @@
 
 * { box-sizing: border-box; }
 
+/* Nom accessible sans impact visuel (labels de champs dont le placeholder porte le sens). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 body {
   margin: 0;
-  min-width: 900px;
+  /* Accessibilité (Task 22) : plus de plancher 900px — la fenêtre Electron gère sa taille
+     minimale (640×480) ; le contenu doit rester utilisable à 320 px CSS. */
+  min-width: 320px;
   min-height: 100vh;
   color: var(--ink);
   background: var(--paper);
