@@ -42,10 +42,19 @@ tu peux ainsi ouvrir n'importe quelle application avant de la piloter ; l'altern
 touche key WIN puis type du nom puis ENTER.
 Pour une action, action.arguments_json doit être une chaîne contenant un objet JSON. Cet objet doit
 inclure expected_effect avec type ui_state_change, file_appeared, print_job_accepted ou
-message_accepted. Pour type, ajoute obligatoirement text (exemple : {"text":"recherche",
-"press_enter":true,"expected_effect":"ui_state_change"}). Pour click, ajoute x et y. Pour key,
-ajoute keys. Pour navigate, ajoute url. N'invente jamais qu'une action a réussi : completed=true
-uniquement si la capture prouve l'objectif. N'utilise ni shell, ni commande, ni script.`;
+message_accepted. Il doit AUSSI inclure : intent (courte phrase en français décrivant le BUT de
+cette action précise, 1 à 500 caractères) et safety_decision valant allowed,
+require_confirmation ou blocked. Utilise require_confirmation pour toute action risquée
+(suppression, envoi de message, achat, impression, authentification, téléchargement) ; utilise
+blocked si l'action ne devrait pas être faite — elle sera alors refusée localement. Ton
+auto-évaluation ne remplace jamais la politique locale : allowed ne peut rien débloquer.
+Pour type, ajoute obligatoirement text (exemple : {"text":"recherche","press_enter":true,
+"intent":"lancer la recherche","safety_decision":"allowed","expected_effect":"ui_state_change"}).
+Pour click, ajoute x et y. Pour key, ajoute keys. Pour navigate, ajoute url. N'invente jamais
+qu'une action a réussi : completed=true uniquement si la capture prouve l'objectif. N'utilise ni
+shell, ni commande, ni script.`;
+
+const SAFETY_DECISIONS = new Set(['allowed', 'require_confirmation', 'blocked']);
 
 function safeObservation(observation) {
   if (!Number.isFinite(observation?.width) || observation.width < 1
@@ -115,6 +124,16 @@ function parseResponse(response, { interactionId, callIndex, observation, modelI
   }
   if (!args || typeof args !== 'object' || Array.isArray(args) || !args.expected_effect) {
     throw new Error('expected_effect_required');
+  }
+  // Contrat d'action (Task 2) : chaque action porte son intention et son auto-évaluation de
+  // sécurité. L'autorité locale (classifyAction + broker) reste dominante — `allowed` ne peut
+  // rien abaisser ; `blocked` est respecté tel quel (arrêt dur en aval, jamais « réparé »).
+  if (typeof args.intent !== 'string' || !args.intent.trim() || args.intent.length > 500) {
+    throw new Error('computer_use_intent_required');
+  }
+  const declaredSafety = args.safety_decision?.decision ?? args.safety_decision;
+  if (!SAFETY_DECISIONS.has(declaredSafety)) {
+    throw new Error('computer_use_safety_decision_invalid');
   }
   if (typeof args.expected_effect === 'string' && EFFECTS.has(args.expected_effect)) {
     args.expected_effect = { type: args.expected_effect };
@@ -254,7 +273,7 @@ export function createOpenAiCompatibleComputerUseProvider({
           { role: 'assistant', content: invalidOutput },
           {
             role: 'user',
-            content: `Réponse invalide : ${error.message}. Corrige uniquement le JSON. Une action type exige un champ text non vide.`,
+            content: `Réponse invalide : ${error.message}. Corrige uniquement le JSON. Une action type exige un champ text non vide. Chaque action exige intent (1-500 caractères) et safety_decision (allowed, require_confirmation ou blocked) — reprends la même action avec le contrat complet, sans changer ta décision de sécurité.`,
           },
         ],
       });

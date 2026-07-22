@@ -28,6 +28,8 @@ describe('OpenAI-compatible Computer Use provider', () => {
         name: 'type',
         arguments_json: JSON.stringify({
           text: 'recette gâteau',
+          intent: 'saisir la recherche',
+          safety_decision: 'allowed',
           expected_effect: { type: 'ui_state_change' },
         }),
       },
@@ -70,7 +72,7 @@ describe('OpenAI-compatible Computer Use provider', () => {
       text: 'Je clique.',
       action: {
         name: 'click',
-        arguments_json: JSON.stringify({ x: 500, y: 72, expected_effect: 'ui_state_change' }),
+        arguments_json: JSON.stringify({ x: 500, y: 72, intent: 'cliquer la recherche', safety_decision: 'allowed', expected_effect: 'ui_state_change' }),
       },
     }));
     const provider = createOpenAiCompatibleComputerUseProvider({ id: 'vision', client, model: 'vision' });
@@ -96,7 +98,7 @@ describe('OpenAI-compatible Computer Use provider', () => {
       text: 'Je saisis.',
       action: {
         name: 'type',
-        arguments_json: JSON.stringify({ text: 'recette gâteau', expected_effect: 'ui_state_change' }),
+        arguments_json: JSON.stringify({ text: 'recette gâteau', intent: 'saisir la recherche', safety_decision: 'allowed', expected_effect: 'ui_state_change' }),
       },
     }));
     const provider = createOpenAiCompatibleComputerUseProvider({ id: 'vision', client, model: 'vision' });
@@ -120,7 +122,7 @@ describe('OpenAI-compatible Computer Use provider', () => {
       action: {
         name: 'type',
         arguments_json: JSON.stringify({
-          text: 'recette gâteau', press_enter: true, expected_effect: 'ui_state_change',
+          text: 'recette gâteau', press_enter: true, intent: 'valider la recherche', safety_decision: 'allowed', expected_effect: 'ui_state_change',
         }),
       },
     });
@@ -167,7 +169,7 @@ describe('OpenAI-compatible Computer Use provider', () => {
         text: '',
         action: {
           name: 'click',
-          arguments_json: JSON.stringify({ command: 'whoami', expected_effect: { type: 'ui_state_change' } }),
+          arguments_json: JSON.stringify({ command: 'whoami', intent: 'exécuter une commande', safety_decision: 'allowed', expected_effect: { type: 'ui_state_change' } }),
         },
       })),
       model: 'vision',
@@ -175,6 +177,41 @@ describe('OpenAI-compatible Computer Use provider', () => {
     await expect(shell.invoke({
       operation: 'start', goal: 'test', environment: 'browser', observation,
     })).rejects.toThrow('Argument interdit');
+  });
+
+  it('exige intent et safety_decision dans chaque action (Task 2) — l\'autorité locale reste dominante', async () => {
+    const withoutIntent = JSON.stringify({
+      completed: false,
+      text: 'Je clique.',
+      action: {
+        name: 'click',
+        arguments_json: JSON.stringify({ x: 10, y: 10, safety_decision: 'allowed', expected_effect: 'ui_state_change' }),
+      },
+    });
+    const missing = createOpenAiCompatibleComputerUseProvider({
+      id: 'no-intent',
+      client: clientReturning(withoutIntent),
+      model: 'vision',
+    });
+    await expect(missing.invoke({
+      operation: 'start', goal: 'test', environment: 'browser', observation,
+    })).rejects.toThrow('computer_use_intent_required');
+
+    const badSafety = createOpenAiCompatibleComputerUseProvider({
+      id: 'bad-safety',
+      client: clientReturning(JSON.stringify({
+        completed: false,
+        text: 'Je clique.',
+        action: {
+          name: 'click',
+          arguments_json: JSON.stringify({ x: 10, y: 10, intent: 'cliquer', safety_decision: 'trust_me', expected_effect: 'ui_state_change' }),
+        },
+      })),
+      model: 'vision',
+    });
+    await expect(badSafety.invoke({
+      operation: 'start', goal: 'test', environment: 'browser', observation,
+    })).rejects.toThrow('computer_use_safety_decision_invalid');
   });
 
   it('normalizes a model that returns expected_effect as an allowed scalar', async () => {
@@ -185,7 +222,7 @@ describe('OpenAI-compatible Computer Use provider', () => {
         text: 'Je clique.',
         action: {
           name: 'click',
-          arguments_json: JSON.stringify({ x: 500, y: 100, expected_effect: 'ui_state_change' }),
+          arguments_json: JSON.stringify({ x: 500, y: 100, intent: 'cliquer le bouton', safety_decision: 'allowed', expected_effect: 'ui_state_change' }),
         },
       })),
       model: 'openrouter/free',
@@ -204,7 +241,7 @@ describe('OpenAI-compatible Computer Use provider', () => {
       text: 'Je saisis la recherche.',
       action: {
         name: 'type',
-        arguments_json: JSON.stringify({ expected_effect: 'ui_state_change' }),
+        arguments_json: JSON.stringify({ intent: 'saisir la recherche', safety_decision: 'allowed', expected_effect: 'ui_state_change' }),
       },
     });
     const valid = JSON.stringify({
@@ -212,7 +249,7 @@ describe('OpenAI-compatible Computer Use provider', () => {
       text: 'Je saisis la recherche.',
       action: {
         name: 'type',
-        arguments_json: JSON.stringify({ value: 'recette gâteau', expected_effect: 'ui_state_change' }),
+        arguments_json: JSON.stringify({ value: 'recette gâteau', intent: 'saisir la recherche', safety_decision: 'allowed', expected_effect: 'ui_state_change' }),
       },
     });
     const client = clientReturning(invalid);
