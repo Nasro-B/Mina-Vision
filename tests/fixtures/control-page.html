@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="fr">
+<body style="height:2000px">
+  <button id="target">Cible</button>
+  <input id="text" />
+  <p id="selection">Texte à sélectionner par Mina.</p>
+  <div id="status">initial</div>
+  <script>
+    document.querySelector('#target').addEventListener('click', () => {
+      document.querySelector('#status').textContent = 'clicked';
+      location.hash = 'clicked';
+    });
+  </script>
+</body>
+</html>

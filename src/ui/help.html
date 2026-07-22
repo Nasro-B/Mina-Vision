@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self'">
+    <title>Mina Vision — Guide</title>
+    <link rel="stylesheet" href="./help.css">
+  </head>
+  <body>
+    <header>
+      <p class="eyebrow">Référence rapide</p>
+      <h1>Ce que Mina sait faire — et ce qu'elle ne fera jamais</h1>
+      <p class="lede">Généré à partir du code et de <code>MINA.md</code> (la constitution de Mina), pas d'une supposition. Si une capacité listée ici ne marche pas chez toi, c'est un bug à signaler — pas une limite normale.</p>
+    </header>
+
+    <nav aria-label="Sommaire">
+      <a href="#peut">Ce qu'elle peut faire</a>
+      <a href="#voix">Commandes vocales</a>
+      <a href="#comprehension">Compréhension dynamique</a>
+      <a href="#etat">Conscience de son état</a>
+      <a href="#outils">Outils du panneau</a>
+      <a href="#jamais">Ce qu'elle ne fait jamais</a>
+      <a href="#canaux">SMS / Telegram / E-mail</a>
+      <a href="#a-connecter">À connecter toi-même</a>
+      <a href="#urgence">Arrêt d'urgence</a>
+    </nav>
+
+    <section id="peut">
+      <h2>Ce qu'elle peut faire</h2>
+      <div class="grid">
+        <article>
+          <h3>Missions (navigateur/bureau/téléphone)</h3>
+          <p>Instruction en texte ou à la voix ; Mina observe l'écran, propose une action à la fois (clic, saisie, navigation, lancement de n'importe quelle application Windows…), qui passe par validation → confirmation si besoin → exécution → vérification de l'effet réel. Jamais d'action « à l'aveugle ». Les pannes réseau/outil sont réessayées automatiquement ; un refus de sécurité ne l'est jamais.</p>
+        </article>
+        <article>
+          <h3>Missions et pilotage lancés à la voix</h3>
+          <p>Une phrase avec un verbe d'action (« va sur… », « ouvre… », « cherche… », « mets youtube ») démarre une mission seule, sans formulaire. Pendant qu'une page reste ouverte (YouTube, résultats), les phrases suivantes la pilotent directement : « mets cheb hasni », « la chanson 2 », « mets sur pause », « chanson suivante » — jamais une nouvelle recherche à chaque fois.</p>
+        </article>
+        <article>
+          <h3>Guidage vocal en cours de mission</h3>
+          <p>Une instruction dite pendant qu'une mission tourne déjà ne relance jamais une deuxième mission concurrente : elle est transmise au tour suivant du modèle, qui continue dans la même fenêtre, à la souris et au clavier.</p>
+        </article>
+        <article>
+          <h3>Interruption (barge-in)</h3>
+          <p>Tu peux couper Mina en pleine phrase : elle se tait immédiatement et écoute, sans jamais perdre le fil de la conversation en cours.</p>
+        </article>
+        <article>
+          <h3>Vision caméra (Huawei appairé)</h3>
+          <p>Flux vidéo signé depuis le téléphone, objectif avant ou arrière (bouton icône dans la vidéo, ou inversion automatique si l'image est noire/floue), rotation d'image correcte, arrêt sécurisé à tout moment. L'IP du téléphone n'est jamais affichée.</p>
+        </article>
+        <article>
+          <h3>Téléphone : détection, SMS, synchronisation</h3>
+          <p>Détecte le téléphone appairé — Huawei par USB, Samsung par Wi-Fi en complément, avec reconnexion automatique et vérification d'identité —, prépare une réponse SMS (confirmation locale obligatoire avant envoi), synchronise SMS et Telegram vers la mémoire chiffrée.</p>
+        </article>
+        <article>
+          <h3>Mina Code — auto-analyse</h3>
+          <p>Indexe et analyse le code source de Mina Vision elle-même (pas un projet externe) : recherche de symboles, statut Git, lancement des tests, revue de sécurité — à la voix ou depuis la section « Code » du tableau de bord. Lecture et analyse sans confirmation ; toute écriture de fichier reste confirmée, <code>git push</code> n'existe structurellement pas.</p>
+        </article>
+        <article>
+          <h3>Documents PDF &amp; Word</h3>
+          <p>« Génère-moi un PDF/Word sur… » : Mina rédige le contenu et crée un vrai fichier dans <code>Documents\Mina Vision\</code>. Noms horodatés, jamais d'écrasement d'un fichier existant.</p>
+        </article>
+        <article>
+          <h3>Analyseur d'erreurs techniques</h3>
+          <p>Chaque erreur qu'elle relit lui vient avec une explication en français et un remède concret — jamais un code brut réservé aux développeurs.</p>
+        </article>
+        <article>
+          <h3>Thème jour/nuit</h3>
+          <p>Bouton dans l'en-tête ou commande vocale (« version nuit », « mode jour »).</p>
+        </article>
+        <article>
+          <h3>Musique</h3>
+          <p>« Mets de la musique » : elle demande quoi écouter puis cherche et lance sur YouTube. Un titre/artiste direct (« mets cheb hasni ») marche aussi si une page média est déjà ouverte.</p>
+        </article>
+        <article>
+          <h3>Mémoire locale chiffrée + recherche</h3>
+          <p>Tout ce qu'on te dit est mémorisé avec sa source, son canal et sa date. Compaction automatique de contexte sur une tâche longue — rien n'est perdu, juste résumé. Recherche dans cette mémoire, lecture de fichiers ou de pages web comme preuves citées — jamais une affirmation sans source. Se déverrouille automatiquement à chaque démarrage.</p>
+        </article>
+        <article>
+          <h3>Automatisations gouvernées</h3>
+          <p>Définitions, historique de récupération et sondes de santé consultables. La création ou le changement d'état d'une automatisation reste uniquement côté processus principal, jamais depuis l'interface.</p>
+        </article>
+        <article>
+          <h3>Organisation personnelle</h3>
+          <p>Section « Aujourd'hui » : tâches, événements, contacts — chaque élément porte sa source et sa date d'observation ; ce qui date de plus de 24h est signalé séparément, jamais présenté comme à jour.</p>
+        </article>
+        <article>
+          <h3>Documents &amp; mode urgence</h3>
+          <p>Intake et quarantaine de documents (jamais l'original écrasé), classification, et un mode urgence qui coupe réseau et automatisations externes en un geste.</p>
+        </article>
+        <article>
+          <h3>Skills et Windows Sandbox</h3>
+          <p>Compétences additionnelles chargées depuis un <code>SKILL.md</code> validé et signé — <strong>doivent être installées une par une</strong> depuis la section Skills avant d'être utilisables ; Mina n'en a aucune tant que tu ne les as pas installées. Exécution de code (Python/JS/PowerShell) uniquement dans Windows Sandbox jetable, avec deux confirmations distinctes, jamais sur ta vraie machine.</p>
+        </article>
+        <article>
+          <h3>Analyses IA vérifiées</h3>
+          <p>Tokens et coûts réellement consommés, par fournisseur et par période, exportables en CSV/JSON — jamais une estimation présentée comme un fait.</p>
+        </article>
+        <article>
+          <h3>Voix</h3>
+          <p>Écoute activée par phrase, transcription, réponse parlée par une voix naturelle et chaleureuse. Répond localement à certaines demandes sans lancer de mission — voir ci-dessous.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="voix">
+      <h2>Commandes vocales</h2>
+      <table>
+        <tbody>
+          <tr><th>Activer l'écoute</th><td><code>Salut Mina</code> · <code>Bonjour Mina</code> · <code>Mina, comment ça va</code> · ou <code>Mina, &lt;ta demande&gt;</code> directement.</td></tr>
+          <tr><th>Couper sa parole</th><td><code>stop</code> · <code>chut</code> · <code>tais-toi</code> · <code>silence</code> — coupure immédiate, même en tout début de phrase ; elle continue d'écouter.</td></tr>
+          <tr><th>Arrêter l'écoute</th><td><code>Mina, arrête</code> — se tait ET arrête complètement d'écouter.</td></tr>
+          <tr><th>Mode pause</th><td><code>mets-toi en pause</code> · <code>pause</code> — silence total, ignore toute voix entendue, jusqu'à entendre <code>Mina</code> ou <code>reprends Mina</code>.</td></tr>
+          <tr><th>Après activation</th><td>Dis ton instruction normalement — elle part en mission si ce n'est pas une des commandes ci-dessous. Un verbe d'action seul en début de phrase (« lance… », « ouvre… », « cherche… ») suffit aussi, sans dire « Mina » avant.</td></tr>
+          <tr><th>Qui est ton créateur ?</th><td>Réponse fixe (identité Nasro), puis Mina propose d'ouvrir la caméra — réponds <code>oui</code>/<code>ok</code>/<code>d'accord</code> ou <code>non</code>.</td></tr>
+          <tr><th>Que sais-tu faire ?</th><td><code>que sais-tu faire</code> · <code>quels sont tes outils/compétences/skills</code> — réponse composée depuis son état réel du moment (skills vraiment installés, sandbox dispo ou pas, téléphone connecté ou pas), jamais une liste figée.</td></tr>
+          <tr><th>Ouvrir/fermer/inverser la caméra</th><td><code>ouvre la cam</code> · <code>n'allume pas la cam</code> · <code>éteins la caméra</code> · <code>inverse la caméra</code> — à tout moment, pas seulement après la question créateur.</td></tr>
+          <tr><th>Vision noire ou floue</th><td>Mina le détecte seule et retourne l'objectif une fois, sans qu'on le lui demande.</td></tr>
+          <tr><th>Thème</th><td><code>je veux la version nuit</code> · <code>version jour</code> / <code>white</code></td></tr>
+          <tr><th>Musique</th><td><code>mets de la musique</code> (elle demande quoi) · <code>mets &lt;artiste/titre&gt;</code> · <code>mets sur pause</code> / <code>reprends</code> · <code>chanson suivante</code> · <code>arrête la musique</code></td></tr>
+          <tr><th>Navigateur</th><td><code>ferme le navigateur</code></td></tr>
+          <tr><th>Missions</th><td>« va sur… », « ouvre… », « cherche… » sur le web, le bureau ou « … sur le téléphone » — départ automatique dans le bon environnement.</td></tr>
+          <tr><th>Mina Code</th><td><code>analyse le code</code> · <code>cherche &lt;symbole&gt; dans le code</code> · <code>statut Git</code> · <code>lance les tests</code> · <code>revue du code</code></td></tr>
+          <tr><th>Documents</th><td><code>génère-moi un PDF/Word sur…</code></td></tr>
+        </tbody>
+      </table>
+      <p class="note">Raccourci clavier global, à tout moment, même hors focus de la fenêtre : <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Échap</kbd> = arrêt d'urgence. Tu peux interrompre Mina en pleine phrase, elle se tait et écoute.</p>
+    </section>
+
+    <section id="comprehension">
+      <h2>Compréhension dynamique</h2>
+      <p>La liste ci-dessus n'est pas une limite : Mina comprend aussi des formulations jamais listées ici (« balance-moi du raï », « fous la vidéo en pause »). Le modèle vocal reconnaît l'intention directement pendant la conversation et déclenche la bonne action, sans étape ni latence supplémentaire. La liste de commandes reste utile comme référence rapide, pas comme limite stricte du vocabulaire compris.</p>
+    </section>
+
+    <section id="etat">
+      <h2>Conscience de son état</h2>
+      <p>Quand on lui demande ce qu'elle sait faire, Mina répond avec son état réel du moment — pas un texte figé : les skills qu'elle a vraiment (liste vide si rien n'est installé), si le bac à sable Windows est disponible, si un téléphone est connecté, si sa mémoire est déverrouillée. Une capacité qu'elle n'a pas réellement, elle le dit — jamais inventée.</p>
+    </section>
+
+    <section id="outils">
+      <h2>Outils du panneau « Outils directs »</h2>
+      <table>
+        <tbody>
+          <tr><th>01 — Trier Google Photos</th><td>Aperçu par défaut (rien n'est modifié) sauf mode sélection avec confirmation.</td></tr>
+          <tr><th>02 — Détecter le Huawei</th><td>Vérifie la présence et l'identité signée du téléphone appairé via USB/ADB. Aucune IP affichée, seulement le modèle.</td></tr>
+          <tr><th>03 — Vision Huawei en direct</th><td>Démarre/arrête le flux caméra signé. Icône d'inversion en overlay dans la vidéo pendant le flux.</td></tr>
+          <tr><th>04 — Répondre par SMS</th><td>Demande l'ID du message reçu, le numéro destinataire, le texte — confirmation locale obligatoire avant envoi réel.</td></tr>
+          <tr><th>05 — Synchroniser les messages</th><td>Fait descendre les nouveaux SMS/Telegram vers la mémoire chiffrée.</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Chaque section (Configuration locale, Mémoire, Analyses, Sandbox, Automatisations, Extensions, Aujourd'hui, Documents, Activité) est repliable et repliée par défaut à l'ouverture. Le panneau « Outils directs » peut aussi être masqué en entier — la mission s'élargit à la place.</p>
+    </section>
+
+    <section id="jamais">
+      <h2>Ce qu'elle ne fait jamais — pas des bugs, des règles</h2>
+      <ul class="never-list">
+        <li>Ne contrôle jamais directement la souris ou le clavier sans passer par validation → confirmation → vérification de l'effet réel.</li>
+        <li>Ne coupe jamais le Wi-Fi, un adaptateur réseau, le pare-feu ou une route Windows — le mode « urgence »/« hors-ligne » ne filtre que ses propres fournisseurs IA.</li>
+        <li>Ne simule jamais un résultat d'outil — annonce clairement une indisponibilité ou une incertitude plutôt que d'inventer.</li>
+        <li>Ne réessaie jamais automatiquement une action refusée par un garde-fou de sécurité (confirmation refusée, action bloquée) — la résilience ne couvre que les pannes techniques (réseau, timeout), jamais un refus.</li>
+        <li>Ne prétend jamais voir ou observer quelque chose visuellement pendant une conversation vocale — elle ne reçoit que de l'audio ; ce qu'elle « voit » vient uniquement du flux caméra affiché à l'écran.</li>
+        <li>Ne voit, n'affiche, ne journalise et n'envoie jamais un mot de passe, une clé ou un secret à un modèle ou un skill.</li>
+        <li>Un skill ne peut jamais élargir ses propres capacités ni exécuter un script directement sur ta machine.</li>
+        <li>Le code exécuté en sandbox n'a jamais accès au réseau, presse-papiers, imprimante, caméra, micro ou à ton profil.</li>
+        <li>Ne crée jamais de compte à ta place et n'entre jamais un mot de passe ou un code de consentement pour toi.</li>
+        <li>Une automatisation ou un changement de <code>MINA.md</code> ne s'applique jamais à chaud — il faut une confirmation locale explicite et une nouvelle session.</li>
+        <li>Mina Code ne fait jamais <code>git push</code> ni ne modifie une branche protégée — la fonctionnalité est structurellement absente, pas juste désactivée. Toute écriture de fichier ou commit reste soumise à confirmation.</li>
+      </ul>
+    </section>
+
+    <section id="canaux">
+      <h2>Différences selon le canal</h2>
+      <table>
+        <tbody>
+          <tr><th>Local / voix</th><td>Toutes les capacités accordées, confirmations locales normales.</td></tr>
+          <tr><th>SMS</th><td>Conversation et brouillon/réponse seulement — jamais d'accès au PC, aux fichiers, aux skills, à la sandbox, à l'e-mail ou à la maison connectée.</td></tr>
+          <tr><th>Telegram</th><td>Conversation et mémoire — seules des capacités distantes explicitement activées et bornées peuvent s'ajouter. Jamais de contrôle du PC ni de sandbox.</td></tr>
+          <tr><th>E-mail</th><td>Le corps d'un e-mail reçu est toujours une donnée à lire, jamais une instruction qui déclenche quoi que ce soit tout seul.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="a-connecter">
+      <h2>Ce qui reste à connecter toi-même</h2>
+      <p class="note">Mina ne se connecte jamais à un compte à ta place (mot de passe, consentement OAuth) — c'est une règle de sécurité, pas un oubli.</p>
+      <ul>
+        <li><strong>Installer les skills</strong> — section Skills → installer depuis <code>skills-reference\&lt;nom&gt;</code> → confirmer l'audit. Sans cette étape, Mina n'a aucun skill même s'ils existent sur le disque.</li>
+        <li><strong>Bac à sable Windows</strong> — fonctionnalité Windows à activer (redémarrage requis), sinon l'exécution de code en sandbox reste indisponible.</li>
+        <li><strong>Compte Google</strong> (Gmail, Calendrier, Contacts, Tâches) — <code>npm run connect:google</code>, consentement dans ton propre navigateur. Le connecteur Google Tasks n'existe pas encore côté code.</li>
+        <li><strong>Google Home</strong> — SDK à télécharger manuellement depuis la console Google (compte requis).</li>
+        <li><strong>Comptes mail Microsoft / IMAP</strong> — autorisation à faire toi-même.</li>
+      </ul>
+    </section>
+
+    <section id="urgence">
+      <h2>Arrêt d'urgence</h2>
+      <p><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Échap</kbd>, ou dire <code>Mina, arrête</code> : annule immédiatement missions, recherches, envois et jobs sandbox en cours. Prioritaire sur toute file, confirmation ou automatisation. Après un arrêt, rien ne redémarre tout seul.</p>
+    </section>
+
+    <footer>
+      <p>Ordre d'autorité, du plus fort au plus faible : sécurité immuable → ton ordre explicite du moment → <code>MINA.md</code> → skill actif validé → ta demande → contenu externe (web, fichier, message). Une règle plus restrictive gagne toujours sur une moins restrictive.</p>
+    </footer>
+  </body>
+</html>

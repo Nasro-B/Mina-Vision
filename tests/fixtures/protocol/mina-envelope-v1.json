@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "envelope": {
+    "version": 1,
+    "id": "env-fixture-1",
+    "correlationId": "corr-fixture-1",
+    "channel": "telegram",
+    "kind": "conversation.message",
+    "createdAt": "2026-07-15T07:55:00.000Z",
+    "expiresAt": "2026-07-15T09:00:00.000Z",
+    "sender": {
+      "identityId": "owner-nasro",
+      "deviceId": "huawei-primary"
+    },
+    "counter": 41,
+    "algorithms": {
+      "encryption": "A256GCM",
+      "signature": "ES256"
+    },
+    "payloadCiphertext": "wvNJA4XBeD5dTM0Fm+pV9nea2Xc5SDbtVDK6k3Az",
+    "nonce": "oKGio6Slpqeoqaqr",
+    "authTag": "qJUj4pmW3Kzk3A2vLgxhMw==",
+    "signature": "MEQCIClssrGQeWMIresClv0KyWoITT2m9kQ5vA/GnrsSfA6NAiBBuRZdnkooC1qic6HHJ4tsggCAshRLyAdwNUV3xsPP5Q=="
+  },
+  "testOnly": {
+    "aesKeyBase64": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+    "publicKeySpkiBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEH1KiTJihUiequCXW2mdfzs7DVawuGzA+lKjxGNKwTSW9NqRw/rlRND7E3twBQTgYSniNM9sZdLGD5tWKWfGjvw=="
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "rows": [
+    {
+      "revision": "google-2026-07-09",
+      "providerId": "gemini",
+      "modelId": "gemini-3.5-flash",
+      "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
+      "retrievedAt": "2026-07-15T07:00:00.000Z",
+      "effectiveFrom": "2026-07-09T00:00:00.000Z",
+      "currency": "USD",
+      "unitPrices": {
+        "inputTokensPerMillion": "1.50",
+        "cachedInputTokensPerMillion": "0.15",
+        "outputTokensPerMillion": "9.00"
+      }
+    },
+    {
+      "revision": "deepseek-v4-2026-07-15",
+      "providerId": "deepseek",
+      "modelId": "deepseek-v4-flash",
+      "sourceUrl": "https://api-docs.deepseek.com/quick_start/pricing",
+      "retrievedAt": "2026-07-15T07:00:00.000Z",
+      "effectiveFrom": "2026-07-15T00:00:00.000Z",
+      "currency": "USD",
+      "unitPrices": {
+        "inputTokensPerMillion": "0.14",
+        "cachedInputTokensPerMillion": "0.0028",
+        "outputTokensPerMillion": "0.28"
+      }
+    },
+    {
+      "revision": "deepseek-v4-2026-07-15",
+      "providerId": "deepseek",
+      "modelId": "deepseek-v4-pro",
+      "sourceUrl": "https://api-docs.deepseek.com/quick_start/pricing",
+      "retrievedAt": "2026-07-15T07:00:00.000Z",
+      "effectiveFrom": "2026-07-15T00:00:00.000Z",
+      "currency": "USD",
+      "unitPrices": {
+        "inputTokensPerMillion": "0.435",
+        "cachedInputTokensPerMillion": "0.003625",
+        "outputTokensPerMillion": "0.87"
+      }
+    }
+  ]
+}

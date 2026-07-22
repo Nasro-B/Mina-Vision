@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="description" content="Fixture structurée Mina Vision">
+    <title>Recherche Mina Vision</title>
+    <style>.answer { color: rgb(12, 34, 56); font-weight: 700; }</style>
+    <script type="application/ld+json">{"@type":"Article","name":"Preuve locale"}</script>
+  </head>
+  <body>
+    <main>
+      <h1>Recette de gâteau</h1>
+      <p class="answer">Chocolat et vanille</p>
+      <a href="/details?token=LINK_SECRET&view=public">Voir les détails</a>
+      <input type="password" value="PASSWORD_SECRET" aria-label="Mot de passe">
+      <div id="dynamic">En attente</div>
+      <iframe title="Cadre preuve" src="/frame"></iframe>
+    </main>
+    <script>
+      window.publicConfig = { theme: 'light', token: 'INLINE_SECRET' };
+      fetch('/api/public?token=NETWORK_SECRET&view=ok').then((response) => response.json()).then(() => {
+        document.querySelector('#dynamic').textContent = 'Contenu dynamique chargé';
+      });
+    </script>
+  </body>
+</html>

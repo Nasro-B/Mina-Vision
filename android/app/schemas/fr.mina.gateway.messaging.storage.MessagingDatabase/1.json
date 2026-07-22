@@ -1,0 +1,109 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "804ee846af4aa20332f26a57ce2a8f15",
+    "entities": [
+      {
+        "tableName": "encrypted_messaging_secrets",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`name_index` TEXT NOT NULL, `name_ciphertext` TEXT NOT NULL, `value_ciphertext` TEXT NOT NULL, `updated_at_ms` INTEGER NOT NULL, PRIMARY KEY(`name_index`))",
+        "fields": [
+          {
+            "fieldPath": "nameIndex",
+            "columnName": "name_index",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nameCiphertext",
+            "columnName": "name_ciphertext",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "valueCiphertext",
+            "columnName": "value_ciphertext",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtMs",
+            "columnName": "updated_at_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "name_index"
+          ]
+        }
+      },
+      {
+        "tableName": "encrypted_messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`dedupe_index` TEXT NOT NULL, `channel` TEXT NOT NULL, `direction` TEXT NOT NULL, `sender_ciphertext` TEXT NOT NULL, `body_ciphertext` TEXT NOT NULL, `source_timestamp_ms` INTEGER NOT NULL, `stored_at_ms` INTEGER NOT NULL, `state` TEXT NOT NULL, PRIMARY KEY(`dedupe_index`))",
+        "fields": [
+          {
+            "fieldPath": "dedupeIndex",
+            "columnName": "dedupe_index",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channel",
+            "columnName": "channel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "direction",
+            "columnName": "direction",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderCiphertext",
+            "columnName": "sender_ciphertext",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bodyCiphertext",
+            "columnName": "body_ciphertext",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceTimestampMs",
+            "columnName": "source_timestamp_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "storedAtMs",
+            "columnName": "stored_at_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "dedupe_index"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '804ee846af4aa20332f26a57ce2a8f15')"
+    ]
+  }
+}

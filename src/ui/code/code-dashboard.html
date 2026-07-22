@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mina Code — Tableau de bord</title>
+  <style>
+    :root {
+      --ink: #182231; --muted: #5b6472; --paper: #f3f5f9; --panel: #ffffff;
+      --line: #dde1ea; --accent: #4f46e5; --success: #047857; --danger: #c33a2d;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink: #eef0f5; --muted: #9aa3b2; --paper: #0b0c0f; --panel: #17181d;
+        --line: #2b2e37; --accent: #818cf8; --success: #34d399; --danger: #ef7266;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px; background: var(--paper); color: var(--ink);
+      font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+    }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .note { color: var(--muted); margin: 0 0 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; }
+    .code-empty { color: var(--muted); font-style: italic; }
+    .code-plan-steps { list-style: none; padding: 0; margin: 8px 0; }
+    .code-plan-step { padding: 3px 0; font-family: Consolas, monospace; }
+    .code-plan-step.is-completed { color: var(--success); }
+    .code-plan-step.is-in_progress { color: var(--accent); }
+    .code-plan-step.is-failed { color: var(--danger); }
+    .code-plan-mark { margin-right: 8px; }
+    .code-plan-files { color: var(--muted); margin-left: 8px; font-size: 12px; }
+    .code-plan-footer { display: flex; gap: 16px; border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+    .code-tests-ok { color: var(--success); }
+    .code-tests-ko { color: var(--danger); }
+    .code-diff { font-family: Consolas, monospace; font-size: 12.5px; overflow-x: auto; margin: 0; }
+    .code-diff-line { display: block; white-space: pre; }
+    .code-diff-add { color: var(--success); }
+    .code-diff-del { color: var(--danger); }
+    .code-diff-hunk, .code-diff-file { color: var(--accent); }
+    .code-test-summary.is-ok strong { color: var(--success); }
+    .code-test-summary.is-ko strong { color: var(--danger); }
+    .code-test-failures { color: var(--danger); font-family: Consolas, monospace; font-size: 12.5px; }
+    .code-git-group h4, .code-git-log + h4 { font-size: 12px; margin: 10px 0 4px; color: var(--muted); }
+    .code-git-group ul, .code-git-log { margin: 0; padding-left: 18px; font-family: Consolas, monospace; font-size: 12.5px; }
+    .code-git-clean { color: var(--success); }
+    .code-git-dirty { color: var(--danger); }
+    .code-git-reminder { color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
+    .code-context-row { display: flex; gap: 10px; padding: 3px 0; }
+    .code-context-row b { min-width: 140px; }
+    .code-terminal { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-family: Consolas, monospace; font-size: 12.5px; max-height: 220px; overflow-y: auto; }
+    .code-terminal-line.is-ok { color: var(--success); }
+    .code-terminal-line.is-err { color: var(--danger); }
+    .code-terminal-line.is-cmd { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <h1>Mina Code — Tableau de bord</h1>
+  <p class="note">Page autonome de démonstration des panneaux (données d'exemple ; dans l'app, les mêmes modules sont branchés sur l'IPC réel).</p>
+  <div class="grid">
+    <section class="panel"><h2>Plan</h2><div id="plan"></div></section>
+    <section class="panel"><h2>Diff</h2><div id="diff"></div></section>
+    <section class="panel"><h2>Tests</h2><div id="tests"></div></section>
+    <section class="panel"><h2>Git</h2><div id="git"></div></section>
+    <section class="panel"><h2>Contexte projet</h2><div id="context"></div></section>
+    <section class="panel"><h2>Journal</h2><div id="terminal" class="code-terminal"></div></section>
+  </div>
+  <script type="module">
+    import { createCodePlanBoard } from './code-plan-board.mjs';
+    import { createCodeDiffViewer } from './code-diff-viewer.mjs';
+    import { createCodeTestPanel } from './code-test-panel.mjs';
+    import { createCodeGitPanel } from './code-git-panel.mjs';
+    import { createCodeContextPanel } from './code-context-panel.mjs';
+    import { createCodeTerminal } from './code-terminal.mjs';
+
+    createCodePlanBoard({ container: document.querySelector('#plan') }).render({
+      plan: {
+        title: 'Ajouter le renouvellement de JWT',
+        status: 'in_progress',
+        steps: [
+          { description: 'Valider le token expiré', status: 'completed', files: ['tests/auth'] },
+          { description: 'Créer l\'endpoint refresh', status: 'completed', files: ['src/routes'] },
+          { description: 'Ajouter le middleware auto-refresh', status: 'in_progress', files: [] },
+          { description: 'Mettre à jour les tests E2E', status: 'pending', files: [] },
+          { description: 'Documenter dans README', status: 'pending', files: [] },
+        ],
+      },
+      lastTest: { passed: 42, failed: 0 },
+      filesChanged: 3,
+    });
+
+    createCodeDiffViewer({ container: document.querySelector('#diff') }).render({
+      diffText: [
+        '--- a/src/middleware/auth.mjs',
+        '+++ b/src/middleware/auth.mjs',
+        '@@ -12,4 +12,6 @@',
+        ' export function verifierJwt(token) {',
+        '-  return jwt.verify(token, secret);',
+        '+  return jwt.verify(token, secret, { clockTolerance: 5 });',
+        ' }',
+      ].join('\n'),
+    });
+
+    createCodeTestPanel({ container: document.querySelector('#tests') }).render({
+      result: { passed: 42, failed: 0, skipped: 1, duration: 2_800, framework: 'vitest', failures: [] },
+    });
+
+    createCodeGitPanel({ container: document.querySelector('#git') }).render({
+      status: {
+        branch: 'feature/jwt-refresh', upstream: null, ahead: 0, behind: 0,
+        staged: ['src/middleware/auth.mjs'], modified: ['tests/auth.test.mjs'], untracked: [], clean: false,
+      },
+      log: [
+        { shortHash: 'a1b2c3d', subject: 'feat(auth): JWT expiry validation', author: 'Mina' },
+        { shortHash: 'e4f5a6b', subject: 'test(auth): rejet token expiré', author: 'Mina' },
+      ],
+    });
+
+    createCodeContextPanel({ container: document.querySelector('#context') }).render({
+      projectRoot: 'C:/Serveurs/Mina Vision',
+      projectContext: { framework: 'Electron', minaMd: '# Mina', scripts: { test: 'vitest run', start: 'electron .' } },
+      indexStatus: { indexedFiles: 334, symbols: 2180, lastIndexedAt: '2026-07-20T21:00:00.000Z' },
+    });
+
+    const terminal = createCodeTerminal({ container: document.querySelector('#terminal') });
+    terminal.append('npx vitest run', 'cmd');
+    terminal.append('Tests 42 passed (42)', 'ok');
+    terminal.append('Patch appliqué : src/middleware/auth.mjs', 'info');
+  </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "id": "face-sface-2021dec",
+  "role": "face-recognition",
+  "runtime": "onnx",
+  "source": "opencv/face_recognition_sface",
+  "revision": "89e1f6f89ab68a12ab974b5b65162abf464a461f",
+  "license": "Apache-2.0",
+  "licenseUrl": "https://huggingface.co/opencv/face_recognition_sface/blob/89e1f6f89ab68a12ab974b5b65162abf464a461f/LICENSE",
+  "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
+  "path": "var/models/face-sface-2021dec",
+  "modelFile": "face_recognition_sface_2021dec.onnx",
+  "estimatedRamMb": 256,
+  "files": [
+    {
+      "url": "https://huggingface.co/opencv/face_recognition_sface/resolve/89e1f6f89ab68a12ab974b5b65162abf464a461f/face_recognition_sface_2021dec.onnx?download=true",
+      "path": "face_recognition_sface_2021dec.onnx",
+      "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"
+    }
+  ],
+  "tensorSignature": {
+    "inputs": ["data"],
+    "outputs": ["fc1"]
+  }
+}
