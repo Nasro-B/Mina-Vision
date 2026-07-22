@@ -41,7 +41,7 @@ export function createMinaRuntime({
       await sessionManager.beforeTurn({ workSessionId: work.workSessionId });
       const evidence = await evidenceProvider({ channel, identityId, goal, memoryRequired });
       if (!Array.isArray(evidence)) throw new TypeError('runtime_evidence_must_be_array');
-      const value = await run({ evidence: Object.freeze([...evidence]) });
+      const value = await run({ evidence: Object.freeze([...evidence]), workSessionId: work.workSessionId });
       if (entry.canceled) return value;
       const after = await sessionManager.afterTurn({ workSessionId: work.workSessionId });
       if (!work.microSession && after.status === 'active') {

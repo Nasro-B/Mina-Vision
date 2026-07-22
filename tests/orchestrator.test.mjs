@@ -283,4 +283,85 @@ describe('createMinaOrchestrator: resilience (faults retried, refusals never)', 
     expect(executor.execute).toHaveBeenCalledTimes(2);
     expect(state.status).toBe('completed');
   });
+
+  describe('autorité du broker (R-01)', () => {
+    const clickResponse = () => ({
+      start: vi.fn().mockResolvedValue({
+        interactionId: 'i1', completed: false, text: '',
+        calls: [{ id: 'c1', name: 'click', arguments: { x: 500, y: 250 } }],
+      }),
+      continue: vi.fn().mockResolvedValue({ interactionId: 'i1', completed: true, text: 'Terminé', calls: [] }),
+    });
+
+    it('deny → mission stoppée authorization_denied, exécuteur JAMAIS appelé, aucun dialogue', async () => {
+      const executor = createExecutor();
+      const confirm = vi.fn();
+      const actionAuthorizer = {
+        assess: vi.fn(async () => ({ decision: 'deny', reason: 'session_grant', request: {} })),
+        confirm: vi.fn(),
+      };
+      const mina = createMinaOrchestrator({
+        computerUse: clickResponse(), executors: { browser: executor }, confirm, actionAuthorizer,
+      });
+      const state = await mina.run({ goal: 'Clique', environment: 'browser', workSessionId: 'work-1', maxActions: 5, timeoutMs: 10_000 });
+      expect(state).toMatchObject({ status: 'stopped', stopReason: 'authorization_denied' });
+      expect(executor.execute).not.toHaveBeenCalled();
+      expect(confirm).not.toHaveBeenCalled();
+      expect(actionAuthorizer.assess).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'work-1' }));
+    });
+
+    it('confirm broker → dialogue local, confirmation consommée, PUIS exécution', async () => {
+      const executor = createExecutor();
+      const confirm = vi.fn(async () => true);
+      const request = { digest: 'sha256:abc' };
+      const actionAuthorizer = {
+        assess: vi.fn(async () => ({ decision: 'confirm', reason: 'confirmation_required', request })),
+        confirm: vi.fn(async () => ({ decision: 'allow', reason: 'confirmation_consumed', request })),
+      };
+      const mina = createMinaOrchestrator({
+        computerUse: clickResponse(), executors: { browser: executor }, confirm, actionAuthorizer,
+      });
+      const state = await mina.run({ goal: 'Clique', environment: 'browser', workSessionId: 'work-1', maxActions: 5, timeoutMs: 10_000 });
+      expect(confirm).toHaveBeenCalledOnce();
+      expect(actionAuthorizer.confirm).toHaveBeenCalledWith({ request });
+      expect(executor.execute).toHaveBeenCalledOnce();
+      expect(state.status).toBe('completed');
+    });
+
+    it('confirm broker refusé par Nasro → pas d\'exécution, résultat confirmation_refused au modèle', async () => {
+      const executor = createExecutor();
+      const confirm = vi.fn(async () => false);
+      const actionAuthorizer = {
+        assess: vi.fn(async () => ({ decision: 'confirm', reason: 'confirmation_required', request: { digest: 'sha256:abc' } })),
+        confirm: vi.fn(),
+      };
+      const computerUse = clickResponse();
+      const mina = createMinaOrchestrator({
+        computerUse, executors: { browser: executor }, confirm, actionAuthorizer,
+      });
+      const state = await mina.run({ goal: 'Clique', environment: 'browser', workSessionId: 'work-1', maxActions: 5, timeoutMs: 10_000 });
+      expect(executor.execute).not.toHaveBeenCalled();
+      expect(actionAuthorizer.confirm).not.toHaveBeenCalled();
+      expect(computerUse.continue).toHaveBeenCalledWith(expect.objectContaining({
+        actionResult: expect.objectContaining({ error: 'confirmation_refused' }),
+      }));
+      expect(state.status).toBe('completed');
+    });
+
+    it('allow broker → exécution directe sans dialogue', async () => {
+      const executor = createExecutor();
+      const confirm = vi.fn();
+      const actionAuthorizer = {
+        assess: vi.fn(async () => ({ decision: 'allow', reason: 'authorized', request: {} })),
+        confirm: vi.fn(),
+      };
+      const mina = createMinaOrchestrator({
+        computerUse: clickResponse(), executors: { browser: executor }, confirm, actionAuthorizer,
+      });
+      const state = await mina.run({ goal: 'Clique', environment: 'browser', workSessionId: 'work-1', maxActions: 5, timeoutMs: 10_000 });
+      expect(executor.execute).toHaveBeenCalledOnce();
+      expect(confirm).not.toHaveBeenCalled();
+      expect(state.status).toBe('completed');
+    });
+  });
 });

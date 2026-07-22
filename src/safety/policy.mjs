@@ -49,7 +49,7 @@ export function classifyAction(action, context = {}) {
   return { decision: 'allow', reason: 'Action locale non sensible.' };
 }
 
-export function classifyCapabilityBase({ capability, effect }) {
+export function classifyCapabilityBase({ capability, effect, sensitivity }) {
   if (BLOCKED_CAPABILITIES.test(capability ?? '')) {
     return { decision: 'deny', reason: 'base_policy' };
   }
@@ -60,5 +60,12 @@ export function classifyCapabilityBase({ capability, effect }) {
     return { decision: 'allow', reason: 'base_policy' };
   }
   if (effect === 'read') return { decision: 'allow', reason: 'base_policy' };
+  // Boucle Computer Use locale (R-01) : une action ORDINAIRE (classée non sensible par
+  // classifyAction) est couverte par le grant de mission borné — la confirmation one-shot
+  // reste exigée pour toute action sensible. Fail-closed : sensitivity absente = sensible.
+  // Les capacités des autres domaines (mail.*, home.*, …) gardent la confirmation systématique.
+  if (String(capability).startsWith('computer.') && effect === 'execute' && sensitivity === 'ordinary') {
+    return { decision: 'allow', reason: 'base_policy' };
+  }
   return { decision: 'confirm', reason: 'base_policy' };
 }
