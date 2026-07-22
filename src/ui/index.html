@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com; media-src 'self' blob:">
+    <title>Mina Vision — Agent local</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="rail">
+        <div class="iris" id="iris" aria-hidden="true"><span></span></div>
+        <nav class="rail-nav" aria-label="Zones Mina Vision">
+          <button class="rail-btn" data-view="mission" aria-current="true" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+            <span>Mission</span>
+          </button>
+          <button class="rail-btn" data-view="config" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h13"/><circle cx="15" cy="6" r="2"/><circle cx="7" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>
+            <span>Config</span>
+          </button>
+          <button class="rail-btn" data-view="automation" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="7" r="2.4"/><circle cx="18" cy="7" r="2.4"/><circle cx="12" cy="17" r="2.4"/><path d="M8.2 8.3 10 15M15.8 8.3 14 15M8.5 7h7"/></svg>
+            <span>Auto</span>
+          </button>
+          <button class="rail-btn" data-view="today" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg>
+            <span>Auj.</span>
+          </button>
+          <button class="rail-btn" data-view="diagnostic" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12h4l1.8-6 3.4 12 2.4-9 1.6 3h5.8"/></svg>
+            <span>Diag</span>
+          </button>
+          <button class="rail-btn" data-view="code" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 7 4 12l4.5 5M15.5 7 20 12l-4.5 5M13 5l-2.5 14"/></svg>
+            <span>Code</span>
+          </button>
+        </nav>
+        <div class="rail-spacer"></div>
+        <button class="rail-icon-button" id="help-button" type="button" title="Guide : ce que Mina sait faire">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.3 9.3a2.7 2.7 0 1 1 3.7 2.5c-.9.4-1 1-1 1.9"/><circle cx="12" cy="17" r=".3" fill="currentColor"/></svg>
+        </button>
+        <button class="rail-icon-button" id="theme-toggle" type="button" title="Basculer jour / nuit">
+          <span id="theme-toggle-icon" aria-hidden="true">
+            <svg class="icon-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/></svg>
+            <svg class="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
+          </span>
+        </button>
+      </aside>
+
+      <main class="shell">
+        <div class="hud-strip">
+          <span class="hud-item"><span class="status-dot" id="status-dot"></span><span id="status-text">Initialisation</span></span>
+          <span class="hud-item"><b>Voix</b><span>Mina</span></span>
+          <span class="hud-item"><b>Horloge</b><span id="hud-clock">—</span></span>
+        </div>
+
+        <section class="lock-panel" id="lock-panel" hidden>
+          <strong>Accès IA verrouillé</strong>
+          <span id="lock-text">Renouvelez les clés exposées avant toute connexion.</span>
+        </section>
+
+        <section class="view is-active" data-view="mission">
+        <div class="mission-head">
+          <p class="eyebrow">Agent local multimodal</p>
+          <h1>Mina Vision</h1>
+        </div>
+
+        <div class="workspace" id="workspace">
+        <section class="command-panel" aria-labelledby="command-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Mission</p>
+              <h2 id="command-title">Que doit faire Mina&nbsp;?</h2>
+            </div>
+            <div class="heading-actions">
+              <label class="voice-animation-control">
+                <span>Animation</span>
+                <select id="voice-animation-select" aria-label="Choisir l’animation vocale">
+                  <option value="mina">Noyau Mina</option>
+                  <option value="cloudzir">CloudZIR Spectral</option>
+                </select>
+              </label>
+              <button class="ghost-button" id="voice-fullscreen-button" type="button" aria-label="Animation vocale en plein écran" title="Animation vocale en plein écran (Échap pour sortir)">
+                <svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H4v4M16 3h4v4M8 21H4v-4M16 21h4v-4"/></svg>
+              </button>
+              <button class="ghost-button" id="tools-toggle" type="button" aria-expanded="true" aria-controls="tools-panel" title="Afficher ou masquer les outils directs">
+                <span id="tools-toggle-label">Masquer outils</span>
+              </button>
+              <button class="voice-button" id="voice-button" type="button" aria-pressed="false">
+                <span class="voice-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" width="10" height="10"><circle cx="12" cy="12" r="9" fill="currentColor"/></svg></span><span>Live Stream</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="voice-presence" id="voice-presence" aria-label="Présence vocale de Mina Vision">
+            <div class="cloudzir-nebula" aria-hidden="true">
+              <span class="cloudzir-nebula-bar"></span>
+              <span class="cloudzir-nebula-bar"></span>
+              <span class="cloudzir-nebula-bar"></span>
+              <span class="cloudzir-nebula-bar"></span>
+              <span class="cloudzir-nebula-bar"></span>
+              <span class="cloudzir-nebula-bar"></span>
+              <span class="cloudzir-nebula-bar"></span>
+            </div>
+            <canvas id="voice-presence-canvas" width="640" height="360" aria-hidden="true"></canvas>
+            <div class="voice-presence-status" aria-live="polite">
+              <strong id="voice-presence-label"></strong>
+              <small id="voice-presence-detail"></small>
+            </div>
+            <div class="voice-presence-modes" aria-hidden="true">
+              <span>Écoute</span><span>Réflexion</span><span>Réponse</span>
+            </div>
+            <p class="voice-presence-fullscreen-hint" aria-hidden="true">Clic : changer la couleur · Échap : quitter</p>
+          </div>
+
+          <div class="environment" role="radiogroup" aria-label="Surface contrôlée">
+            <label><input type="radio" name="environment" value="browser" checked><span>Navigateur</span></label>
+            <label><input type="radio" name="environment" value="desktop"><span>Bureau</span></label>
+            <label><input type="radio" name="environment" value="mobile"><span>Téléphone</span></label>
+          </div>
+
+          <label class="command-field">
+            <span>Instruction</span>
+            <textarea id="goal" rows="4" maxlength="4000"></textarea>
+          </label>
+
+          <!-- Non cochée par défaut : cochée, elle TUE toute mission tant que le coffre n'est pas
+               initialisé (memory_locked) — la mémoire est de toute façon utilisée dès qu'elle est
+               disponible ; cette case n'ajoute que le BLOCAGE strict, un opt-in. -->
+          <label class="memory-option"><input id="memory-required" type="checkbox"> Exiger la mémoire : bloquer la mission si le coffre est verrouillé</label>
+
+          <div class="primary-actions">
+            <button class="primary" id="start-button" type="button">Lancer la mission</button>
+            <button class="emergency" id="stop-button" type="button">Arrêter</button>
+            <button class="primary" id="resume-button" type="button" hidden>Relancer Mina</button>
+          </div>
+          <p class="shortcut">Raccourci global&nbsp;: <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Échap</kbd></p>
+        </section>
+
+        <aside class="tools-panel" id="tools-panel" aria-label="Outils Mina">
+          <p class="eyebrow">Outils directs</p>
+          <button class="tool-card" id="dental-button" type="button">
+            <span class="tool-index">01</span>
+            <span><strong>Trier Google Photos</strong><small id="dental-mode">Aperçu, rien n'est modifié</small></span>
+          </button>
+          <button class="tool-card" id="phone-button" type="button">
+            <span class="tool-index">02</span>
+            <span><strong>Détecter le Huawei</strong><small id="phone-status">USB / ADB</small></span>
+          </button>
+          <button class="tool-card" id="camera-button" type="button">
+            <span class="tool-index">03</span>
+            <span><strong>Vision Huawei en direct</strong><small id="camera-status">Caméra signée · arrêt sécurisé</small></span>
+          </button>
+          <div class="camera-preview" id="camera-preview" hidden>
+            <img id="camera-frame" alt="Flux caméra en direct du Huawei appairé" />
+            <button class="camera-flip-button" id="camera-switch-button" type="button" title="Inverser caméra" hidden>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M17 2l4 4-4 4" />
+                <path d="M21 6H8a4 4 0 0 0-4 4v1" />
+                <path d="M7 22l-4-4 4-4" />
+                <path d="M3 18h13a4 4 0 0 0 4-4v-1" />
+              </svg>
+            </button>
+          </div>
+          <button class="tool-card" id="sms-button" type="button">
+            <span class="tool-index">04</span>
+            <span><strong>Répondre par SMS</strong><small>Confirmation locale obligatoire</small></span>
+          </button>
+          <button class="tool-card" id="phone-sync-button" type="button">
+            <span class="tool-index">05</span>
+            <span><strong>Synchroniser les messages</strong><small>SMS / Telegram vers mémoire chiffrée</small></span>
+          </button>
+        </aside>
+      </div>
+        </section>
+
+      <div class="dashboard-zone view" data-view="config">
+        <h2 class="dashboard-zone-title">Configuration &amp; mémoire</h2>
+        <section class="memory-panel" aria-labelledby="settings-title">
+        <div class="activity-head">
+          <div><p class="eyebrow">Configuration locale</p><h2 id="settings-title">Modèles, modes et variables</h2></div>
+          <div class="heading-actions">
+            <button class="ghost-button" id="settings-toggle" type="button" aria-expanded="true" aria-controls="settings-collapsible">
+              <span id="settings-toggle-label">Masquer</span>
+            </button>
+            <button id="settings-save" type="button">Enregistrer dans .env</button>
+          </div>
+        </div>
+        <div class="collapsible" id="settings-collapsible">
+          <div class="collapsible-inner">
+            <div class="settings-mode-row">
+              <label><span>Mode d’inférence</span><select id="settings-mode"></select></label>
+              <label class="memory-option"><input id="settings-offline" type="checkbox"> Mode hors ligne strict</label>
+            </div>
+            <div id="settings-fields" class="settings-grid"></div>
+            <h3>Secrets chiffrés et fournisseurs</h3>
+            <div id="settings-providers" class="provider-grid"></div>
+            <p class="sandbox-remediation">Les secrets sont chiffrés par le keyring Mina Vision et ne sont jamais réaffichés. Les valeurs non sensibles sont écrites dans <code>.env</code>.</p>
+            <h3>Envoi SMS automatique</h3>
+            <div class="settings-mode-row">
+              <p id="sms-policy-status">Mode actuel : —</p>
+              <button class="ghost-button" id="sms-policy-revoke" type="button">Arrêt d’urgence SMS auto</button>
+              <button class="ghost-button" id="sms-policy-reactivate" type="button">Réactiver</button>
+            </div>
+            <p class="sandbox-remediation">L’arrêt d’urgence force la confirmation systématique pour chaque SMS, quel que soit le mode configuré, jusqu’à réactivation explicite.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="memory-panel" aria-labelledby="memory-title">
+        <div class="activity-head">
+          <div><p class="eyebrow">Mémoire locale chiffrée</p><h2 id="memory-title">Mémoire et sources</h2></div>
+          <div class="heading-actions">
+            <button class="ghost-button section-toggle" id="memory-panel-toggle" type="button" aria-expanded="true" aria-controls="memory-panel-collapsible">
+              <span id="memory-panel-toggle-label">Masquer</span>
+            </button>
+            <div class="memory-badges"><span id="memory-state">Verrouillée</span><span id="semantic-state">Indisponible</span><span id="backup-state">Backup désactivé</span></div>
+          </div>
+        </div>
+        <div class="collapsible" id="memory-panel-collapsible">
+          <div class="collapsible-inner">
+            <div class="memory-controls">
+              <input id="recovery-phrase" type="password" autocomplete="off" placeholder="Phrase de récupération (si nécessaire)">
+              <button id="memory-initialize" type="button">Initialiser</button>
+              <button id="memory-unlock" type="button">Déverrouiller</button>
+              <button id="memory-lock" type="button">Verrouiller</button>
+            </div>
+            <pre id="recovery-output" class="recovery-output" hidden></pre>
+            <div class="source-grid">
+              <label><span>Recherche mémoire</span><input id="memory-query" type="search" maxlength="1000" placeholder="Ex. rendez-vous mardi"></label>
+              <button id="memory-search" type="button">Rechercher</button>
+              <label><span>Lire un fichier</span><input id="file-path" type="text" maxlength="4000" placeholder="C:\Documents\note.pdf"></label>
+              <button id="file-read" type="button">Lire</button>
+              <label><span>Lire une page web</span><input id="web-url" type="url" maxlength="4000" placeholder="https://example.com"></label>
+              <button id="web-read" type="button">Lire</button>
+            </div>
+            <ol id="memory-results" class="memory-results" aria-live="polite"></ol>
+          </div>
+        </div>
+      </section>
+
+      <section class="memory-panel" aria-labelledby="analytics-title">
+        <div class="activity-head">
+          <div><p class="eyebrow">Consommation vérifiée</p><h2 id="analytics-title">Analyses IA, tokens et coûts</h2></div>
+          <div class="heading-actions">
+            <button class="ghost-button section-toggle" id="analytics-toggle" type="button" aria-expanded="true" aria-controls="analytics-collapsible">
+              <span id="analytics-toggle-label">Masquer</span>
+            </button>
+            <div class="sandbox-actions">
+              <button id="analytics-refresh" type="button">Actualiser</button>
+              <button id="analytics-export-csv" type="button">Exporter CSV</button>
+              <button id="analytics-export-json" type="button">Exporter JSON</button>
+            </div>
+          </div>
+        </div>
+        <div class="collapsible" id="analytics-collapsible">
+          <div class="collapsible-inner">
+            <div class="settings-mode-row">
+              <label><span>Depuis</span><input id="analytics-from" type="datetime-local"></label>
+              <label><span>Jusqu’à</span><input id="analytics-to" type="datetime-local"></label>
+            </div>
+            <div id="analytics-summary" class="analytics-summary"></div>
+            <ol id="analytics-results" class="memory-results" aria-live="polite"></ol>
+          </div>
+        </div>
+      </section>
+
+      </div>
+
+      <div class="dashboard-zone view" data-view="automation">
+        <h2 class="dashboard-zone-title">Automatisation &amp; capacités</h2>
+        <section class="skills-sandbox-panel" aria-labelledby="skills-sandbox-title">
+        <div class="activity-head">
+          <div><p class="eyebrow">Constitution, skills et exécution isolée</p><h2 id="skills-sandbox-title">Skills et Windows Sandbox</h2></div>
+          <div class="heading-actions">
+            <button class="ghost-button section-toggle" id="sandbox-toggle" type="button" aria-expanded="true" aria-controls="sandbox-collapsible">
+              <span id="sandbox-toggle-label">Masquer</span>
+            </button>
+            <div class="memory-badges"><span id="mina-digest">MINA.md —</span><span id="sandbox-state">Vérification…</span></div>
+          </div>
+        </div>
+        <div class="collapsible" id="sandbox-collapsible">
+          <div class="collapsible-inner">
+            <p id="sandbox-remediation" class="sandbox-remediation"></p>
+            <div class="sandbox-actions">
+              <button id="choose-skill" type="button">Auditer un skill ZIP</button>
+              <button id="install-skill" type="button" disabled>Installer après validation</button>
+              <span>Les chemins et le code ne traversent jamais le renderer pour l’installation ou l’exécution.</span>
+            </div>
+            <pre id="quarantine-report" class="recovery-output" hidden></pre>
+            <div class="sandbox-grid">
+              <div><h3>Skills disponibles</h3><ol id="skill-list" class="memory-results"></ol></div>
+              <div><h3>Propositions</h3><ol id="sandbox-proposals" class="memory-results"></ol></div>
+              <div><h3>Jobs et artefacts</h3><ol id="sandbox-jobs" class="memory-results"></ol><ol id="sandbox-artifacts" class="memory-results"></ol></div>
+            </div>
+            <h3>Flux temps réel borné</h3>
+            <ol id="sandbox-stream" class="sandbox-stream" aria-live="polite"></ol>
+          </div>
+        </div>
+      </section>
+
+      <section class="memory-panel" aria-labelledby="automation-title">
+        <div class="activity-head">
+          <div><p class="eyebrow">Automatisations &amp; santé</p><h2 id="automation-title">Définitions, recovery et sondes</h2></div>
+          <div class="heading-actions">
+            <button class="ghost-button section-toggle" id="automation-toggle" type="button" aria-expanded="true" aria-controls="automation-collapsible">
+              <span id="automation-toggle-label">Masquer</span>
+            </button>
+            <button id="automation-refresh" type="button">Actualiser</button>
+          </div>
+        </div>
+        <div class="collapsible" id="automation-collapsible">
+          <div class="collapsible-inner">
+            <div id="automation-summary" class="analytics-summary"></div>
+            <p class="sandbox-remediation">Section en lecture seule&nbsp;: la création/transition d’automatisations se fait uniquement côté process principal, jamais depuis ce panneau.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="memory-panel" aria-labelledby="extensions-title">
+        <div class="activity-head">
+          <div><p class="eyebrow">Approbations, connecteurs &amp; personnalité</p><h2 id="extensions-title">Extensions privées</h2></div>
+          <div class="heading-actions">
+            <button class="ghost-button section-toggle" id="extensions-toggle" type="button" aria-expanded="true" aria-controls="extensions-collapsible">
+              <span id="extensions-toggle-label">Masquer</span>
+            </button>
+            <button id="extensions-refresh" type="button">Actualiser</button>
+          </div>
+        </div>
+        <div class="collapsible" id="extensions-collapsible">
+          <div class="collapsible-inner">
+            <div id="extensions-summary" class="analytics-summary"></div>
+            <p class="sandbox-remediation">Section en lecture seule&nbsp;: approbation d’éditeur, activation de connecteur et confirmation de personnalité restent côté process principal, jamais depuis ce panneau.</p>
+          </div>
+        </div>
+      </section>
+
+      </div>
+
+      <div class="dashboard-zone view" data-view="today">
+        <h2 class="dashboard-zone-title">Aujourd’hui &amp; documents</h2>
+        <section class="memory-panel" aria-labelledby="today-title">
+        <div class="activity-head">
+          <div><p class="eyebrow">Organisation personnelle</p><h2 id="today-title">Aujourd’hui</h2></div>
+          <div class="heading-actions">
+            <button class="ghost-button section-toggle" id="today-toggle" type="button" aria-expanded="true" aria-controls="today-collapsible">
+              <span id="today-toggle-label">Masquer</span>
+            </button>
+            <button id="today-refresh" type="button">Actualiser</button>
+          </div>
+        </div>
+        <div class="collapsible" id="today-collapsible">
+          <div class="collapsible-inner">
+            <ol id="today-items" class="memory-results" aria-live="polite"></ol>
+            <p class="sandbox-remediation">Chaque élément porte sa source et sa date d’observation&nbsp;; les données obsolètes (&gt;24h) sont signalées séparément, jamais présentées comme à jour.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="memory-panel" aria-labelledby="documents-title">
+        <div class="activity-head">
+          <div><p class="eyebrow">Documents &amp; urgence</p><h2 id="documents-title">Quarantaine et mode urgence</h2></div>
+          <div class="heading-actions">
+            <button class="ghost-button section-toggle" id="documents-toggle" type="button" aria-expanded="true" aria-controls="documents-collapsible">
+              <span id="documents-toggle-label">Masquer</span>
+            </button>
+            <div class="memory-badges"><span id="emergency-network-state">Réseau&nbsp;: —</span></div>
+          </div>
+        </div>
+        <div class="collapsible" id="documents-collapsible">
+          <div class="collapsible-inner">
+            <div id="documents-summary" class="analytics-summary"></div>
+            <p class="sandbox-remediation">Aucun octet brut de document n’entre dans ce panneau&nbsp;; les originaux ne sont jamais écrasés. Le mode urgence coupe le réseau et les automatisations externes.</p>
+          </div>
+        </div>
+      </section>
+
+      </div>
+
+      <div class="dashboard-zone view" data-view="diagnostic">
+        <h2 class="dashboard-zone-title">Diagnostic</h2>
+        <section class="activity technical-log-panel" aria-labelledby="technical-log-title">
+        <div class="activity-head">
+          <div><p class="eyebrow">Diagnostic local expurgé</p><h2 id="technical-log-title">Erreurs techniques</h2></div>
+          <div class="heading-actions">
+            <button class="ghost-button" id="technical-log-clear" type="button">Effacer</button>
+            <button class="ghost-button section-toggle" id="technical-log-toggle" type="button" aria-expanded="true" aria-controls="technical-log-collapsible">
+              <span id="technical-log-toggle-label">Masquer</span>
+            </button>
+          </div>
+        </div>
+        <div class="collapsible" id="technical-log-collapsible">
+          <div class="collapsible-inner">
+            <ol id="technical-log" aria-live="polite">
+              <li class="technical-log-empty"><time>—</time><span>Aucune erreur technique.</span></li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section class="activity" aria-labelledby="activity-title">
+        <div class="activity-head">
+          <div><p class="eyebrow">Journal local</p><h2 id="activity-title">Activité</h2></div>
+          <div class="heading-actions">
+            <button class="ghost-button section-toggle" id="activity-toggle" type="button" aria-expanded="true" aria-controls="activity-collapsible">
+              <span id="activity-toggle-label">Masquer</span>
+            </button>
+            <span id="counter">0 action</span>
+          </div>
+        </div>
+        <div class="collapsible" id="activity-collapsible">
+          <div class="collapsible-inner">
+            <ol id="log" aria-live="polite">
+              <li><time>—</time><span>Mina attend une instruction.</span></li>
+            </ol>
+          </div>
+        </div>
+      </section>
+      </div>
+      <div class="dashboard-zone view" data-view="code">
+        <h2 class="dashboard-zone-title">Mina Code</h2>
+        <section class="code-view" aria-labelledby="code-view-title">
+          <div class="activity-head">
+            <div><p class="eyebrow">Agent de code local</p><h2 id="code-view-title">Atelier code</h2></div>
+            <div class="heading-actions">
+              <button class="ghost-button" id="code-index-button" type="button">Analyser le projet</button>
+              <button class="ghost-button" id="code-tests-button" type="button">Lancer les tests</button>
+              <button class="ghost-button" id="code-review-button" type="button">Revue de code</button>
+              <button class="ghost-button" id="code-git-button" type="button">Statut Git</button>
+            </div>
+          </div>
+          <div class="code-grid">
+            <div class="code-panel"><h3 class="code-panel-title">Contexte projet</h3><div id="code-context-panel"></div></div>
+            <div class="code-panel"><h3 class="code-panel-title">Plan</h3><div id="code-plan-board"></div></div>
+            <div class="code-panel"><h3 class="code-panel-title">Tests</h3><div id="code-test-panel"></div></div>
+            <div class="code-panel"><h3 class="code-panel-title">Git</h3><div id="code-git-panel"></div></div>
+            <div class="code-panel code-panel-wide"><h3 class="code-panel-title">Diff</h3><div id="code-diff-panel"></div></div>
+            <div class="code-panel code-panel-wide"><h3 class="code-panel-title">Journal Mina Code</h3><div id="code-terminal" class="code-terminal"></div></div>
+          </div>
+        </section>
+      </div>
+      </main>
+    </div>
+    <script type="module" src="./renderer.js"></script>
+  </body>
+</html>

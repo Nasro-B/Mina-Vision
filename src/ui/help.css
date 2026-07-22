@@ -1,0 +1,85 @@
+:root {
+  color-scheme: light;
+  --ink: #102a34;
+  --muted: #60737a;
+  --paper: #eaf1ef;
+  --panel: #f8fbfa;
+  --line: #cbd9d6;
+  --aqua: #0f998e;
+  --aqua-soft: #c9ebe5;
+  --coral: #d95448;
+  --shadow: 0 20px 60px rgba(18, 53, 59, 0.11);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 36px 48px 64px;
+  max-width: 980px;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-size: 0.78rem;
+  color: var(--aqua);
+  font-weight: 600;
+}
+
+h1 { margin: 0 0 12px; font-size: 1.7rem; letter-spacing: -0.02em; }
+h2 { margin: 0 0 14px; font-size: 1.22rem; letter-spacing: -0.015em; }
+h3 { margin: 0 0 6px; font-size: 1.02rem; }
+
+.lede { margin: 0 0 28px; color: var(--muted); max-width: 68ch; }
+
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 0 34px;
+  padding: 14px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+nav a { color: var(--aqua); text-decoration: none; font-size: 0.9rem; }
+nav a:hover { text-decoration: underline; }
+
+section { margin: 0 0 40px; scroll-margin-top: 20px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+.grid article {
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.grid article p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+
+table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line); font-size: 0.92rem; vertical-align: top; }
+th { width: 30%; color: var(--ink); font-weight: 600; white-space: nowrap; }
+td { color: var(--muted); }
+tr:last-child th, tr:last-child td { border-bottom: none; }
+
+.note { margin: 12px 0 0; font-size: 0.87rem; color: var(--muted); }
+
+.never-list, ul { margin: 0; padding-left: 20px; }
+.never-list li, ul li { margin-bottom: 9px; color: var(--muted); font-size: 0.93rem; }
+.never-list li::marker { color: var(--coral); }
+
+code { background: rgba(15, 153, 142, 0.1); padding: 1px 6px; border-radius: 5px; font-size: 0.88em; }
+kbd { background: var(--panel); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 2px 7px; font-size: 0.85em; }
+
+footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; }

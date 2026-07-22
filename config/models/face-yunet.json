@@ -1,0 +1,24 @@
+{
+  "id": "face-yunet-2023mar",
+  "role": "face-detection",
+  "runtime": "onnx",
+  "source": "opencv/face_detection_yunet",
+  "revision": "b373a5f059a29efc0007211ca22892ce229ec241",
+  "license": "MIT",
+  "licenseUrl": "https://huggingface.co/opencv/face_detection_yunet/blob/b373a5f059a29efc0007211ca22892ce229ec241/LICENSE",
+  "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+  "path": "var/models/face-yunet-2023mar",
+  "modelFile": "face_detection_yunet_2023mar.onnx",
+  "estimatedRamMb": 128,
+  "files": [
+    {
+      "url": "https://huggingface.co/opencv/face_detection_yunet/resolve/b373a5f059a29efc0007211ca22892ce229ec241/face_detection_yunet_2023mar.onnx?download=true",
+      "path": "face_detection_yunet_2023mar.onnx",
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
+    }
+  ],
+  "tensorSignature": {
+    "inputs": ["input"],
+    "outputs": ["cls_8", "cls_16", "cls_32", "obj_8", "obj_16", "obj_32", "bbox_8", "bbox_16", "bbox_32", "kps_8", "kps_16", "kps_32"]
+  }
+}

@@ -1,0 +1,1727 @@
+import { applyEnvironmentSelection, computeVoiceStartTime, formatGroundingLabel } from './controller.mjs';
+import { createMinaDialogue, SELF_KNOWLEDGE_FALLBACK } from '../personality/mina-dialogue.mjs';
+import { composeCapabilityBrief } from '../core/capability-brief.mjs';
+import { composeJournalBrief } from '../diagnostics/activity-journal.mjs';
+import { assessFrameQuality, decideLensFlip, frameStatsFromGrayscale } from '../perception/frame-quality.mjs';
+import {
+  cloudzirPaletteColors, createBargeInDetector, createCloudzirPalettePreference,
+  createVoiceAnimationPreference, createVoicePresence, isPlaybackSuppressed, isShieldActive,
+  nextCloudzirPalette, normalizeVoiceLevel, readbackShieldDuration,
+} from './voice-presence.mjs';
+
+const api = window.mina;
+const elements = {
+  iris: document.querySelector('#iris'),
+  voicePresenceCanvas: document.querySelector('#voice-presence-canvas'),
+  voicePresence: document.querySelector('#voice-presence'),
+  voiceAnimation: document.querySelector('#voice-animation-select'),
+  voiceFullscreen: document.querySelector('#voice-fullscreen-button'),
+  voicePresenceLabel: document.querySelector('#voice-presence-label'),
+  voicePresenceDetail: document.querySelector('#voice-presence-detail'),
+  statusDot: document.querySelector('#status-dot'),
+  statusText: document.querySelector('#status-text'),
+  lockPanel: document.querySelector('#lock-panel'),
+  lockText: document.querySelector('#lock-text'),
+  goal: document.querySelector('#goal'),
+  start: document.querySelector('#start-button'),
+  stop: document.querySelector('#stop-button'),
+  resume: document.querySelector('#resume-button'),
+  voice: document.querySelector('#voice-button'),
+  dental: document.querySelector('#dental-button'),
+  dentalMode: document.querySelector('#dental-mode'),
+  phone: document.querySelector('#phone-button'),
+  phoneStatus: document.querySelector('#phone-status'),
+  camera: document.querySelector('#camera-button'),
+  cameraStatus: document.querySelector('#camera-status'),
+  cameraPreview: document.querySelector('#camera-preview'),
+  cameraSwitch: document.querySelector('#camera-switch-button'),
+  workspace: document.querySelector('#workspace'),
+  helpButton: document.querySelector('#help-button'),
+  themeToggle: document.querySelector('#theme-toggle'),
+  themeToggleIcon: document.querySelector('#theme-toggle-icon'),
+  toolsToggle: document.querySelector('#tools-toggle'),
+  toolsToggleLabel: document.querySelector('#tools-toggle-label'),
+  cameraFrame: document.querySelector('#camera-frame'),
+  sms: document.querySelector('#sms-button'),
+  phoneSync: document.querySelector('#phone-sync-button'),
+  settingsSave: document.querySelector('#settings-save'),
+  settingsMode: document.querySelector('#settings-mode'),
+  settingsOffline: document.querySelector('#settings-offline'),
+  settingsFields: document.querySelector('#settings-fields'),
+  settingsProviders: document.querySelector('#settings-providers'),
+  smsPolicyStatus: document.querySelector('#sms-policy-status'),
+  smsPolicyRevoke: document.querySelector('#sms-policy-revoke'),
+  smsPolicyReactivate: document.querySelector('#sms-policy-reactivate'),
+  analyticsRefresh: document.querySelector('#analytics-refresh'),
+  analyticsExportCsv: document.querySelector('#analytics-export-csv'),
+  analyticsExportJson: document.querySelector('#analytics-export-json'),
+  analyticsFrom: document.querySelector('#analytics-from'),
+  analyticsTo: document.querySelector('#analytics-to'),
+  analyticsSummary: document.querySelector('#analytics-summary'),
+  analyticsResults: document.querySelector('#analytics-results'),
+  automationRefresh: document.querySelector('#automation-refresh'),
+  automationSummary: document.querySelector('#automation-summary'),
+  extensionsRefresh: document.querySelector('#extensions-refresh'),
+  extensionsSummary: document.querySelector('#extensions-summary'),
+  todayRefresh: document.querySelector('#today-refresh'),
+  todayItems: document.querySelector('#today-items'),
+  emergencyNetworkState: document.querySelector('#emergency-network-state'),
+  log: document.querySelector('#log'),
+  technicalLog: document.querySelector('#technical-log'),
+  technicalLogClear: document.querySelector('#technical-log-clear'),
+  counter: document.querySelector('#counter'),
+  memoryRequired: document.querySelector('#memory-required'),
+  memoryState: document.querySelector('#memory-state'),
+  semanticState: document.querySelector('#semantic-state'),
+  backupState: document.querySelector('#backup-state'),
+  recoveryPhrase: document.querySelector('#recovery-phrase'),
+  recoveryOutput: document.querySelector('#recovery-output'),
+  memoryInitialize: document.querySelector('#memory-initialize'),
+  memoryUnlock: document.querySelector('#memory-unlock'),
+  memoryLock: document.querySelector('#memory-lock'),
+  memoryQuery: document.querySelector('#memory-query'),
+  memorySearch: document.querySelector('#memory-search'),
+  filePath: document.querySelector('#file-path'),
+  fileRead: document.querySelector('#file-read'),
+  webUrl: document.querySelector('#web-url'),
+  webRead: document.querySelector('#web-read'),
+  memoryResults: document.querySelector('#memory-results'),
+  minaDigest: document.querySelector('#mina-digest'),
+  sandboxState: document.querySelector('#sandbox-state'),
+  sandboxRemediation: document.querySelector('#sandbox-remediation'),
+  chooseSkill: document.querySelector('#choose-skill'),
+  installSkill: document.querySelector('#install-skill'),
+  quarantineReport: document.querySelector('#quarantine-report'),
+  skillList: document.querySelector('#skill-list'),
+  sandboxProposals: document.querySelector('#sandbox-proposals'),
+  sandboxJobs: document.querySelector('#sandbox-jobs'),
+  sandboxArtifacts: document.querySelector('#sandbox-artifacts'),
+  sandboxStream: document.querySelector('#sandbox-stream'),
+};
+
+const voiceAnimationPreference = createVoiceAnimationPreference({ storage: window.localStorage });
+elements.voiceAnimation.value = voiceAnimationPreference.load();
+const voicePresence = createVoicePresence({
+  canvas: elements.voicePresenceCanvas,
+  container: elements.voicePresence,
+  label: elements.voicePresenceLabel,
+  detail: elements.voicePresenceDetail,
+  reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true,
+});
+voicePresence.setAnimation(elements.voiceAnimation.value);
+elements.voiceAnimation.addEventListener('change', () => {
+  elements.voiceAnimation.value = voiceAnimationPreference.save(elements.voiceAnimation.value);
+  voicePresence.setAnimation(elements.voiceAnimation.value);
+});
+
+// CloudZIR colour cycling. Applies ONLY the gradient variables the bars read — the shape lives in
+// the CSS keyframes and bar geometry, which nothing here touches.
+const cloudzirPalettePreference = createCloudzirPalettePreference({ storage: window.localStorage });
+let cloudzirPalette = cloudzirPalettePreference.load();
+const applyCloudzirPalette = (id) => {
+  const { from, to } = cloudzirPaletteColors(id);
+  elements.voicePresence.style.setProperty('--cloudzir-from', from);
+  elements.voicePresence.style.setProperty('--cloudzir-to', to);
+};
+applyCloudzirPalette(cloudzirPalette);
+// Click anywhere on the animation surface (windowed or fullscreen) to advance the palette.
+elements.voicePresence.addEventListener('click', () => {
+  if (elements.voiceAnimation.value !== 'cloudzir') return;
+  cloudzirPalette = cloudzirPalettePreference.save(nextCloudzirPalette(cloudzirPalette));
+  applyCloudzirPalette(cloudzirPalette);
+});
+
+// Fullscreen uses the native API so Échap exits without any custom key handling.
+elements.voiceFullscreen.addEventListener('click', async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await elements.voicePresence.requestFullscreen();
+  } catch (error) {
+    log(`Plein écran indisponible : ${error.message}`);
+  }
+});
+
+let actionCount = 0;
+let busy = false;
+let voiceCapture = null;
+let audioPlaybackTime = 0;
+let playbackContext = null;
+let stagedQuarantineId = null;
+let sandboxAvailable = false;
+let settingsSchema = null;
+let cameraStreaming = false;
+let cameraLens = 'front';
+let cameraFlipTried = false;
+let cameraGreetContext = undefined;
+let greetedOnSight = false;
+const dialogue = createMinaDialogue();
+let dialogueState = { awaitingCameraConsent: false };
+// True while a YouTube/music mission is (or just was) driving the browser: lets follow-up voice
+// lines ("mets cheb hasni", "la chanson 2", "mets sur pause") pilot the OPEN page instead of dying.
+let mediaSessionActive = false;
+const qualityProbe = document.createElement('canvas');
+qualityProbe.width = 48;
+qualityProbe.height = 48;
+
+// Local Windows TTS (Web Speech API) — LAST-RESORT ONLY. Its SAPI timbre is robotic; the natural
+// fallback is speakLocal() below (Kokoro), and the normal path remains the Gemini Live voice.
+const speakSapi = (text) => {
+  try {
+    const synth = window.speechSynthesis;
+    if (!synth || typeof SpeechSynthesisUtterance !== 'function') return;
+    const utterance = new SpeechSynthesisUtterance(String(text).slice(0, 600));
+    utterance.lang = 'fr-FR';
+    synth.cancel();
+    synth.speak(utterance);
+  } catch { /* speech is best-effort, never fatal */ }
+};
+
+// Natural local fallback voice (Kokoro ff_siwis in a worker process): its PCM chunks arrive on the
+// SAME mina:voice-audio channel as Gemini's, so playback, animations and barge-in behave
+// identically. SAPI only remains for the case where the local model itself is unavailable.
+const speak = (text) => {
+  api.localTts({ text: String(text ?? '') })
+    .then((result) => { if (!result?.spoken) speakSapi(text); })
+    .catch(() => { speakSapi(text); });
+};
+
+// One mouth only: deterministic replies are sent back to Gemini Live as "[DIS] <texte>" and read
+// verbatim by its natural voice (the local TTS sounded robotic and overlapped with Gemini's own
+// audio). Falls back to local TTS only when no live voice session exists to do the reading.
+// Timestamp of the last deterministic line handed to the voice model. Used to ignore a barge-in
+// that fires in the instant right after: the owner's own question is still echoing (mic picks up
+// the tail of their sentence, or the speakers), the server VAD reads that as "user is talking",
+// and the reply gets killed before a single word is heard — the exact "elle se tait puis demande
+// si j'ai entendu" symptom. A REAL interruption a moment later still works normally.
+let lastReadbackAt = 0;
+const READBACK_GRACE_MS = 2_000;
+// Ignoring the echo interruption client-side is NOT enough: the interruption already killed the
+// audio generation SERVER-side, so « Mina continue » had nothing left to play — the owner heard
+// silence while Mina believed she had spoken (« et voilà »). The only real recovery is to re-send
+// the same [DIS] line once. One retry only: a retry loop against a persistent echo would stutter.
+let lastReadbackText = '';
+let readbackRetryUsed = false;
+
+// Timestamp of the last barge-in cut. Chunks still in flight from the killed turn are dropped for
+// a SHORT self-expiring window (see isPlaybackSuppressed) — an earlier version used a boolean
+// cleared only by say(), which silently muted every later conversational reply for good.
+let playbackSuppressedAt = 0;
+// Dernier chunk audio de la voix PRINCIPALE réellement joué — sert au repli local anti-doublon.
+let lastVoiceAudioAt = 0;
+
+// Bouclier de lecture : tant qu'une réplique déterministe est lue, le micro n'alimente PLUS le
+// serveur (l'écho des haut-parleurs déclenchait le VAD qui tuait la lecture — « liste tes
+// outils » → mute → « et voilà »). Le barge-in réel reste : le détecteur local coupe la lecture
+// sur une voix soutenue (~400 ms au-dessus de l'écho résiduel).
+let readbackShieldUntil = 0;
+const bargeInDetector = createBargeInDetector();
+
+const say = async (text) => {
+  lastReadbackAt = Date.now();
+  lastReadbackText = text;
+  readbackRetryUsed = false;
+  playbackSuppressedAt = 0; // a new line to speak re-opens playback immediately after any earlier cut
+  readbackShieldUntil = Date.now() + readbackShieldDuration(text);
+  bargeInDetector.reset();
+  try {
+    const result = await api.sayVoice(text);
+    if (result?.spoken) return;
+    if (result?.reason === 'paused') return; // en pause : silence voulu, jamais de repli local
+  } catch { /* fall through to the local fallback voice */ }
+  // Anti-doublon (cas réel : la voix LOCALE répétait la phrase APRÈS la voix principale) :
+  // l'échec de sendText pendant une reprise de session n'empêche pas toujours Gemini de finir
+  // par parler. Le repli local attend 2 s et ne joue QUE si la voix principale n'a rien émis.
+  const requestedAt = Date.now();
+  setTimeout(() => {
+    if (lastVoiceAudioAt > requestedAt || scheduledVoiceSources.size > 0) return;
+    speak(text);
+  }, 2_000);
+};
+
+// Grayscale mean/variance of the current camera frame, read from a downscaled offscreen canvas so the
+// black/blurry decision runs cheaply on every frame. Returns null if the frame can't be sampled yet.
+const sampleFrameStats = (image) => {
+  try {
+    const context = qualityProbe.getContext('2d', { willReadFrequently: true });
+    if (!context || !image.naturalWidth) return null;
+    context.drawImage(image, 0, 0, qualityProbe.width, qualityProbe.height);
+    const { data } = context.getImageData(0, 0, qualityProbe.width, qualityProbe.height);
+    const gray = new Uint8Array(data.length / 4);
+    for (let i = 0, g = 0; i < data.length; i += 4, g += 1) {
+      gray[g] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+    }
+    return frameStatsFromGrayscale(gray);
+  } catch {
+    return null;
+  }
+};
+
+const openCameraFromDialogue = async (context) => {
+  cameraGreetContext = context;
+  if (cameraStreaming) return;
+  try {
+    await api.startPhoneCamera();
+    cameraStreaming = true;
+    cameraLens = 'front';
+    cameraFlipTried = false;
+    greetedOnSight = false;
+    elements.cameraStatus.textContent = 'Démarrage CameraX…';
+  } catch (error) {
+    void reportTechnicalError('camera', 'camera_start_failed', error);
+    log(`Caméra : ${error.message}`);
+  }
+};
+
+const declineCameraFromDialogue = async () => {
+  if (!cameraStreaming) return;
+  try {
+    await api.stopPhoneCamera();
+    cameraStreaming = false;
+    elements.cameraPreview.hidden = true;
+    elements.cameraSwitch.hidden = true;
+    elements.cameraFrame.removeAttribute('src');
+    elements.cameraStatus.textContent = 'Caméra signée · arrêt sécurisé';
+  } catch (error) {
+    void reportTechnicalError('camera', 'camera_stop_failed', error);
+    log(`Caméra : ${error.message}`);
+  }
+};
+
+// The dialogue layer only ever returns the owner's own next answer (title/artist) — never a guessed
+// song. Turning it into a real mission (not a bespoke YouTube automation) reuses the whole existing
+// orchestrator: normalized actions, confirmations, and post-action verification all still apply.
+const playMusicFromDialogue = async (query) => {
+  const trimmed = String(query ?? '').trim().slice(0, 200);
+  if (!trimmed) return;
+  mediaSessionActive = true;
+  try {
+    const results = await api.searchYouTube({ query: trimmed, maxResults: 1 });
+    const first = results[0];
+    if (!first?.url) throw new Error('youtube_api_empty_results');
+    elements.goal.value = `Ouvre exactement ${first.url} dans YouTube et lance la lecture de « ${first.title} » par ${first.channelTitle}.`;
+    log(`YouTube Data API : ${first.title} · ${first.channelTitle}`);
+  } catch (error) {
+    log(`YouTube Data API indisponible (${error.message}) ; recherche navigateur.`);
+    elements.goal.value = `Va sur https://www.youtube.com, cherche "${trimmed}" et lance la lecture de la première vidéo pertinente dans les résultats.`;
+  }
+  void startMission(elements.goal.value, 'browser');
+};
+
+const timeLabel = () => new Intl.DateTimeFormat('fr-FR', {
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+}).format(new Date());
+
+const log = (message) => {
+  if (elements.log.children.length === 1 && elements.log.textContent.includes('attend une instruction')) {
+    elements.log.textContent = '';
+  }
+  const item = document.createElement('li');
+  const time = document.createElement('time');
+  const text = document.createElement('span');
+  time.textContent = timeLabel();
+  text.textContent = String(message);
+  item.append(time, text);
+  elements.log.prepend(item);
+  while (elements.log.children.length > 30) elements.log.lastElementChild.remove();
+};
+
+const reportTechnicalError = (scope, code, error, severity = 'error') => api.reportTechnicalError({
+  severity,
+  scope,
+  code,
+  message: String(error?.message ?? error ?? 'Erreur technique sans détail.'),
+}).catch(() => {});
+
+const technicalLogTime = (occurredAt) => {
+  const date = new Date(occurredAt);
+  return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(date);
+};
+
+const renderTechnicalEntry = (entry) => {
+  if (elements.technicalLog.querySelector('.technical-log-empty')) elements.technicalLog.textContent = '';
+  const item = document.createElement('li');
+  const time = document.createElement('time');
+  const text = document.createElement('span');
+  item.className = `technical-log-entry ${entry.severity === 'warning' ? 'warning' : 'error'}`;
+  time.textContent = technicalLogTime(entry.occurredAt);
+  text.textContent = `[${entry.scope}] ${entry.code} — ${entry.message}`;
+  item.append(time, text);
+  elements.technicalLog.prepend(item);
+  while (elements.technicalLog.children.length > 100) elements.technicalLog.lastElementChild.remove();
+};
+
+const showEmptyTechnicalLog = () => {
+  elements.technicalLog.textContent = '';
+  const item = document.createElement('li');
+  const time = document.createElement('time');
+  const text = document.createElement('span');
+  item.className = 'technical-log-empty';
+  time.textContent = '—';
+  text.textContent = 'Aucune erreur technique.';
+  item.append(time, text);
+  elements.technicalLog.append(item);
+};
+
+const refreshTechnicalLog = async () => {
+  const entries = await api.listTechnicalLogs();
+  showEmptyTechnicalLog();
+  [...entries].reverse().forEach(renderTechnicalEntry);
+};
+
+const setStatus = (label, type = 'ready', active = false) => {
+  elements.statusText.textContent = label;
+  elements.statusDot.className = `status-dot ${type}`;
+  elements.iris.classList.toggle('active', active);
+  elements.resume.hidden = type !== 'blocked';
+};
+
+const setBusy = (value) => {
+  busy = value;
+  elements.start.disabled = value;
+  elements.dental.disabled = value;
+  elements.iris.classList.toggle('active', value || Boolean(voiceCapture));
+};
+
+const selectedEnvironment = () => document.querySelector('input[name="environment"]:checked')?.value || 'browser';
+const selectEnvironment = (environment) => applyEnvironmentSelection(environment,
+  document.querySelectorAll('input[name="environment"]'),
+);
+
+const startMission = async (goal = elements.goal.value, environment = selectedEnvironment()) => {
+  if (busy) return;
+  const instruction = String(goal).trim();
+  if (!instruction) {
+    elements.goal.focus();
+    log('Ajoutez une instruction avant de lancer Mina.');
+    return;
+  }
+  setBusy(true);
+  setStatus('Mission en cours', 'ready', true);
+  log(`Mission lancée sur ${environment} : ${instruction}`);
+  try {
+    const result = await api.start({
+      goal: instruction,
+      environment,
+      memoryRequired: elements.memoryRequired.checked,
+    });
+    log(result.status === 'completed' ? `Terminé : ${result.result}` : `Arrêt : ${result.stopReason}`);
+    setStatus(result.status === 'completed' ? 'Prête' : 'Mission arrêtée', result.status === 'completed' ? 'ready' : 'blocked');
+    // Spoken outcome: in a voice session the owner isn't reading the log — silence after
+    // "je m'en occupe" reads as "nothing happened".
+    void say(result.status === 'completed' ? 'Mission terminée.' : "Je n'ai pas pu finir la mission.");
+  } catch (error) {
+    void reportTechnicalError(`mission:${environment}`, 'mission_request_failed', error);
+    log(`Erreur : ${error.message}`);
+    setStatus('Action bloquée', 'blocked');
+    void say("La mission a échoué, mon créateur.");
+  } finally {
+    setBusy(false);
+  }
+};
+
+const downsamplePcm16 = (samples, sourceRate, targetRate = 16_000) => {
+  const ratio = sourceRate / targetRate;
+  const length = Math.max(1, Math.floor(samples.length / ratio));
+  const pcm = new Int16Array(length);
+  for (let index = 0; index < length; index += 1) {
+    const start = Math.floor(index * ratio);
+    const end = Math.min(samples.length, Math.floor((index + 1) * ratio));
+    let sum = 0;
+    for (let cursor = start; cursor < end; cursor += 1) sum += samples[cursor];
+    const value = Math.max(-1, Math.min(1, sum / Math.max(1, end - start)));
+    pcm[index] = value < 0 ? value * 0x8000 : value * 0x7fff;
+  }
+  return pcm.buffer;
+};
+
+const startVoiceCapture = async () => {
+  // Create/resume the PLAYBACK context here, while still inside the click's user-gesture window:
+  // an AudioContext first created later (on the first arriving chunk) can be born "suspended" by
+  // Chromium's autoplay policy, and then Mina's reply is scheduled but never audible.
+  if (!playbackContext) playbackContext = new AudioContext({ sampleRate: 24_000 });
+  if (playbackContext.state === 'suspended') await playbackContext.resume().catch(() => {});
+  const voiceSession = await api.startVoice();
+  if (voiceSession?.engine === 'deepgram') {
+    log('Gemini indisponible — écoute de secours Deepgram active, voix locale naturelle.');
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    video: false,
+  });
+  const context = new AudioContext();
+  const source = context.createMediaStreamSource(stream);
+  const processor = context.createScriptProcessor(4096, 1, 1);
+  const silent = context.createGain();
+  silent.gain.value = 0;
+  processor.onaudioprocess = (event) => {
+    const samples = event.inputBuffer.getChannelData(0);
+    voicePresence.setLevel(samples);
+    if (isShieldActive({ shieldUntil: readbackShieldUntil, now: Date.now() })) {
+      // Lecture en cours : rien ne part au serveur (zéro écho = zéro coupure serveur)…
+      if (!bargeInDetector.push(normalizeVoiceLevel(samples))) return;
+      // …sauf si le propriétaire parle VRAIMENT : voix soutenue → on coupe la lecture et on
+      // rouvre le micro immédiatement, ce chunk inclus — l'interruption reste instantanée.
+      readbackShieldUntil = 0;
+      log('Vous parlez — je me tais et je vous écoute.');
+      stopVoicePlayback();
+    }
+    api.sendVoiceAudio(downsamplePcm16(samples, context.sampleRate));
+  };
+  source.connect(processor);
+  processor.connect(silent);
+  silent.connect(context.destination);
+  voiceCapture = { stream, context, source, processor, silent };
+  voicePresence.dispatch({ type: 'capture_started' });
+  elements.voice.setAttribute('aria-pressed', 'true');
+  elements.voice.querySelector('span:last-child').textContent = 'À l’écoute';
+  setStatus('À l’écoute', 'ready', true);
+  log('Voix active. Dites « Salut Mina », « Bonjour Mina » ou « Mina, comment ça va ? ».');
+};
+
+const stopVoiceCapture = async () => {
+  if (!voiceCapture) return;
+  voiceCapture.processor.disconnect();
+  voiceCapture.source.disconnect();
+  voiceCapture.silent.disconnect();
+  voiceCapture.stream.getTracks().forEach((track) => track.stop());
+  await voiceCapture.context.close();
+  voiceCapture = null;
+  await api.stopVoice();
+  voicePresence.dispatch({ type: 'capture_stopped' });
+  elements.voice.setAttribute('aria-pressed', 'false');
+  elements.voice.querySelector('span:last-child').textContent = 'Live Stream';
+  setStatus('Prête', 'ready');
+};
+
+// Every scheduled chunk keeps its source referenced so a barge-in can stop the whole queue —
+// without this, audio already buffered client-side keeps talking long after the server stopped.
+const scheduledVoiceSources = new Set();
+
+const playPcm24 = async (payload) => {
+  if (isPlaybackSuppressed({ suppressedAt: playbackSuppressedAt, now: Date.now() })) return;
+  lastVoiceAudioAt = Date.now();
+  const bytes = payload?.audio instanceof Uint8Array ? payload.audio : new Uint8Array(payload?.audio ?? []);
+  if (bytes.byteLength < 2) return;
+  if (!playbackContext) playbackContext = new AudioContext({ sampleRate: 24_000 });
+  // Chromium starts an AudioContext created outside a direct user gesture in "suspended" state —
+  // scheduling then succeeds silently and NOTHING is heard. Resuming is idempotent and cheap.
+  if (playbackContext.state === 'suspended') void playbackContext.resume().catch(() => {});
+  const pcm = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2));
+  const audioBuffer = playbackContext.createBuffer(1, pcm.length, 24_000);
+  const channel = audioBuffer.getChannelData(0);
+  for (let index = 0; index < pcm.length; index += 1) channel[index] = pcm[index] / 0x8000;
+  const source = playbackContext.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(playbackContext.destination);
+  scheduledVoiceSources.add(source);
+  source.onended = () => {
+    scheduledVoiceSources.delete(source);
+    if (scheduledVoiceSources.size === 0 && voiceCapture) {
+      voicePresence.dispatch({ type: 'playback_finished' });
+      // Lecture réellement terminée : le bouclier estimé ne doit JAMAIS rendre Mina sourde plus
+      // longtemps que la vraie voix — 800 ms de marge pour la queue d'écho, puis micro rouvert.
+      readbackShieldUntil = Math.min(readbackShieldUntil, Date.now() + 800);
+    }
+  };
+  // Coussin anti-gigue (voir computeVoiceStartTime) : 150 ms au départ d'une salve, recalage
+  // à +60 ms pour un chunk en retard — supprime les micro-coupures dues au réseau/IPC.
+  const startsAt = computeVoiceStartTime({
+    currentTime: playbackContext.currentTime,
+    queuedUntil: audioPlaybackTime,
+    queueEmpty: scheduledVoiceSources.size === 1, // cette source vient d'être ajoutée au Set
+  });
+  source.start(startsAt);
+  audioPlaybackTime = startsAt + audioBuffer.duration;
+};
+
+// Barge-in: the owner spoke over Mina. Cut everything still queued locally (Gemini chunks + the
+// fallback TTS) so she goes quiet and listens. The live session and the dialogue state are left
+// untouched — the conversation context is never lost, only the remaining speech is dropped.
+const stopVoicePlayback = () => {
+  playbackSuppressedAt = Date.now();
+  readbackShieldUntil = 0; // toute coupure rouvre le micro immédiatement — jamais de surdité résiduelle
+  for (const source of scheduledVoiceSources) {
+    try { source.stop(); } catch { /* already ended */ }
+  }
+  scheduledVoiceSources.clear();
+  audioPlaybackTime = 0;
+  if (voiceCapture) voicePresence.dispatch({ type: 'capture_started' });
+  try { window.speechSynthesis?.cancel(); } catch { /* fallback TTS optional */ }
+};
+
+const formatDate = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'date inconnue' : date.toLocaleString('fr-FR');
+};
+
+const updateMemoryStatus = (state) => {
+  elements.memoryState.textContent = state.locked ? 'Verrouillée' : 'Déverrouillée';
+  elements.memoryState.className = state.locked ? 'badge blocked' : 'badge ready';
+  elements.semanticState.textContent = state.semanticMode === 'lexical_degraded'
+    ? 'RAG lexical dégradé'
+    : state.semanticMode;
+  elements.semanticState.className = state.semanticMode === 'lexical_degraded' ? 'badge warning' : 'badge';
+  elements.backupState.textContent = state.backupState === 'configured' ? 'Firebase configuré' : 'Backup désactivé';
+  elements.backupState.className = 'badge';
+  elements.memorySearch.disabled = state.locked;
+  elements.fileRead.disabled = state.locked;
+  elements.webRead.disabled = state.locked;
+};
+
+const renderMemoryItems = (items, kind = 'memory') => {
+  elements.memoryResults.textContent = '';
+  if (!items.length) {
+    const empty = document.createElement('li');
+    empty.textContent = 'Aucun résultat.';
+    elements.memoryResults.append(empty);
+    return;
+  }
+  items.forEach((item) => {
+    const row = document.createElement('li');
+    const content = document.createElement('strong');
+    const meta = document.createElement('small');
+    if (kind === 'evidence') {
+      content.textContent = item.extract || 'Preuve sans extrait';
+      meta.textContent = `${item.locator || 'source inconnue'} · ${formatDate(item.capturedAt)} · ${item.freshnessClass || 'statut inconnu'}`;
+    } else {
+      content.textContent = item.masked ? 'Contenu sensible masqué' : item.content;
+      const provenance = Object.keys(item.provenance ?? {}).length ? JSON.stringify(item.provenance) : 'provenance inconnue';
+      meta.textContent = `${formatDate(item.date)} · ${item.classification} · ${provenance}`;
+    }
+    row.append(content, meta);
+    elements.memoryResults.append(row);
+  });
+};
+
+const refreshMemoryStatus = async () => updateMemoryStatus(await api.memoryStatus());
+
+const settingValue = (key, state) => {
+  const providers = state.config.providers;
+  const values = {
+    LM_STUDIO_ENABLED: providers.lmStudio.enabled,
+    LM_STUDIO_BASE_URL: providers.lmStudio.baseUrl,
+    LM_STUDIO_TEXT_MODEL: providers.lmStudio.model,
+    LM_STUDIO_VISION_MODEL: providers.lmStudio.visionModel,
+    LM_STUDIO_EMBEDDING_MODEL: providers.lmStudio.embeddingModel,
+    LM_STUDIO_TIMEOUT_MS: providers.lmStudio.timeoutMs,
+    GEMINI_MODEL: providers.gemini.model,
+    DEEPSEEK_BASE_URL: providers.deepseek.baseUrl,
+    DEEPSEEK_MODEL: providers.deepseek.model,
+    OPENROUTER_BASE_URL: providers.openrouter.baseUrl,
+    OPENROUTER_VISION_MODEL: providers.openrouter.model,
+    MODAL_ENDPOINT: providers.modal.baseUrl,
+    MODAL_MODEL: providers.modal.model,
+    HF_INFERENCE_BASE_URL: providers.huggingface.baseUrl,
+    HF_TEXT_MODEL: providers.huggingface.model,
+    HTTPSMS_BASE_URL: state.config.sms.httpsms.baseUrl,
+    HTTPSMS_FROM_NUMBER: state.config.sms.httpsms.fromNumber,
+    HTTPSMS_SMS_MODE: state.config.sms.httpsms.mode,
+    SMS_SEND_MODE: state.config.sms.policy.sendMode,
+    SMS_ALLOWLIST: state.config.sms.policy.allowlist.join(', '),
+    SMS_QUIET_HOURS_START: state.config.sms.policy.quietHoursStart ?? '',
+    SMS_QUIET_HOURS_END: state.config.sms.policy.quietHoursEnd ?? '',
+    SMS_MAX_PER_MINUTE: state.config.sms.policy.maxPerMinute,
+    SMS_MAX_PER_DAY: state.config.sms.policy.maxPerDay,
+  };
+  return values[key] ?? '';
+};
+
+const refreshSettings = async () => {
+  const [schema, state] = await Promise.all([api.settingsSchema(), api.settingsState()]);
+  settingsSchema = schema;
+  elements.settingsMode.textContent = '';
+  schema.modes.forEach((mode) => {
+    const option = document.createElement('option');
+    option.value = mode;
+    option.textContent = mode;
+    option.selected = mode === state.config.inference.mode;
+    elements.settingsMode.append(option);
+  });
+  elements.settingsOffline.checked = state.config.inference.offline;
+  elements.settingsFields.textContent = '';
+  schema.nonSensitiveKeys.filter((key) => !['MINA_INFERENCE_MODE', 'MINA_OFFLINE'].includes(key)).forEach((key) => {
+    const label = document.createElement('label');
+    const title = document.createElement('span');
+    const input = document.createElement('input');
+    title.textContent = key;
+    input.dataset.envKey = key;
+    input.type = key.endsWith('_ENABLED') ? 'checkbox' : 'text';
+    if (input.type === 'checkbox') input.checked = settingValue(key, state) === true;
+    else input.value = settingValue(key, state) ?? '';
+    label.append(title, input);
+    elements.settingsFields.append(label);
+  });
+  const secretStatus = new Map(state.secrets.map((entry) => [entry.providerId, entry.configured]));
+  elements.settingsProviders.textContent = '';
+  schema.providers.forEach((provider) => {
+    const card = document.createElement('article');
+    const title = document.createElement('strong');
+    const status = document.createElement('small');
+    title.textContent = `${provider.id} · ${provider.locality}`;
+    const configured = provider.id === 'lmStudio' ? state.config.providers.lmStudio.enabled : secretStatus.get(provider.id) === true;
+    status.textContent = configured ? 'Configuré' : 'Non configuré';
+    card.append(title, status);
+    let secretInput = null;
+    if (provider.id !== 'lmStudio') {
+      secretInput = document.createElement('input');
+      secretInput.type = 'password';
+      secretInput.autocomplete = 'new-password';
+      secretInput.placeholder = 'Nouveau secret — jamais réaffiché';
+      card.append(secretInput);
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.textContent = 'Chiffrer le secret';
+      save.addEventListener('click', async () => {
+        try {
+          if (!secretInput.value) return;
+          await api.setProviderSecret({ providerId: provider.id, value: secretInput.value });
+          secretInput.value = '';
+          log(`Secret ${provider.id} enregistré dans le keyring.`);
+          await refreshSettings();
+        } catch (error) { secretInput.value = ''; log(`Secret ${provider.id} : ${error.message}`); }
+      });
+      card.append(save);
+      const revoke = document.createElement('button');
+      revoke.type = 'button';
+      revoke.textContent = 'Révoquer localement';
+      revoke.disabled = !configured;
+      revoke.addEventListener('click', async () => { await api.revokeProviderSecret({ providerId: provider.id }); await refreshSettings(); });
+      card.append(revoke);
+    }
+    const test = document.createElement('button');
+    test.type = 'button';
+    test.textContent = 'Valider la configuration';
+    test.addEventListener('click', async () => {
+      try { await api.testProvider({ providerId: provider.id }); log(`Configuration ${provider.id} valide.`); }
+      catch (error) { log(`Configuration ${provider.id} : ${error.message}`); }
+    });
+    card.append(test);
+    elements.settingsProviders.append(card);
+  });
+};
+
+const localDateTimeValue = (date) => {
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+};
+
+const analyticsRequest = () => ({
+  from: new Date(elements.analyticsFrom.value).toISOString(),
+  to: new Date(elements.analyticsTo.value).toISOString(),
+  page: 1,
+  pageSize: 100,
+});
+
+const refreshAnalytics = async () => {
+  const result = await api.queryAnalytics(analyticsRequest());
+  const aggregate = result.aggregates;
+  const cards = [
+    ['Appels', aggregate.attempts],
+    ['Succès', aggregate.successRate === null ? '—' : `${Math.round(aggregate.successRate * 100)} %`],
+    ['Tokens entrée', aggregate.inputTokens],
+    ['Tokens cache', aggregate.cachedInputTokens],
+    ['Tokens sortie', aggregate.outputTokens],
+    ['Raisonnement', aggregate.reasoningTokens],
+    ['Coût connu', `${(aggregate.budgetConsumptionMicros / 1_000_000).toFixed(6)} ${result.items[0]?.currency ?? 'USD'}`],
+    ['Coûts inconnus', aggregate.unknownCostAttempts],
+    ['Latence p95', aggregate.p95LatencyMs === null ? '—' : `${Math.round(aggregate.p95LatencyMs)} ms`],
+  ];
+  elements.analyticsSummary.textContent = '';
+  cards.forEach(([label, value]) => {
+    const card = document.createElement('article');
+    const strong = document.createElement('strong');
+    const small = document.createElement('small');
+    strong.textContent = String(value);
+    small.textContent = label;
+    card.append(strong, small);
+    elements.analyticsSummary.append(card);
+  });
+  elements.analyticsResults.textContent = '';
+  result.items.forEach((item) => {
+    const row = document.createElement('li');
+    const title = document.createElement('strong');
+    const detail = document.createElement('small');
+    title.textContent = `${item.providerId} · ${item.modelId} · ${item.status}`;
+    detail.textContent = `${formatDate(item.startedAt)} · ${item.capability} · ${item.latencyMs} ms · ${item.costMicros ?? 'coût inconnu'} µ$`;
+    row.append(title, detail);
+    elements.analyticsResults.append(row);
+  });
+  if (!result.items.length) elements.analyticsResults.append(listEntry('Aucune utilisation enregistrée', 'Les métriques apparaîtront après un appel modèle instrumenté.', null));
+};
+
+const refreshToday = async () => {
+  const briefing = await api.getDailyBriefing({ identityId: 'owner', asOf: Date.now(), channel: 'local' });
+  elements.todayItems.textContent = '';
+  briefing.items.forEach((item) => {
+    elements.todayItems.append(listEntry(item.text ?? item.section, `${item.section} · ${item.sourceRef}`, null));
+  });
+  briefing.staleItems.forEach((item) => {
+    elements.todayItems.append(listEntry(item.text ?? item.section, item.label, null));
+  });
+  if (!briefing.items.length && !briefing.staleItems.length) {
+    elements.todayItems.append(listEntry('Rien à signaler', 'Aucune source configurée ou rien de nouveau aujourd’hui.', null));
+  }
+};
+
+const refreshAutomationStatus = async () => {
+  const [definitions, cases, health] = await Promise.all([
+    api.listAutomationDefinitions(),
+    api.listRecoveryCases(),
+    api.healthSnapshot(),
+  ]);
+  const openCases = cases.filter((entry) => !entry.closedManually).length;
+  const failedProbes = health.filter((entry) => entry.status === 'failed').length;
+  const cards = [
+    ['Définitions', definitions.length],
+    ['Cas de recovery ouverts', openCases],
+    ['Sondes santé (échecs)', `${failedProbes} / ${health.length}`],
+  ];
+  elements.automationSummary.textContent = '';
+  cards.forEach(([label, value]) => {
+    const card = document.createElement('article');
+    const strong = document.createElement('strong');
+    const small = document.createElement('small');
+    strong.textContent = String(value);
+    small.textContent = label;
+    card.append(strong, small);
+    elements.automationSummary.append(card);
+  });
+  const emergency = await api.getEmergencyStatus();
+  elements.emergencyNetworkState.textContent = `Réseau : ${emergency.network === 'disabled' ? 'coupé (urgence active)' : 'normal'}`;
+};
+
+// Read-only status card: Approbations/Connecteurs/Éditeurs approuvés/Personnalité admin actions
+// (publisher approval, connector activation, personality patch confirmation) stay main-process/local
+// and are deliberately never exposed here — this panel only ever displays counts and current style.
+const refreshExtensionsStatus = async () => {
+  const [connectors, personality] = await Promise.all([api.listConnectors(), api.getPersonalityProfile()]);
+  const cards = [
+    ['Connecteurs installés', connectors.length],
+    ['Personnalité — nom', personality.displayName],
+    ['Personnalité — ton', personality.tone],
+  ];
+  elements.extensionsSummary.textContent = '';
+  cards.forEach(([label, value]) => {
+    const card = document.createElement('article');
+    const strong = document.createElement('strong');
+    const small = document.createElement('small');
+    strong.textContent = String(value);
+    small.textContent = label;
+    card.append(strong, small);
+    elements.extensionsSummary.append(card);
+  });
+};
+
+const listEntry = (title, detail, buttonLabel, onClick, disabled = false) => {
+  const row = document.createElement('li');
+  const strong = document.createElement('strong');
+  const small = document.createElement('small');
+  strong.textContent = title;
+  small.textContent = detail;
+  row.append(strong, small);
+  if (buttonLabel) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = buttonLabel;
+    button.disabled = disabled;
+    button.addEventListener('click', () => { void onClick(); });
+    row.append(button);
+  }
+  return row;
+};
+
+const refreshSkillsSandbox = async () => {
+  const state = await api.skillsSandboxStatus();
+  sandboxAvailable = state.sandbox.available;
+  elements.minaDigest.textContent = `MINA.md v${state.instructions.version} · ${state.instructions.digest.slice(0, 18)}…`;
+  elements.sandboxState.textContent = sandboxAvailable ? 'Sandbox disponible' : `Sandbox bloqué · ${state.sandbox.reason}`;
+  elements.sandboxState.className = sandboxAvailable ? 'ready' : 'blocked';
+  elements.sandboxRemediation.textContent = state.sandbox.remediation || '';
+  elements.skillList.textContent = '';
+  state.installedSkills.forEach((skill) => elements.skillList.append(listEntry(
+    `${skill.name} · ${skill.version} · installé`,
+    `${skill.capabilities.join(', ') || 'aucune capacité'} · ${skill.channels.join(', ')}`,
+  )));
+  (state.bundledSkills ?? []).forEach((skill) => elements.skillList.append(listEntry(
+    `${skill.name} · ${skill.version} · intégré`,
+    `${skill.capabilities.join(', ') || 'aucune capacité'} · ${skill.channels.join(', ')}`,
+  )));
+  if (!state.installedSkills.length && !(state.bundledSkills ?? []).length) elements.skillList.append(listEntry('Aucun skill disponible', 'Utilisez la quarantaine locale.', null));
+  elements.sandboxProposals.textContent = '';
+  state.proposals.forEach((proposal) => elements.sandboxProposals.append(listEntry(
+    proposal.summary || proposal.proposalId,
+    `Permissions : ${(proposal.requestedPermissions ?? []).join(', ') || 'aucune'}`,
+    'Exécuter',
+    async () => {
+      try {
+        await api.executeSandbox({ proposalId: proposal.proposalId });
+        await refreshSkillsSandbox();
+      } catch (error) { log(`Sandbox : ${error.message}`); }
+    },
+    !sandboxAvailable,
+  )));
+  if (!state.proposals.length) elements.sandboxProposals.append(listEntry('Aucune proposition', 'L’exécution exige une demande explicite.', null));
+  elements.sandboxJobs.textContent = '';
+  state.jobs.forEach((job) => elements.sandboxJobs.append(listEntry(
+    `${job.jobId} · ${job.status}`,
+    job.summary || 'Job isolé',
+    'Annuler',
+    async () => { await api.cancelSandbox({ jobId: job.jobId }); await refreshSkillsSandbox(); },
+    !['running', 'starting'].includes(job.status),
+  )));
+  elements.sandboxArtifacts.textContent = '';
+  state.artifacts.forEach((artifact) => elements.sandboxArtifacts.append(listEntry(
+    artifact.name || artifact.artifactId,
+    artifact.digest || 'Empreinte indisponible',
+    'Importer',
+    async () => { await api.importSandboxArtifact({ jobId: artifact.jobId, artifactId: artifact.artifactId }); },
+  )));
+};
+
+const applyStatusFromHealth = (status) => {
+  const rotated = status.ok && status.config?.credentialsRotated;
+  elements.lockPanel.hidden = rotated;
+  if (!rotated) {
+    elements.lockText.textContent = status.ok
+      ? 'Les clés vues pendant la configuration doivent être renouvelées. Mina reste hors ligne jusque-là.'
+      : status.error;
+    setStatus('Clés à renouveler', 'blocked');
+    elements.start.disabled = true;
+    elements.dental.disabled = true;
+    elements.voice.disabled = true;
+  } else {
+    elements.start.disabled = false;
+    elements.dental.disabled = false;
+    elements.voice.disabled = false;
+    setStatus('Prête', 'ready');
+  }
+};
+
+elements.start.addEventListener('click', () => { void startMission(); });
+// Nothing in the backend actually stays stuck after an emergency stop (mina-runtime.mjs keeps
+// runtimeStatus === 'ready') — only the status pill did, with no way back except restarting the
+// whole app. This just re-checks health and puts the UI back to 'Prête' without a real restart.
+elements.resume.addEventListener('click', async () => {
+  log('Relance demandée après arrêt.');
+  try {
+    const status = await api.status();
+    applyStatusFromHealth(status);
+    log('Mina relancée : prête pour une nouvelle instruction.');
+  } catch (error) {
+    setStatus('Action bloquée', 'blocked');
+    log(`Relance : ${error.message}`);
+  }
+});
+elements.stop.addEventListener('click', async () => {
+  await api.stop();
+  setBusy(false);
+  setStatus('Arrêter', 'blocked');
+  log('Arrêt d’urgence déclenché. Les entrées ont été relâchées.');
+});
+elements.dental.addEventListener('click', async () => {
+  if (busy) return;
+  setBusy(true);
+  setStatus('Analyse dentaire', 'ready', true);
+  log('Analyse Google Photos démarrée.');
+  try {
+    const report = await api.dental({ maxItems: 100 });
+    log(`Analyse terminée : ${report.analyzed} analysées, ${report.selected} retenues, ${report.errors} erreur(s).`);
+    setStatus('Prête', 'ready');
+  } catch (error) {
+    log(`Google Photos : ${error.message}`);
+    setStatus('Action bloquée', 'blocked');
+  } finally {
+    setBusy(false);
+  }
+});
+elements.phone.addEventListener('click', async () => {
+  elements.phoneStatus.textContent = 'Détection…';
+  try {
+    const phone = await api.detectPhone();
+    elements.phoneStatus.textContent = phone.model || 'Android détecté';
+    log(`Téléphone détecté : ${phone.model || 'Android'}.`);
+  } catch (error) {
+    elements.phoneStatus.textContent = 'Non connecté / non autorisé';
+    void reportTechnicalError('phone', 'phone_detection_failed', error);
+    log(`Téléphone : ${error.message}`);
+  }
+});
+elements.camera.addEventListener('click', async () => {
+  try {
+    if (cameraStreaming) {
+      await api.stopPhoneCamera();
+      cameraStreaming = false;
+      elements.cameraStatus.textContent = 'Caméra signée · arrêt sécurisé';
+      elements.cameraPreview.hidden = true;
+      elements.cameraSwitch.hidden = true;
+      elements.cameraFrame.removeAttribute('src');
+      log('Flux caméra Huawei arrêté.');
+    } else {
+      await api.startPhoneCamera();
+      cameraStreaming = true;
+      cameraLens = 'front';
+      cameraFlipTried = false;
+      greetedOnSight = false;
+      cameraGreetContext = undefined;
+      elements.cameraStatus.textContent = 'Démarrage CameraX…';
+      log('Flux CameraX signé demandé au Huawei appairé.');
+    }
+  } catch (error) {
+    void reportTechnicalError('camera', 'camera_toggle_failed', error);
+    log(`Caméra : ${error.message}`);
+  }
+});
+
+const flipCameraLens = async () => {
+  if (!cameraStreaming) { log('Caméra : démarre le flux avant d’inverser l’objectif.'); return; }
+  const nextLens = cameraLens === 'front' ? 'back' : 'front';
+  try {
+    await api.switchCameraLens({ lens: nextLens });
+    cameraLens = nextLens;
+    log(`Caméra inversée : objectif ${nextLens === 'front' ? 'avant' : 'arrière'}.`);
+  } catch (error) {
+    void reportTechnicalError('camera', 'camera_lens_switch_failed', error);
+    log(`Inversion caméra : ${error.message}`);
+  }
+};
+elements.cameraSwitch.addEventListener('click', () => { void flipCameraLens(); });
+
+const applyToolsCollapsed = (collapsed) => {
+  elements.workspace.classList.toggle('tools-collapsed', collapsed);
+  elements.toolsToggle.setAttribute('aria-expanded', String(!collapsed));
+  elements.toolsToggleLabel.textContent = collapsed ? 'Afficher outils' : 'Masquer outils';
+};
+let toolsCollapsed = true;
+try { toolsCollapsed = localStorage.getItem('mina.toolsCollapsed') !== '0'; } catch { /* storage optional */ }
+applyToolsCollapsed(toolsCollapsed);
+elements.helpButton.addEventListener('click', () => { api.openHelp().catch((error) => log(`Guide : ${error.message}`)); });
+
+const THEME_STORAGE_KEY = 'mina.theme';
+// Single source of truth is the DOM attribute itself — no separate JS variable to keep in sync,
+// so both the header click and the "je veux la version nuit" voice command call the same function.
+// The icon itself never touches innerHTML (renderer.js has a hard no-HTML-injection contract):
+// both SVG states are static markup in index.html, and pure CSS keyed off :root[data-theme] shows
+// the one matching the theme a click would activate (sun while dark is active, moon while light).
+const applyTheme = (theme) => {
+  const next = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem(THEME_STORAGE_KEY, next); } catch { /* storage optional */ }
+  return next;
+};
+const currentTheme = () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+let initialTheme = 'light';
+try { initialTheme = localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light'; } catch { /* storage optional */ }
+applyTheme(initialTheme);
+elements.themeToggle.addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
+
+// Rail navigation: Mission stays reachable from anywhere; the four secondary zones are views you
+// switch to (aria-current + a shown/hidden .view), not a scroll you fall through. Pure CSS-class
+// toggling — every IPC-driven update inside a hidden view keeps happening in the background and
+// is simply visible again the moment its zone is reselected.
+const railButtons = [...document.querySelectorAll('.rail-btn[data-view]')];
+const dashboardViews = [...document.querySelectorAll('.view[data-view]')];
+railButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    railButtons.forEach((entry) => entry.removeAttribute('aria-current'));
+    button.setAttribute('aria-current', 'true');
+    dashboardViews.forEach((view) => view.classList.toggle('is-active', view.dataset.view === button.dataset.view));
+  });
+});
+
+// Vue Mina Code : panneaux DOM purs (src/ui/code/*) branchés sur l'IPC code. Fail-soft complet —
+// sans pont preload (page ouverte hors Electron), la vue affiche « indisponible » et rien ne casse.
+const codeElements = {
+  context: document.querySelector('#code-context-panel'),
+  plan: document.querySelector('#code-plan-board'),
+  tests: document.querySelector('#code-test-panel'),
+  git: document.querySelector('#code-git-panel'),
+  diff: document.querySelector('#code-diff-panel'),
+  terminal: document.querySelector('#code-terminal'),
+  indexButton: document.querySelector('#code-index-button'),
+  testsButton: document.querySelector('#code-tests-button'),
+  reviewButton: document.querySelector('#code-review-button'),
+  gitButton: document.querySelector('#code-git-button'),
+};
+if (codeElements.terminal) {
+  void (async () => {
+    const [{ createCodePlanBoard }, { createCodeDiffViewer }, { createCodeTestPanel }, { createCodeGitPanel }, { createCodeContextPanel }, { createCodeTerminal }] = await Promise.all([
+      import('./code/code-plan-board.mjs'),
+      import('./code/code-diff-viewer.mjs'),
+      import('./code/code-test-panel.mjs'),
+      import('./code/code-git-panel.mjs'),
+      import('./code/code-context-panel.mjs'),
+      import('./code/code-terminal.mjs'),
+    ]);
+    const panels = {
+      plan: createCodePlanBoard({ container: codeElements.plan }),
+      diff: createCodeDiffViewer({ container: codeElements.diff }),
+      tests: createCodeTestPanel({ container: codeElements.tests }),
+      git: createCodeGitPanel({ container: codeElements.git }),
+      context: createCodeContextPanel({ container: codeElements.context }),
+      terminal: createCodeTerminal({ container: codeElements.terminal }),
+    };
+    panels.plan.render({});
+    panels.diff.render({});
+    panels.tests.render({});
+    panels.git.render({});
+    panels.context.render({});
+
+    const codeCall = async (label, method, request) => {
+      if (typeof api?.[method] !== 'function') {
+        panels.terminal.append(`${label} : indisponible (pont preload absent)`, 'err');
+        return null;
+      }
+      panels.terminal.append(label, 'cmd');
+      const response = await api[method](request).catch((error) => ({ ok: false, error: String(error?.message ?? error) }));
+      if (!response?.ok) {
+        panels.terminal.append(`${label} : ${response?.error ?? 'échec inconnu'}`, 'err');
+        return null;
+      }
+      return response.data;
+    };
+
+    const refreshStatus = async () => {
+      const status = await codeCall('Statut du projet', 'codeStatus');
+      if (status) {
+        panels.context.render({ projectRoot: status.projectRoot, projectContext: { framework: status.framework, scripts: {} }, indexStatus: status.index });
+      }
+    };
+
+    codeElements.indexButton?.addEventListener('click', async () => {
+      const report = await codeCall('Analyse du projet (indexation complète)', 'codeIndex');
+      if (report) {
+        panels.terminal.append(`Indexation : ${report.indexed}/${report.total} fichier(s), ${report.errors.length} erreur(s) de parse`, report.errors.length > 0 ? 'info' : 'ok');
+        await refreshStatus();
+      }
+    });
+    codeElements.testsButton?.addEventListener('click', async () => {
+      panels.terminal.append('Tests en cours — cela peut prendre plusieurs minutes…', 'info');
+      const result = await codeCall('npm test (vitest)', 'codeTestsRun', {});
+      if (result) {
+        panels.tests.render({ result });
+        panels.terminal.append(`Tests : ${result.passed ?? 0} verts, ${result.failed ?? 0} rouges`, result.failed > 0 || result.crashed ? 'err' : 'ok');
+      }
+    });
+    codeElements.reviewButton?.addEventListener('click', async () => {
+      const report = await codeCall('Revue de code (fichiers indexés)', 'codeReview', {});
+      if (report) {
+        const { critical = 0, high = 0, medium = 0, low = 0 } = report.summary ?? {};
+        panels.terminal.append(`Revue : ${report.findings.length} finding(s) — ${critical} critique(s), ${high} élevé(s), ${medium} moyen(s), ${low} faible(s)`, critical + high > 0 ? 'err' : 'ok');
+        for (const finding of report.findings.slice(0, 12)) {
+          panels.terminal.append(`  [${finding.severity}] ${finding.proof}`, finding.severity === 'critical' ? 'err' : 'info');
+        }
+      }
+    });
+    codeElements.gitButton?.addEventListener('click', async () => {
+      const [status, log, diff] = await Promise.all([
+        codeCall('git status', 'codeGitStatus'),
+        codeCall('git log', 'codeGitLog', { maxCount: 10 }),
+        codeCall('git diff', 'codeGitDiff', {}),
+      ]);
+      panels.git.render({
+        notRepository: status?.notRepository !== false,
+        status: status?.status ?? null,
+        log: log?.log ?? [],
+      });
+      panels.diff.render({ diffText: diff?.diff ?? '', title: 'Diff du dépôt' });
+      if (status?.notRepository !== false) panels.terminal.append('Ce dossier n\'est pas un dépôt git.', 'info');
+    });
+
+    // Premier chargement paresseux : au premier clic sur l'onglet Code seulement.
+    const codeRailButton = railButtons.find((button) => button.dataset.view === 'code');
+    let loadedOnce = false;
+    codeRailButton?.addEventListener('click', () => {
+      if (loadedOnce) return;
+      loadedOnce = true;
+      void refreshStatus();
+    });
+  })();
+}
+
+// HUD clock: self-contained, no IPC — same instrument-panel reading as the rest of the strip.
+const hudClock = document.querySelector('#hud-clock');
+if (hudClock) {
+  const tickClock = () => { hudClock.textContent = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); };
+  tickClock();
+  setInterval(tickClock, 1_000);
+}
+
+// Every section after "Configuration locale" folds the same way (pliant accordion): title/badges
+// stay put in .activity-head, everything else lives in .collapsible > .collapsible-inner.
+const wireCollapsibleSection = (toggleId, labelId, collapsibleId, storageKey) => {
+  const toggle = document.querySelector(`#${toggleId}`);
+  const label = document.querySelector(`#${labelId}`);
+  const container = document.querySelector(`#${collapsibleId}`);
+  let collapsed = true;
+  try { collapsed = localStorage.getItem(storageKey) !== '0'; } catch { /* storage optional */ }
+  const apply = (value) => {
+    container.classList.toggle('collapsed', value);
+    toggle.setAttribute('aria-expanded', String(!value));
+    label.textContent = value ? 'Afficher' : 'Masquer';
+  };
+  apply(collapsed);
+  toggle.addEventListener('click', () => {
+    collapsed = !collapsed;
+    apply(collapsed);
+    try { localStorage.setItem(storageKey, collapsed ? '1' : '0'); } catch { /* storage optional */ }
+  });
+};
+[
+  ['settings-toggle', 'settings-toggle-label', 'settings-collapsible', 'mina.settingsCollapsed'],
+  ['memory-panel-toggle', 'memory-panel-toggle-label', 'memory-panel-collapsible', 'mina.memoryPanelCollapsed'],
+  ['analytics-toggle', 'analytics-toggle-label', 'analytics-collapsible', 'mina.analyticsCollapsed'],
+  ['sandbox-toggle', 'sandbox-toggle-label', 'sandbox-collapsible', 'mina.sandboxCollapsed'],
+  ['automation-toggle', 'automation-toggle-label', 'automation-collapsible', 'mina.automationCollapsed'],
+  ['extensions-toggle', 'extensions-toggle-label', 'extensions-collapsible', 'mina.extensionsCollapsed'],
+  ['today-toggle', 'today-toggle-label', 'today-collapsible', 'mina.todayCollapsed'],
+  ['documents-toggle', 'documents-toggle-label', 'documents-collapsible', 'mina.documentsCollapsed'],
+  ['technical-log-toggle', 'technical-log-toggle-label', 'technical-log-collapsible', 'mina.technicalLogCollapsed'],
+  ['activity-toggle', 'activity-toggle-label', 'activity-collapsible', 'mina.activityCollapsed'],
+].forEach(([toggleId, labelId, collapsibleId, storageKey]) => wireCollapsibleSection(toggleId, labelId, collapsibleId, storageKey));
+elements.toolsToggle.addEventListener('click', () => {
+  toolsCollapsed = !toolsCollapsed;
+  applyToolsCollapsed(toolsCollapsed);
+  try { localStorage.setItem('mina.toolsCollapsed', toolsCollapsed ? '1' : '0'); } catch { /* storage optional */ }
+});
+
+const evaluateFrameQuality = async () => {
+  const stats = sampleFrameStats(elements.cameraFrame);
+  if (!stats) return;
+  const assessment = assessFrameQuality(stats);
+  if (!assessment.usable) {
+    const { flip, toLens } = decideLensFlip({ assessment, currentLens: cameraLens, alreadyFlipped: cameraFlipTried });
+    if (flip) {
+      cameraFlipTried = true;
+      const label = assessment.reason === 'too_dark' ? 'noire' : 'floue';
+      log(`Mina : la vision est ${label}, je retourne la caméra.`);
+      void say(`La vision est ${label}, je retourne la caméra.`);
+      try {
+        await api.switchCameraLens({ lens: toLens });
+        cameraLens = toLens;
+      } catch (error) {
+        log(`Inversion caméra : ${error.message}`);
+      }
+    }
+    return;
+  }
+  // Greets on first usable frame whether the camera was opened by voice consent OR by the manual
+  // button — "seeing" the owner is about the stream being live, not about who pressed start.
+  if (!greetedOnSight) {
+    greetedOnSight = true;
+    const greeting = dialogue.greetOnSight(cameraGreetContext);
+    log(`Mina : ${greeting}`);
+    void say(greeting);
+  }
+};
+
+api.onCameraFrame((frame) => {
+  if (!frame || frame.mimeType !== 'image/jpeg' || typeof frame.imageBase64 !== 'string') return;
+  elements.cameraFrame.onload = () => { void evaluateFrameQuality(); };
+  elements.cameraFrame.src = `data:image/jpeg;base64,${frame.imageBase64}`;
+  // CameraX reports rotationDegrees = how much to rotate clockwise so the image reads upright —
+  // never applied before, so a front-camera frame (commonly 90/270 on most sensors) rendered on its side.
+  const rotation = [0, 90, 180, 270].includes(frame.rotation) ? frame.rotation : 0;
+  elements.cameraFrame.style.transform = rotation ? `rotate(${rotation}deg)` : '';
+  elements.cameraPreview.hidden = false;
+  elements.cameraSwitch.hidden = false;
+  elements.cameraStatus.textContent = `Direct · image ${frame.sequence}`;
+});
+
+api.onCameraStatus((status) => {
+  if (status?.state === 'starting' || status?.state === 'streaming') {
+    cameraStreaming = true;
+  } else if (status?.state === 'error') {
+    cameraStreaming = false;
+    elements.cameraSwitch.hidden = true;
+    elements.cameraStatus.textContent = 'Flux indisponible';
+    log(`Caméra : ${status.error}`);
+  } else if (status?.state === 'stopped') {
+    cameraStreaming = false;
+    elements.cameraSwitch.hidden = true;
+    elements.cameraStatus.textContent = 'Caméra signée · arrêt sécurisé';
+  }
+});
+elements.voice.addEventListener('click', async () => {
+  try {
+    if (voiceCapture) await stopVoiceCapture();
+    else await startVoiceCapture();
+  } catch (error) {
+    await api.stopVoice().catch(() => {});
+    void reportTechnicalError('voice', 'voice_start_failed', error);
+    log(`Voix : ${error.message}`);
+    setStatus('Voix indisponible', 'blocked');
+  }
+});
+
+api.onEvent((event) => {
+  if (event.type === 'action_completed') {
+    actionCount += 1;
+    elements.counter.textContent = `${actionCount} action${actionCount > 1 ? 's' : ''}`;
+    log(`Action exécutée : ${event.action?.name || 'inconnue'}.`);
+  } else if (event.type === 'action_rejected') {
+    log(`Action rejetée : ${event.error}.`);
+  } else if (event.type === 'action_unverified') {
+    log(`${formatGroundingLabel('unsupported')} : ${event.actionResult?.verification?.reason || 'effet absent'}.`);
+  } else if (event.type === 'emergency_stop') {
+    setBusy(false);
+    setStatus('Arrêter', 'blocked');
+  } else if (event.type === 'dental_progress') {
+    elements.counter.textContent = `${event.analyzed} photo${event.analyzed > 1 ? 's' : ''}`;
+  } else if (event.type === 'voice_error') {
+    voicePresence.dispatch({ type: 'failure' });
+    log(`Voix : ${event.error}.`);
+  } else if (event.type === 'phone_messages_synced') {
+    log(`Téléphone : ${event.stored} nouveau(x) message(s) mémorisé(s).`);
+  } else if (event.type === 'resilience_retry') {
+    log(`Résilience : ${event.operation} a échoué (${event.error}), nouvel essai ${event.attempt + 1}…`);
+    announceRetryOnce();
+  } else if (event.type === 'action_error') {
+    log(`Action plantée (${event.action?.name || 'inconnue'}) : ${event.error} — Mina contourne.`);
+  }
+});
+
+// One spoken heads-up per rough retry burst — a flaky network can emit many retries in seconds
+// and Mina must not chant "je réessaie" over and over.
+let lastRetryAnnouncement = 0;
+const announceRetryOnce = () => {
+  const now = Date.now();
+  if (now - lastRetryAnnouncement < 30_000) return;
+  lastRetryAnnouncement = now;
+  void say('Petit souci technique, je réessaie.');
+};
+api.onVoiceWake((phrase) => {
+  voicePresence.dispatch({ type: 'capture_started' });
+  setStatus('Mina activée', 'ready', true);
+  log(`Activation entendue : ${phrase}. Dites maintenant votre instruction.`);
+});
+// Runs one utterance through the deterministic dialogue layer and executes its intent.
+// Returns true when the dialogue owned the turn (reply or action), false when nothing matched.
+// Dedup between the two understanding layers: the deterministic text layer usually fires first
+// (~1s after silence), the Gemini live tool call for the SAME sentence arrives moments later.
+// Whoever executes a kind stamps it; the other side skips the kind for a short window.
+const intentStamps = new Map();
+const stampIntent = (kind) => intentStamps.set(kind, Date.now());
+const intentJustHandled = (kind, windowMs = 6_000) => (Date.now() - (intentStamps.get(kind) ?? 0)) < windowMs;
+
+// "Que sais-tu faire ?" answered from the REAL runtime state (installed skills, sandbox, phone) —
+// the hardcoded text only survives as a fallback when the state probe itself fails.
+const describeCapabilities = async () => {
+  stampIntent('describe');
+  try {
+    const snapshot = await api.capabilities();
+    const brief = composeCapabilityBrief(snapshot);
+    log('Mina : description des capacités depuis l’état réel.');
+    void say(brief);
+  } catch (error) {
+    log(`Capacités : ${error.message} — description générique.`);
+    void say(SELF_KNOWLEDGE_FALLBACK);
+  }
+};
+
+// « Trouve-moi un article » : réponse web directe lue à voix haute — jamais de navigateur.
+// Les sources restent dans le journal (URL complètes) ; la voix ne lit que les titres.
+const runWebAnswer = async (query) => {
+  stampIntent('web');
+  log(`Recherche web directe : ${query}`);
+  try {
+    const result = await api.webAnswer({ query });
+    for (const source of result.sources) log(`Source web : ${source.title || source.url} — ${source.url}`);
+    const titles = result.sources.map((source) => source.title).filter(Boolean);
+    void say(titles.length ? `${result.text} Mes sources : ${titles.join(', ')}.` : result.text);
+  } catch (error) {
+    void reportTechnicalError('research', 'web_answer_failed', error);
+    log(`Recherche web : ${error.message}`);
+    // 429 = quota gratuit Gemini du moment (partagé avec la session vocale) — le dire honnêtement
+    // vaut mieux qu'un échec générique qui ressemble à une panne.
+    void say(String(error?.message ?? '').includes('web_answer_http_429')
+      ? 'Mon quota gratuit de recherche web est épuisé pour le moment. Réessayez un peu plus tard, ou demandez-moi de chercher dans le navigateur.'
+      : "La recherche web directe n'a pas abouti. Je peux ouvrir le navigateur si vous voulez.");
+  }
+};
+
+// « Qu'as-tu fait ? » : résumé parlé composé depuis le journal PERSISTANT — la vérité factuelle,
+// jamais un souvenir improvisé. En mode Gemini, l'outil lire_journal donne le détail complet.
+const runJournalBrief = async () => {
+  stampIntent('journal');
+  try {
+    const entries = await api.readJournal({ limit: 30 });
+    log(`Journal : ${entries.length} événement(s) relus.`);
+    void say(composeJournalBrief(entries));
+  } catch (error) {
+    void reportTechnicalError('journal', 'journal_read_failed', error);
+    void say("Je n'arrive pas à relire mon journal pour le moment.");
+  }
+};
+
+const executeDialogueAction = (action) => {
+  if (action?.type === 'open_camera') { stampIntent('camera'); void openCameraFromDialogue(action.context); }
+  else if (action?.type === 'decline_camera') { stampIntent('camera'); void declineCameraFromDialogue(); }
+  else if (action?.type === 'set_theme') { stampIntent('theme'); applyTheme(action.theme); }
+  else if (action?.type === 'select_environment') {
+    stampIntent('environment');
+    const environment = selectEnvironment(action.environment);
+    log(`Surface active : ${environment}.`);
+  }
+  else if (action?.type === 'play_music') { stampIntent('mission'); playMusicFromDialogue(action.query); }
+  else if (action?.type === 'connect_google_browser') {
+    stampIntent('google_login');
+    api.connectGoogleBrowser()
+      .then(() => log('Connexion Google : Chrome normal ouvert avec le profil persistant Mina Vision.'))
+      .catch((error) => log(`Connexion Google : ${error.message}`));
+  }
+  else if (action?.type === 'close_browser' || action?.type === 'change_music') {
+    stampIntent('close_browser');
+    mediaSessionActive = false;
+    api.closeBrowser().catch((error) => log(`Fermeture navigateur : ${error.message}`));
+  } else if (action?.type === 'flip_camera') { stampIntent('camera'); void flipCameraLens(); }
+  else if (action?.type === 'start_mission') {
+    stampIntent('mission');
+    if (/youtube|musique|chanson|video|film/iu.test(action.goal)) mediaSessionActive = true;
+    void startOrGuideMission(action.goal, action.environment);
+  } else if (action?.type === 'media_followup') {
+    stampIntent('mission');
+    mediaSessionActive = true;
+    const contextGoal = `Dans l'onglet déjà ouvert du navigateur (YouTube ou lecteur en cours), exécute : ${action.command}. `
+      + "N'ouvre ni nouvel onglet ni nouvelle recherche Google — agis directement sur la page actuelle (lecteur, résultats déjà affichés).";
+    void startOrGuideMission(contextGoal, 'browser');
+  } else if (action?.type === 'describe_capabilities') void describeCapabilities();
+  else if (action?.type === 'web_search') void runWebAnswer(action.query);
+  else if (action?.type === 'read_journal') void runJournalBrief();
+};
+
+const applyDialogueDecision = (utterance) => {
+  const decision = dialogue.interpret(utterance, { ...dialogueState, mediaSessionActive });
+  dialogueState = decision.state;
+  if (!decision.reply && !decision.action) return false;
+  if (decision.reply) { log(`Mina : ${decision.reply}`); void say(decision.reply); }
+  executeDialogueAction(decision.action);
+  return true;
+};
+
+// Structured intents from the Gemini live session (dynamic understanding of ANY phrasing).
+// Skipped when the deterministic layer just handled the same kind — otherwise executed through
+// the exact same action paths, so safety confirmations and verification stay identical.
+api.onVoiceIntent((intent) => {
+  const name = intent?.name;
+  const args = intent?.args ?? {};
+  if (name === 'lancer_mission') {
+    if (intentJustHandled('mission') || intentJustHandled('environment')) return;
+    const goal = String(args.objectif ?? '').trim();
+    if (!goal) return;
+    log(`Intention Gemini : mission — ${goal}`);
+    executeDialogueAction({
+      type: 'start_mission',
+      environment: ['browser', 'desktop', 'mobile'].includes(args.environnement) ? args.environnement : selectedEnvironment(),
+      goal,
+    });
+  } else if (name === 'selectionner_environnement') {
+    if (intentJustHandled('environment')) return;
+    if (!['browser', 'desktop', 'mobile'].includes(args.environnement)) return;
+    executeDialogueAction({ type: 'select_environment', environment: args.environnement });
+  } else if (name === 'piloter_page') {
+    if (intentJustHandled('mission')) return;
+    const command = String(args.commande ?? '').trim();
+    if (!command) return;
+    log(`Intention Gemini : pilotage page — ${command}`);
+    executeDialogueAction({ type: 'media_followup', command });
+  } else if (name === 'jouer_musique') {
+    if (intentJustHandled('mission')) return;
+    const titre = String(args.titre ?? '').trim();
+    if (!titre) return;
+    log(`Intention Gemini : musique — ${titre}`);
+    executeDialogueAction({ type: 'play_music', query: titre });
+  } else if (name === 'camera') {
+    if (intentJustHandled('camera')) return;
+    log(`Intention Gemini : caméra — ${args.action}`);
+    if (args.action === 'ouvrir') executeDialogueAction({ type: 'open_camera' });
+    else if (args.action === 'fermer') executeDialogueAction({ type: 'decline_camera' });
+    else if (args.action === 'inverser') executeDialogueAction({ type: 'flip_camera' });
+  } else if (name === 'theme') {
+    if (intentJustHandled('theme')) return;
+    executeDialogueAction({ type: 'set_theme', theme: args.mode === 'nuit' ? 'dark' : 'light' });
+  } else if (name === 'fermer_navigateur') {
+    if (intentJustHandled('close_browser')) return;
+    executeDialogueAction({ type: 'close_browser' });
+  } else if (name === 'connecter_gmail_navigateur') {
+    if (intentJustHandled('google_login')) return;
+    executeDialogueAction({ type: 'connect_google_browser' });
+  } else if (name === 'decrire_capacites') {
+    if (intentJustHandled('describe')) return;
+    void describeCapabilities();
+  } else if (name === 'recherche_web') {
+    if (intentJustHandled('web')) return;
+    const requete = String(args.requete ?? '').trim();
+    if (!requete) return;
+    log(`Intention Gemini : recherche web — ${requete}`);
+    void runWebAnswer(requete);
+  }
+});
+
+// Voice while a mission is already running = steering for THAT mission (same window, mouse and
+// keyboard), never a competing second mission. Falls back to a fresh mission when nothing runs
+// (or the running one just finished between the check and the queue attempt).
+// Repeating the same sentence within a few seconds (impatience while the mission spins up) is
+// dropped instead of piling identical guidance onto the queue.
+let lastMissionRequest = { goal: '', at: 0 };
+const startOrGuideMission = async (goal, environment) => {
+  const activeEnvironment = environment ? selectEnvironment(environment) : selectedEnvironment();
+  const now = Date.now();
+  const normalizedGoal = String(goal).trim().toLocaleLowerCase('fr-FR');
+  if (normalizedGoal && normalizedGoal === lastMissionRequest.goal && now - lastMissionRequest.at < 8_000) {
+    log(`Répétition ignorée (déjà en route) : ${goal}`);
+    return;
+  }
+  lastMissionRequest = { goal: normalizedGoal, at: now };
+  if (busy) {
+    try {
+      const result = await api.guideMission(goal);
+      if (result?.queued) {
+        log(`Mission en cours — instruction transmise : ${goal}`);
+        return;
+      }
+    } catch { /* fall through to a fresh mission */ }
+  }
+  elements.goal.value = goal;
+  log(`Mission vocale (${activeEnvironment}) : ${goal}`);
+  void startMission(goal, activeEnvironment);
+};
+
+api.onVoiceCommand((command) => {
+  // Mina's deterministic persona/consent layer owns matched turns — no computer-use mission.
+  if (applyDialogueDecision(command)) return;
+  void startOrGuideMission(command);
+});
+// Everything the wake router ignores still reaches the dialogue layer (consent "oui", "active la
+// caméra", musique, thème…) — but with NO mission fallback: unmatched casual speech does nothing.
+api.onVoiceDialogue((utterance) => { applyDialogueDecision(utterance); });
+api.onVoiceTranscript((transcript) => {
+  voicePresence.dispatch({ type: 'transcript_final' });
+  log(`Voix entendue : ${transcript}`);
+});
+api.onVoiceAudio((payload) => {
+  voicePresence.dispatch({ type: 'audio_chunk' });
+  void playPcm24(payload);
+});
+// Mot d'arrêt explicite (« stop », « chut », « tais-toi ») : coupure IMMÉDIATE et inconditionnelle
+// de la lecture — ce canal contourne volontairement la fenêtre anti-écho ci-dessous, qui avalait
+// les interruptions prononcées juste après le début d'une réponse.
+api.onVoiceStopSpeech?.(() => {
+  log('Stop — Mina se tait.');
+  // Un stop EXPLICITE tue aussi le retry anti-écho : sans ça, l'interruption serveur qui suit
+  // le stop tombait dans la fenêtre de grâce d'une LECTURE ([DIS]) et la ligne était REJOUÉE —
+  // « elle ne s'arrête pas quand je dis stop en début de lecture » (cas réel 2026-07-22).
+  lastReadbackAt = 0;
+  readbackRetryUsed = true;
+  stopVoicePlayback();
+});
+
+api.onVoiceInterrupted(() => {
+  // Ignore an interruption that lands inside the grace window after we asked Mina to speak —
+  // that one is almost always the owner's own trailing audio/echo, not a real interruption.
+  const sinceReadback = Date.now() - lastReadbackAt;
+  if (sinceReadback < READBACK_GRACE_MS) {
+    // The server already discarded the rest of the readback — merely « continuing » plays silence.
+    // Re-send the exact same line once; by then the echo of the question is gone.
+    if (!readbackRetryUsed && lastReadbackText) {
+      readbackRetryUsed = true;
+      lastReadbackAt = Date.now(); // the retry opens its own grace window against a second echo
+      playbackSuppressedAt = 0;
+      log('Écho détecté — je répète ma réponse.');
+      void api.sayVoice(lastReadbackText).catch(() => { speak(lastReadbackText); });
+      return;
+    }
+    log('Interruption ignorée (écho de votre question, Mina continue).');
+    return;
+  }
+  // Logged explicitly: if Mina keeps getting cut mid-sentence while nobody is speaking, this line
+  // appearing in the journal is the proof it came from the server VAD (mic echo), not a bug in the
+  // audio pipeline — which is otherwise indistinguishable from the outside.
+  if (scheduledVoiceSources.size > 0) log(`Parole coupée par une interruption détectée (${Math.round(sinceReadback / 1000)}s après le début).`);
+  stopVoicePlayback();
+});
+
+api.status().then((status) => {
+  applyStatusFromHealth(status);
+  if (status.ok) elements.dentalMode.textContent = status.config.dryRun ? "Aperçu, rien n'est modifié" : 'Sélection avec confirmation';
+}).catch((error) => {
+  setStatus('Configuration invalide', 'blocked');
+  elements.lockPanel.hidden = false;
+  elements.lockText.textContent = error.message;
+});
+elements.sms.addEventListener('click', async () => {
+  const sourceMessageId = window.prompt('Identifiant du SMS reçu auquel répondre :');
+  if (!sourceMessageId) return;
+  const recipientE164 = window.prompt('Numéro destinataire au format E.164 (ex. +336…) :');
+  if (!recipientE164) return;
+  const text = window.prompt('Réponse SMS :');
+  if (!text) return;
+  try {
+    const receipt = await api.sendSmsConfirmed({ sourceMessageId, recipientE164, text });
+    log(`SMS remis à Android (${receipt.id}). Livraison au destinataire non encore prouvée.`);
+  } catch (error) {
+    log(`SMS bloqué : ${error.message}`);
+  }
+});
+elements.phoneSync.addEventListener('click', async () => {
+  try {
+    const result = await api.syncPhoneMessages();
+    log(`Messages synchronisés : ${result.stored} mémorisé(s), ${result.acked} acquitté(s).`);
+  } catch (error) {
+    log(`Synchronisation messages : ${error.message}`);
+  }
+});
+elements.settingsSave.addEventListener('click', async () => {
+  if (!settingsSchema) return;
+  const patch = {
+    MINA_INFERENCE_MODE: elements.settingsMode.value,
+    MINA_OFFLINE: elements.settingsOffline.checked,
+  };
+  elements.settingsFields.querySelectorAll('[data-env-key]').forEach((input) => {
+    patch[input.dataset.envKey] = input.type === 'checkbox' ? input.checked : input.value;
+  });
+  try {
+    await api.updateSettings(patch);
+    log('Configuration non sensible enregistrée dans .env ; runtime rechargé au prochain appel.');
+    await refreshSettings();
+  } catch (error) { log(`Paramètres : ${error.message}`); }
+});
+const refreshSmsPolicyStatus = async () => {
+  try {
+    const { mode } = await api.smsPolicyStatus();
+    elements.smsPolicyStatus.textContent = `Mode actuel : ${mode}`;
+  } catch { /* SMS policy status is best-effort */ }
+};
+elements.smsPolicyRevoke.addEventListener('click', async () => {
+  await api.smsPolicyRevoke();
+  log('Arrêt d’urgence SMS auto activé : confirmation systématique jusqu’à réactivation.');
+  await refreshSmsPolicyStatus();
+});
+elements.smsPolicyReactivate.addEventListener('click', async () => {
+  await api.smsPolicyReactivate();
+  log('Envoi SMS automatique réactivé selon le mode configuré.');
+  await refreshSmsPolicyStatus();
+});
+void refreshSmsPolicyStatus();
+elements.analyticsRefresh.addEventListener('click', () => { void refreshAnalytics().catch((error) => log(`Analyses : ${error.message}`)); });
+elements.automationRefresh.addEventListener('click', () => { void refreshAutomationStatus().catch((error) => log(`Automatisations : ${error.message}`)); });
+elements.extensionsRefresh.addEventListener('click', () => { void refreshExtensionsStatus().catch((error) => log(`Extensions : ${error.message}`)); });
+elements.todayRefresh.addEventListener('click', () => { void refreshToday().catch((error) => log(`Aujourd’hui : ${error.message}`)); });
+const exportAnalytics = async (format) => {
+  try {
+    const result = await api.exportAnalytics({ ...analyticsRequest(), format });
+    log(`Analyses exportées : ${result.rows} ligne(s).`);
+  } catch (error) { log(`Export analyses : ${error.message}`); }
+};
+elements.analyticsExportCsv.addEventListener('click', () => { void exportAnalytics('csv'); });
+elements.analyticsExportJson.addEventListener('click', () => { void exportAnalytics('json'); });
+elements.memoryInitialize.addEventListener('click', async () => {
+  try {
+    const state = await api.initializeMemory();
+    updateMemoryStatus(state);
+    elements.recoveryOutput.hidden = false;
+    elements.recoveryOutput.textContent = `À conserver hors du PC — affichée une seule fois :\n${state.recoveryPhrase}`;
+    log('Mémoire Mina Vision initialisée et déverrouillée. Sauvegardez la phrase de récupération hors du PC.');
+  } catch (error) {
+    log(`Mémoire : ${error.message}`);
+  }
+});
+elements.memoryUnlock.addEventListener('click', async () => {
+  try {
+    const phrase = elements.recoveryPhrase.value.trim();
+    const state = await api.unlockMemory(phrase ? { recoveryPhrase: phrase } : undefined);
+    elements.recoveryPhrase.value = '';
+    updateMemoryStatus(state);
+    log('Mémoire Mina Vision déverrouillée.');
+  } catch (error) {
+    log(`Mémoire : ${error.message}`);
+  }
+});
+elements.memoryLock.addEventListener('click', async () => {
+  updateMemoryStatus(await api.lockMemory());
+  elements.memoryResults.textContent = '';
+  log('Mémoire Mina Vision verrouillée.');
+});
+elements.memorySearch.addEventListener('click', async () => {
+  try {
+    const result = await api.searchMemory({ query: elements.memoryQuery.value, revealSensitive: false });
+    renderMemoryItems(result.items);
+    updateMemoryStatus(await api.memoryStatus());
+  } catch (error) {
+    log(`Recherche mémoire : ${error.message}`);
+  }
+});
+elements.fileRead.addEventListener('click', async () => {
+  try {
+    const output = await api.readFile({ path: elements.filePath.value, operation: 'read' });
+    renderMemoryItems(output.evidence, 'evidence');
+    updateMemoryStatus(await api.memoryStatus());
+  } catch (error) {
+    log(`Lecture fichier : ${error.message}`);
+  }
+});
+elements.webRead.addEventListener('click', async () => {
+  try {
+    const output = await api.readWeb({ url: elements.webUrl.value, operation: 'read' });
+    renderMemoryItems(output.evidence, 'evidence');
+    updateMemoryStatus(await api.memoryStatus());
+  } catch (error) {
+    log(`Lecture web : ${error.message}`);
+  }
+});
+elements.chooseSkill.addEventListener('click', async () => {
+  try {
+    const staged = await api.chooseAndStageSkill();
+    if (staged.canceled) return;
+    stagedQuarantineId = staged.quarantineId;
+    elements.installSkill.disabled = false;
+    elements.quarantineReport.hidden = false;
+    elements.quarantineReport.textContent = JSON.stringify(staged.report, null, 2);
+    log(`Skill audité en quarantaine : ${staged.report?.name || staged.quarantineId}.`);
+  } catch (error) {
+    stagedQuarantineId = null;
+    elements.installSkill.disabled = true;
+    log(`Audit skill : ${error.message}`);
+  }
+});
+elements.installSkill.addEventListener('click', async () => {
+  if (!stagedQuarantineId) return;
+  try {
+    const result = await api.installSkill({ quarantineId: stagedQuarantineId });
+    stagedQuarantineId = null;
+    elements.installSkill.disabled = true;
+    elements.quarantineReport.hidden = true;
+    log(`Skill installé : ${result.name} ${result.version || ''}.`);
+    await refreshSkillsSandbox();
+  } catch (error) {
+    log(`Installation skill : ${error.message}`);
+  }
+});
+
+api.onSandboxEvent((event) => {
+  const item = document.createElement('li');
+  item.textContent = `${timeLabel()} · ${event?.type || 'event'} · ${event?.message || event?.jobId || ''}`;
+  elements.sandboxStream.prepend(item);
+  while (elements.sandboxStream.children.length > 100) elements.sandboxStream.lastElementChild.remove();
+});
+
+api.onTechnicalLog((entry) => renderTechnicalEntry(entry));
+elements.technicalLogClear.addEventListener('click', async () => {
+  await api.clearTechnicalLogs();
+  showEmptyTechnicalLog();
+});
+
+Promise.all([api.sessionState(), api.groundingStatus()]).then(([sessionState, grounding]) => {
+  if (sessionState?.runtimeStatus === 'ready') {
+    log(`Sessions prêtes · ${grounding?.total ?? 0} affirmation(s) suivie(s).`);
+  }
+}).catch(() => {});
+
+refreshMemoryStatus().catch((error) => log(`Mémoire : ${error.message}`));
+refreshSettings().catch((error) => log(`Paramètres : ${error.message}`));
+elements.analyticsFrom.value = localDateTimeValue(new Date(Date.now() - 30 * 24 * 60 * 60 * 1_000));
+elements.analyticsTo.value = localDateTimeValue(new Date());
+refreshAnalytics().catch((error) => log(`Analyses : ${error.message}`));
+refreshSkillsSandbox().catch((error) => log(`Skills/Sandbox : ${error.message}`));
+refreshTechnicalLog().catch((error) => log(`Journal technique : ${error.message}`));
