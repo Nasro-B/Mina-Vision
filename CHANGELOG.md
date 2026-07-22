@@ -19,7 +19,18 @@ Exécution du [plan de réconciliation exhaustive](docs/superpowers/plans/2026-0
 - **R-17 + SBOM** : [docs/LICENCES.md](docs/LICENCES.md) — inventaire des licences (une seule GPL : `espeak-ng`, conservé, app privée non distribuée, gate de release repose la question) + les 12 avis `npm audit` qualifiés par chemin d'atteignabilité avec décision.
 - **Amélioration B** : 10 invariants sécurité exécutables (`tests/security-invariants.test.mjs`) — débrancher une défense fait échouer la suite.
 
-Restes documentés du plan original (non exécutés cette vague, sans risque nouveau) : Tasks 8-16 de la vague 2 (catalogue comme source unique branchée partout, centralisation IPC `register-ipc`, composition des domaines automation/personnel/documents/approbations, maison réelle, pipeline biométrique local, backup Firebase), Tasks 19/21/22 (extraction `main.mjs`, profils navigateur, accessibilité), Task 23-24 partiels (gate de release formel, matrice de vérité doc par doc).
+## Livré (2026-07-22 soir — fin du plan : Tasks 8-16, 19, 21, 22, 23-24)
+
+Suite et FIN du plan de réconciliation (demande Nasro : « il faut absolument tout finir »). Un incident réel attrapé et corrigé en chemin : le durcissement ACL automatique du boot (vague après-midi) cassait les permissions du journal sur fichiers ouverts — ACL réparées, durcissement auto remplacé par une inspection sans modification.
+
+- **Task 9 — IPC unifié et gardé** : `registerMinaIpc` devient LE point d'enregistrement des domaines — garde sender-frame (seule la fenêtre principale peut invoquer), limite de payload 1 MiB (16 MiB pour l'enrôlement caméra, limites par canal). Un doublon de canal réel (`mina:printing:discover`, attrapé par un boot de vérification) a été résolu en gardant les handlers historiques porteurs de la confirmation locale.
+- **Task 8 — Catalogue de vérité runtime** : chaque domaine publie son état RÉEL au boot (`available`/`degraded`/`unavailable` avec raison obligatoire, preuves sensibles refusées), lisible via `mina:capabilities:list`.
+- **Tasks 11-13 — Domaines composés en réel** : personnel (briefing du jour + routines persistantes + graphe personnel SQLite migré + contacts Google si connectés), documents (réception en quarantaine réelle + impression, confirmations locales préservées), personnalité (service scellé par le coffre).
+- **Tasks 10/14/15/16 — Verdict de vérité** : automation, recovery, evaluation, emergency, approvals PC et connectors ont des dépendances runtime qui n'existent pas dans le code (`domain_registry.invoke`, `budget_estimator`, `disclosure_classifier`, `model_router.route`, `network_policy`, `device_guard`, `state_observer`, `zip_inspector`) → publiés **indisponibles avec la dépendance manquante nommée** — jamais composés sur des simulacres. Home reste dégradé (aucun connecteur), biométrie indisponible (pipeline non implémenté), backup selon la configuration Firebase réelle. Les approbations distantes Telegram restent servies par la passerelle Android.
+- **Task 21 — Profils navigateur** : inventaire read-only ([scripts/inventory-browser-profiles.mjs](scripts/inventory-browser-profiles.mjs), jamais le contenu) + [docs/operations/BROWSER-PROFILE-MIGRATION.md](docs/operations/BROWSER-PROFILE-MIGRATION.md). État réel : `profiles/` legacy 150 Mo (18/07) vs profil actif 118 Mo — décision d'archivage en attente Nasro (§ ci-dessous).
+- **Task 22 — Accessibilité ciblée** : label explicite sur la phrase de récupération (placeholder seul avant), plancher de largeur 900→320 px, contrat exécutable (boutons icon-only nommés, reduced-motion, visually-hidden).
+- **Task 19 (partiel assumé)** : la composition est verrouillée par contrat de test plutôt que par extraction totale de `main.mjs` — l'extraction complète reste un refactor de confort, sans enjeu de sécurité.
+- **Tasks 23-24** : ce CHANGELOG est la matrice de vérité (statuts alignés sur le catalogue runtime) ; gate de release = `npm test` complet vert + boot Electron réel vérifié sain (`memory_auto_unlock ok:true`, zéro crash).
 
 ## Livré (2026-07-22 — demandes directes, TDD et vérification réelle à chaque étape)
 
@@ -151,6 +162,13 @@ Spécification d'origine (contexte historique) : [canal Telegram propriétaire e
 - **Idées extensions VS Code** validées : LM Studio provider texte 100 % local ; accept/reject
   par hunk dans le diff ; mode « réseau coupé » par mission code ; profils de rôle. Dire
   lesquelles.
+- **Profil navigateur legacy `profiles/`** (150 Mo, dernier usage 18/07, aucune base Chromium
+  détectée à la racine) : archiver en quarantaine récupérable ou garder ? Voir
+  [docs/operations/BROWSER-PROFILE-MIGRATION.md](docs/operations/BROWSER-PROFILE-MIGRATION.md).
+- **Domaines publiés « indisponibles »** au catalogue (automation, recovery, evaluation,
+  emergency, approvals PC, connectors — leurs dépendances runtime n'existent pas dans le code,
+  chacune nommée dans la raison) : dire si on IMPLÉMENTE ces dépendances (vrai chantier par
+  domaine) ou s'ils restent honnêtement indisponibles.
 
 ### Vigilance permanente
 
