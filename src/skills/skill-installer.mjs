@@ -6,6 +6,11 @@ import { createSkillLoader } from './skill-loader.mjs';
 
 const MAX_FILES = 500;
 const MAX_BYTES = 20 * 1024 * 1024;
+// Anti-bombe (R-02) : au-delà de ce ratio déclaré taille/compressé, l'entrée est refusée AVANT
+// getData() — la décompression d'une bombe en mémoire n'a jamais lieu. Le seuil ne s'applique
+// qu'aux entrées significatives : en dessous, MAX_BYTES borne déjà le coût.
+const MAX_EXPANSION_RATIO = 100;
+const EXPANSION_CHECK_MIN_BYTES = 64 * 1024;
 const ARCHIVES = new Set(['.zip', '.7z', '.rar', '.tar', '.tgz', '.gz', '.bz2', '.xz']);
 const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,100}$/u;
 
@@ -81,6 +86,14 @@ async function extractZip(source, target) {
     if (entry.isDirectory) continue;
     if (ARCHIVES.has(extname(path).toLowerCase())) throw new Error('skill_nested_archive_forbidden');
     const size = Number(entry.header?.size ?? 0);
+    const compressedSize = Number(entry.header?.compressedSize ?? 0);
+    if (!Number.isFinite(size) || size < 0 || !Number.isFinite(compressedSize) || compressedSize < 0) {
+      throw new Error('skill_archive_size_invalid');
+    }
+    if (size > EXPANSION_CHECK_MIN_BYTES
+      && (compressedSize === 0 || size / compressedSize > MAX_EXPANSION_RATIO)) {
+      throw new Error('skill_archive_expansion_limit');
+    }
     descriptors.push({ entry, path, size });
     if (descriptors.length > MAX_FILES) throw new Error('skill_file_count_exceeded');
     if (descriptors.reduce((total, value) => total + value.size, 0) > MAX_BYTES) throw new Error('skill_total_size_exceeded');

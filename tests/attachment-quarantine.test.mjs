@@ -46,6 +46,22 @@ describe('attachment quarantine: size limits', () => {
   });
 });
 
+describe('attachment quarantine: archive expansion limits (R-02)', () => {
+  it('blocks a zip whose declared expansion ratio exceeds 100:1 before any decompression', async () => {
+    // 8 MiB de zéros compressent en quelques KiB : ratio réel largement > 100:1.
+    const bomb = zipBuffer([['payload.bin', Buffer.alloc(8 * 1024 * 1024)]]);
+    const result = await quarantineAttachment({ bytes: bomb, declaredFilename: 'bombe.zip' });
+    expect(result.status).toBe('blocked');
+    expect(result.reasons).toContain('attachment_archive_expansion_limit');
+  });
+
+  it('keeps accepting a normal low-ratio zip', async () => {
+    const normal = zipBuffer([['doc.txt', 'contenu normal peu compressible: ' + Math.random()]]);
+    const result = await quarantineAttachment({ bytes: normal, declaredFilename: 'doc.zip' });
+    expect(result.status).toBe('inspectable');
+  });
+});
+
 describe('attachment quarantine: executable detection', () => {
   it('blocks a Windows PE executable disguised with a document filename', async () => {
     const result = await quarantineAttachment({ bytes: MZ_MAGIC, declaredFilename: 'facture.pdf' });

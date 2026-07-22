@@ -120,6 +120,17 @@ describe('quarantined skill installer', () => {
     await expect(installer().stage({ sourcePath: nested })).rejects.toThrow('skill_nested_archive_forbidden');
   });
 
+  it('refuse un ratio de décompression excessif avant toute décompression (anti-bombe R-02)', async () => {
+    const bomb = join(sourceRoot, 'bomb.zip');
+    const zip = new AdmZip();
+    zip.addFile('SKILL.md', Buffer.from('---\nname: bomb\nversion: 1.0.0\n---\ncorps'));
+    // 8 MiB de zéros : compressés en quelques KiB, ratio déclaré >> 100:1 — la limite doit
+    // frapper AVANT getData(), donc avant que la bombe n'explose en mémoire.
+    zip.addFile('payload.bin', Buffer.alloc(8 * 1024 * 1024));
+    zip.writeZip(bomb);
+    await expect(installer().stage({ sourcePath: bomb })).rejects.toThrow('skill_archive_expansion_limit');
+  });
+
   it('rejects reparse points, incompatible AGPL packages and refused confirmations', async () => {
     const sourcePath = await createSource('linked-source');
     await symlink(join(sourcePath, 'scripts'), join(sourcePath, 'linked'), 'junction');
