@@ -122,9 +122,44 @@ Spécification d'origine (contexte historique) : [canal Telegram propriétaire e
 - mode cloud lorsque PC et téléphone sont hors ligne, uniquement après une nouvelle décision de confidentialité ;
 - extension du périmètre d'approbation distante au-delà des actions `remote_eligible` déjà livrées (voir § Telegram — ce qui est réellement livré) — `local_only` restera refusé à distance dans tous les cas, quelle que soit une évolution future.
 
-## En attente de validation matérielle (code/tests livrés, preuve physique non faite)
+## En attente côté Nasro (actions et décisions — consigné ICI, pas dans un fichier séparé)
 
-Ces éléments ont un code testé et des gates automatisés verts, mais nécessitent une action physique de Nasro non encore réalisée — voir `Pour Nasro.md` :
+> Décision Nasro 2026-07-22 : `Pour Nasro.md` est réservé aux AUTRES projets — pour Mina
+> Vision, tout ce qui attend une action ou une décision de Nasro vit dans CE changelog.
+
+### Actions immédiates
+
+- Relancer Mina proprement : fermer TOUTES les fenêtres Mina d'abord, attendre ~5 secondes,
+  puis `Lancer Mina.cmd` (deux instances simultanées = fenêtre « Initialisation » morte,
+  verrou single-instance). L'incident ACL du 2026-07-22 est réparé et le durcissement
+  automatique retiré du boot.
+- Vérifier à l'usage qu'une mission ordinaire ne demande PAS plus de confirmations qu'avant
+  (seules les actions sensibles en demandent, liées à l'action exacte). Un dialogue sur un
+  simple clic = bug de calibrage à me signaler.
+
+### Décisions en attente
+
+- **Racines de lecture** : Mina ne lit librement que le projet et `Documents\Mina Vision` ;
+  autre dossier = confirmation par fichier. Dossiers de confiance permanents →
+  `MINA_APPROVED_READ_ROOTS` (chemins séparés par `;`).
+- **Anciens transcripts en clair** : `logs/activity-*.jsonl` antérieurs au 2026-07-22
+  s'auto-purgent d'ici au 2026-07-29 (rétention 7 jours). Purge immédiate sur demande.
+- **mythos.skill** : clic final d'installation dans le panneau Skills (staging + audit faits).
+- **MCP Mina ↔ Claude** (pont de test) : design prêt, en attente du « vas-y ».
+- **5 outils vocaux** de l'analyse d'écart (chercher_souvenirs, briefing_du_jour,
+  piloter_maison, combien_ca_coute/sante_technique, imprimer_document) : en attente du « vas-y ».
+- **Idées extensions VS Code** validées : LM Studio provider texte 100 % local ; accept/reject
+  par hunk dans le diff ; mode « réseau coupé » par mission code ; profils de rôle. Dire
+  lesquelles.
+
+### Vigilance permanente
+
+- **espeak-ng est GPL-3.0** : zéro obligation tant que Mina Vision reste privée ; AVANT toute
+  distribution, relire [docs/LICENCES.md](docs/LICENCES.md) §1.
+- **Dépôt git local** depuis le 2026-07-22 (1 tâche = 1 commit, aucun remote — `git push`
+  impossible par construction). Revenir en arrière = demander le revert.
+
+### Validation matérielle (code/tests livrés, preuve physique non faite)
 
 - SDK Google Home 1.9 à déposer ; validation matérielle maison connectée (Huawei + lumière réelle).
 - Validation matérielle caméra (flux visible, coupure USB < 10 s).

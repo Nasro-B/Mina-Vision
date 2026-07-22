@@ -1787,12 +1787,15 @@ app.whenReady().then(async () => {
     writeFile,
   });
   await selfModel.load();
-  // R-04 : le dossier du journal (couches 1 ET 2) est restreint au seul utilisateur courant —
-  // fire-and-forget, un échec est signalé au journal technique, jamais bloquant.
-  void createLocalPathPermissions().harden(path.join(app.getPath('userData'), 'logs'))
-    .then((result) => {
-      if (!result.hardened) {
-        technicalLog.record({ severity: 'warning', scope: 'security', code: 'journal_acl_harden_failed', message: result.error ?? 'inconnu' });
+  // R-04 : INSPECTION seule au boot — harden() automatique RETIRÉ après incident réel du
+  // 2026-07-22 : icacls /inheritance:r /T sur des fichiers OUVERTS échoue partiellement
+  // (héritage coupé, grants non posés) et rend le journal illisible même pour Nasro. Le
+  // durcissement reste disponible via createLocalPathPermissions().harden(), à lancer app
+  // FERMÉE uniquement ; ici on ne fait que signaler un groupe trop large, sans rien modifier.
+  void createLocalPathPermissions().inspect(path.join(app.getPath('userData'), 'logs'))
+    .then((report) => {
+      if (report.broadGroups.length > 0) {
+        technicalLog.record({ severity: 'info', scope: 'security', code: 'journal_acl_broad_groups', message: report.broadGroups.join(', ') });
       }
     })
     .catch(() => {});
