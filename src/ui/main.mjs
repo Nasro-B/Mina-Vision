@@ -8,6 +8,8 @@ import { app, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage, scree
 import { loadConfig, redactConfig } from '../config.mjs';
 import { createMinaOrchestrator } from '../core/orchestrator.mjs';
 import { createMinaRuntime } from '../core/mina-runtime.mjs';
+import { createCapabilityBroker } from '../safety/capability-broker.mjs';
+import { createComputerActionAuthorizer } from '../safety/computer-action-authorizer.mjs';
 import { createClaimLedger } from '../grounding/claim-ledger.mjs';
 import { createSessionManager } from '../sessions/session-manager.mjs';
 import { createSessionStore } from '../sessions/session-store.mjs';
@@ -793,23 +795,37 @@ const startMission = async (request) => {
       ? activeRuntime.phone
       : activeRuntime.desktop;
 
-  const orchestrator = createMinaOrchestrator({
-    computerUse: activeRuntime.computerUse,
-    executors: { [prepared.environment]: executor },
-    confirm: confirmSensitiveAction,
-    onEvent: (event) => send('mina:event', event),
-  });
   return minaCore.runWork({
     channel: 'local',
     identityId: 'owner',
     goal: prepared.goal,
     memoryRequired: prepared.memoryRequired === true,
-    run: async ({ evidence }) => {
+    run: async ({ evidence, workSessionId }) => {
+      // R-01 : le broker devient l'autorité de CHAQUE action Computer Use. Le grant est borné
+      // à cette mission (workSessionId) et à sa durée — jamais computer.* sans borne
+      // temporelle. Les actions sensibles exigent en plus la confirmation one-shot digest-bound.
+      const missionBroker = createCapabilityBroker({
+        grants: [{
+          sessionId: workSessionId ?? 'local-mission',
+          capabilities: ['computer.*'],
+          effects: ['read', 'execute'],
+          resources: ['*'],
+          expiresAt: new Date(Date.now() + activeRuntime.config.missionTimeoutMs + 60_000).toISOString(),
+        }],
+      });
+      const orchestrator = createMinaOrchestrator({
+        computerUse: activeRuntime.computerUse,
+        executors: { [prepared.environment]: executor },
+        confirm: confirmSensitiveAction,
+        onEvent: (event) => send('mina:event', event),
+        actionAuthorizer: createComputerActionAuthorizer({ capabilityBroker: missionBroker }),
+      });
       activeOrchestrator = orchestrator;
       try {
         const result = await orchestrator.run({
           ...prepared,
           evidence,
+          workSessionId: workSessionId ?? 'local-mission',
           mode: activeRuntime.config.inference.mode,
           offline: activeRuntime.config.inference.offline,
           maxActions: activeRuntime.config.maxActions,

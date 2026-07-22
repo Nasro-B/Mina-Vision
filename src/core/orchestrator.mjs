@@ -21,6 +21,10 @@ export function createMinaOrchestrator({
   // comportement historique est strictement identique.
   domain = 'general',
   codeOrchestrator = null,
+  // Autorité des actions (R-01) : quand un authorizer est injecté, AUCUNE action n'atteint
+  // l'exécuteur sans grant de session ; les actions sensibles exigent en plus la confirmation
+  // one-shot liée au digest. null = comportement historique (classifyAction seul).
+  actionAuthorizer = null,
 } = {}) {
   let activeExecutor = null;
   let running = false;
@@ -57,6 +61,7 @@ export function createMinaOrchestrator({
       preferredProvider,
       maxActions = 40,
       timeoutMs = 900_000,
+      workSessionId = null,
       ...codeParams
     }) => {
       // Pipeline développeur : délégation intégrale à l'orchestrateur code injecté.
@@ -141,10 +146,42 @@ export function createMinaOrchestrator({
             break;
           }
 
+          // R-01 : décision d'autorisation AVANT toute exécution. deny → mission stoppée sans
+          // dialogue ; confirm → dialogue local puis confirmation consommée liée au digest.
+          let authorization = null;
+          if (actionAuthorizer) {
+            authorization = await actionAuthorizer.assess({
+              sessionId: workSessionId ?? 'local-mission',
+              action,
+              context: { ...context, environment },
+            });
+            if (authorization.decision === 'deny') {
+              await hideCursor(executor);
+              emit('action_denied', { action, reason: authorization.reason, state });
+              state = stopMission(state, 'authorization_denied');
+              break;
+            }
+          }
+
           let rawActionResult;
           let confirmationRefused = false;
           try {
-            if (safety.decision === 'confirm') {
+            if (authorization) {
+              if (authorization.decision === 'confirm') {
+                const approved = await confirm({ action, context, reason: safety.reason || authorization.reason });
+                const consumed = approved
+                  ? await actionAuthorizer.confirm({ request: authorization.request })
+                  : null;
+                if (consumed?.decision === 'allow') {
+                  rawActionResult = { ...(await executor.execute(action)), safetyAcknowledgement: true };
+                } else {
+                  rawActionResult = { executed: false, error: 'confirmation_refused' };
+                  confirmationRefused = true;
+                }
+              } else {
+                rawActionResult = await executor.execute(action);
+              }
+            } else if (safety.decision === 'confirm') {
               const approved = await confirm({ action, context, reason: safety.reason });
               rawActionResult = approved
                 ? { ...(await executor.execute(action)), safetyAcknowledgement: true }

@@ -59,7 +59,8 @@ describe('Mina runtime composition root', () => {
       channel: 'local', identityId: 'owner', goal: 'Quand ?', memoryRequired: true, run,
     })).resolves.toEqual(evidence);
     expect(evidenceProvider).toHaveBeenCalledWith({ channel: 'local', identityId: 'owner', goal: 'Quand ?', memoryRequired: true });
-    expect(run).toHaveBeenCalledWith({ evidence });
+    // R-01 : le runner reçoit AUSSI le workSessionId — c'est lui qui borne le grant du broker.
+    expect(run).toHaveBeenCalledWith({ evidence, workSessionId: expect.any(String) });
   });
 
   it('ends active work on emergency stop and ends the runtime on shutdown', async () => {
