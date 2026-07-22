@@ -3,6 +3,10 @@ import { createHash } from 'node:crypto';
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const MAX_ZIP_ENTRIES = 500;
 const MAX_ZIP_TOTAL_BYTES = 100 * 1024 * 1024;
+// Anti-bombe (R-02) : ratio déclaré taille/compressé refusé avant toute décompression ; le
+// seuil ne s'applique qu'aux entrées significatives (en dessous, les bornes absolues suffisent).
+const MAX_ZIP_EXPANSION_RATIO = 100;
+const ZIP_EXPANSION_CHECK_MIN_BYTES = 64 * 1024;
 const OLE2_SIGNATURE = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
 const ZIP_SIGNATURE = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 const PDF_SIGNATURE = Buffer.from('%PDF-');
@@ -49,7 +53,16 @@ async function inspectZip(bytes) {
     const name = String(entry.entryName ?? '').replace(/\\/gu, '/');
     if (isTraversalEntry(name)) throw new Error('attachment_zip_traversal_forbidden');
     if (entry.header?.flags & 1) throw new Error('attachment_zip_encrypted_forbidden');
-    totalUncompressed += Number(entry.header?.size ?? 0);
+    const size = Number(entry.header?.size ?? 0);
+    const compressedSize = Number(entry.header?.compressedSize ?? 0);
+    if (!Number.isFinite(size) || size < 0 || !Number.isFinite(compressedSize) || compressedSize < 0) {
+      throw new Error('attachment_archive_size_invalid');
+    }
+    if (size > ZIP_EXPANSION_CHECK_MIN_BYTES
+      && (compressedSize === 0 || size / compressedSize > MAX_ZIP_EXPANSION_RATIO)) {
+      throw new Error('attachment_archive_expansion_limit');
+    }
+    totalUncompressed += size;
     if (totalUncompressed > MAX_ZIP_TOTAL_BYTES) throw new Error('attachment_zip_bomb_suspected');
     if (MACRO_ENTRIES.has(name)) macroDetected = true;
   }
