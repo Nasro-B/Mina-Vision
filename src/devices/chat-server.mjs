@@ -14,6 +14,7 @@ import { parseChatEvent } from '../contracts/chat.mjs';
 import { encodeChatSignatureInput } from '../contracts/chat-binary-codec.mjs';
 import { createChatCrypto, deriveDeviceWrapKey, wrapEpochKey } from './chat-crypto.mjs';
 import { createMonotonicUlid } from '../contracts/event-id.mjs';
+import { createChatLedger } from './chat-ledger.mjs';
 
 const DEFAULT_PORT = 8771;
 const MAX_FRAME_BYTES = 262_144;
@@ -55,6 +56,7 @@ export function createChatServer({
   clock = Date.now,
   logger = null,
   ulid = createMonotonicUlid(),
+  ledger = createChatLedger({ clock }),
 } = {}) {
   if (!identity?.privateKey || !identity?.publicKeySpki) throw new TypeError('chat_server_identite_requise');
   if (!registry || typeof registry.isApproved !== 'function') throw new TypeError('chat_server_registre_requis');
@@ -171,9 +173,13 @@ export function createChatServer({
 
     let answer;
     try {
-      answer = await respond({
+      // Le ledger garantit UNE génération par événement : un rejeu resert la même réponse au
+      // lieu d'en inventer une seconde, différente, pour la même question.
+      const produced = await ledger.once(event.eventId, () => respond({
         text, deviceId: session.deviceId, threadId: event.threadId, eventId: event.eventId,
-      });
+      }));
+      answer = produced.answer;
+      if (produced.replayed) note('chat_app_rejeu_resservi', { eventId: event.eventId });
     } catch (error) {
       // Mina n'a pas pu répondre : on le DIT, on ne fabrique pas une réponse de remplacement.
       answer = `Je n'ai pas pu traiter ce message : ${error.message}`;

@@ -145,6 +145,9 @@ class ChatRepository(
 
     suspend fun pendingCount(): Int = dao.outboxSize()
 
+    /** Un message précis, déchiffré en mémoire — utilisé pour l'aperçu d'une notification. */
+    suspend fun readMessage(eventId: String): ChatMessage? = dao.findEvent(eventId)?.toMessage()
+
     private fun ChatEventRow.toMessage(): ChatMessage {
         val text = decryptOrExplain(this)
         return ChatMessage(

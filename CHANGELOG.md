@@ -135,6 +135,50 @@ Spécification d'origine (contexte historique) : [canal Telegram propriétaire e
 - mode cloud lorsque PC et téléphone sont hors ligne, uniquement après une nouvelle décision de confidentialité ;
 - extension du périmètre d'approbation distante au-delà des actions `remote_eligible` déjà livrées (voir § Telegram — ce qui est réellement livré) — `local_only` restera refusé à distance dans tous les cas, quelle que soit une évolution future.
 
+## Livré (2026-07-23 — application Mina sur téléphone, conversation chiffrée de bout en bout)
+
+Une application Android permet désormais d'écrire à Mina depuis un téléphone appairé. Le canal
+`mina_app` est autorisé par la constitution (MINA.md) pour **conversation, mémoire et médias
+uniquement** — aucune action externe implicite.
+
+- **Appairage explicite** : un téléphone ne parle à Mina que si Nasro a ouvert l'appairage sur
+  le PC et saisi un code à 6 chiffres — à usage unique, valable 5 minutes, 5 tentatives
+  maximum. Être sur le même Wi-Fi ne suffit pas.
+- **Clé de conversation jamais transmise** : elle est enveloppée par une clé dérivée en ECDH
+  P-256 à partir des identités des deux appareils. Un observateur du réseau qui capture tout
+  l'appairage ne peut pas la reconstituer. L'interopérabilité Node ↔ Kotlin est verrouillée par
+  un vecteur de test partagé, lu par les deux plateformes.
+- **Vérifier avant de déchiffrer** : la signature de chaque événement est contrôlée avant toute
+  tentative de déchiffrement, et le contexte (fil, expéditeur, époque, dates) est lié au
+  chiffrement — déplacer un message chiffré vers un autre en-tête casse au lieu de passer
+  inaperçu.
+- **Le téléphone ne stocke que du chiffré** : la base locale (Room) ne contient aucun texte en
+  clair. Coffre verrouillé, l'application affiche « verrouillé » au lieu d'un contenu inventé.
+- **PC éteint = message en attente, pas message perdu** : une file d'envoi durable garde le
+  message et l'envoie au retour du PC. Personne ne répond à la place de Mina. Après 12 essais
+  espacés, l'échec est affiché plutôt qu'une file qui tourne en silence.
+- **Une seule réponse par question** : un message livré deux fois ne déclenche qu'une
+  génération, et le registre PC survit à un redémarrage — un message redélivré ne reçoit pas une
+  seconde réponse, différente de la première.
+- **Mémoire verrouillée = canal fermé**, annoncé tel quel dans l'onglet Système. Les clés de
+  conversation dérivent du coffre : Mina ne répond pas depuis le téléphone avec une mémoire
+  amputée.
+- **Révocation** : retirer un appareil ouvre une nouvelle époque de clé — il ne lit plus les
+  messages suivants. On ne prétend pas effacer ce qu'il a déjà lu.
+- **Dictée** : le message peut être dicté ; la reconnaissance est locale au téléphone, et le
+  texte dicté est chiffré comme tout autre message. Sans moteur de reconnaissance sur
+  l'appareil, l'application le dit au lieu d'afficher un micro inerte.
+- **Notification** à l'arrivée d'une réponse, uniquement quand l'écran de conversation n'est pas
+  déjà affiché.
+
+Vérifié par exécution réelle : 2 911 tests unitaires + 48 tests d'intégration Node, 55 tests
+Kotlin, APK debug assemblée, et démarrage Electron réel confirmant le canal ouvert
+(`chat_app_canal listening:true port:8771`).
+
+Deux défauts n'ont été trouvés que par exécution réelle, jamais par les tests unitaires : la
+bibliothèque WebSocket réémet les erreurs du serveur HTTP sur une autre instance (un port occupé
+tuait le processus), et Room nomme ses colonnes d'après le champ Kotlin si on ne l'annote pas.
+
 ## Livré (2026-07-23 — app Windows complétée, licence, préparation GitHub)
 
 - **Démarrage automatique avec Windows** (manque signalé par Nasro) : case dans **Config → Système Windows**. API Electron officielle (clé de démarrage de la session courante — aucune tâche système, aucune élévation), lancement discret, réversible en un clic. Fail-loud : si Windows n'applique pas le réglage, Mina le dit au lieu de faire semblant.
@@ -146,6 +190,14 @@ Spécification d'origine (contexte historique) : [canal Telegram propriétaire e
 - **Chat natif Android** : constitution amendée (canal `mina_app` autorisé par Nasro) et modules Android `core:chat` / `feature:chat` / `feature:voice` déclarés. Le reste du chantier (protocole, crypto, transport, Firebase) reste à construire — le canal est inactif tant que le code runtime ne le branche pas.
 
 ## En attente côté Nasro (actions et décisions — consigné ICI, pas dans un fichier séparé)
+
+- **Application téléphone — premier appairage** : ouvrir l'appairage dans *Configuration &
+  mémoire* › *Système Windows*, installer l'APK (`android/app/build/outputs/apk/debug/`) sur le
+  téléphone, puis saisir l'adresse du PC (IP locale) et le code affiché. L'APK n'a été installée
+  sur aucun appareil : la décision d'installer reste à Nasro.
+- **Pare-feu Windows** : autoriser le port `8771` sur le réseau privé, sinon le téléphone ne
+  joindra pas le PC (l'application affichera « PC injoignable », ce qui sera exact).
+
 
 ### Publication GitHub
 

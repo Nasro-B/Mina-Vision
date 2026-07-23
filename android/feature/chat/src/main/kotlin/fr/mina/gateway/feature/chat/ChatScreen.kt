@@ -34,7 +34,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
+import fr.mina.gateway.feature.voice.DictationState
+import fr.mina.gateway.feature.voice.VoiceDictation
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -287,32 +294,96 @@ private fun ErrorStrip(text: String, onDismiss: () -> Unit) {
 @Composable
 private fun Composer(onSend: (String) -> Unit) {
     var draft by remember { mutableStateOf("") }
+    var dictationNote by remember { mutableStateOf<String?>(null) }
+    var listening by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val dictation = remember { VoiceDictation(context) }
+    DisposableEffect(Unit) { onDispose { dictation.stop() } }
+
+    // La permission micro est demandée au moment du besoin, jamais au lancement : Mina n'écoute
+    // que si Nasro appuie sur le micro.
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) dictationNote = "Permission micro refusée : la dictée reste indisponible."
+        else {
+            listening = true
+            dictation.start { state -> handleDictation(state, { draft = it }, { listening = it }, { dictationNote = it }) }
+        }
+    }
+
     Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
-        Row(
+        Column(
             Modifier
                 .padding(horizontal = 12.dp, vertical = 10.dp)
                 .imePadding()
                 .navigationBarsPadding(),
-            verticalAlignment = Alignment.Bottom,
         ) {
-            OutlinedTextField(
-                value = draft,
-                onValueChange = { draft = it },
-                modifier = Modifier.weight(1f).heightIn(min = 56.dp),
-                label = { Text("Message à Mina") },
-                maxLines = 5,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = {
-                    if (draft.isNotBlank()) { onSend(draft); draft = "" }
-                }),
-            )
-            Spacer(Modifier.size(8.dp))
-            Button(
-                onClick = { if (draft.isNotBlank()) { onSend(draft); draft = "" } },
-                enabled = draft.isNotBlank(),
-                modifier = Modifier.heightIn(min = 56.dp),
-            ) { Text("Envoyer") }
+            dictationNote?.let {
+                Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.size(6.dp))
+            }
+            Row(verticalAlignment = Alignment.Bottom) {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    modifier = Modifier.weight(1f).heightIn(min = 56.dp),
+                    label = { Text(if (listening) "Dictée en cours…" else "Message à Mina") },
+                    maxLines = 5,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = {
+                        if (draft.isNotBlank()) { onSend(draft); draft = "" }
+                    }),
+                )
+                Spacer(Modifier.size(8.dp))
+                TextButton(
+                    onClick = {
+                        if (listening) {
+                            dictation.stop()
+                            listening = false
+                            dictationNote = null
+                            return@TextButton
+                        }
+                        if (!dictation.isAvailable()) {
+                            dictationNote = "Aucune reconnaissance vocale sur cet appareil."
+                            return@TextButton
+                        }
+                        dictationNote = null
+                        micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                    },
+                    modifier = Modifier.heightIn(min = 56.dp).semantics {
+                        contentDescription = if (listening) "Arrêter la dictée" else "Dicter le message"
+                    },
+                ) { Text(if (listening) "Stop" else "Micro") }
+                Spacer(Modifier.size(4.dp))
+                Button(
+                    onClick = { if (draft.isNotBlank()) { onSend(draft); draft = "" } },
+                    enabled = draft.isNotBlank(),
+                    modifier = Modifier.heightIn(min = 56.dp),
+                ) { Text("Envoyer") }
+            }
         }
+    }
+}
+
+/** Traduit l'état de la dictée en effets sur le brouillon — sans jamais effacer ce qui est tapé. */
+private fun handleDictation(
+    state: DictationState,
+    onDraft: (String) -> Unit,
+    onListening: (Boolean) -> Unit,
+    onNote: (String?) -> Unit,
+) {
+    when (state) {
+        is DictationState.Listening -> onNote("Parlez, Mina écoute le micro de ce téléphone.")
+        is DictationState.Partial -> onDraft(state.text)
+        is DictationState.Final -> {
+            onDraft(state.text)
+            onListening(false)
+            onNote(null)
+        }
+        is DictationState.Failed -> {
+            onListening(false)
+            onNote(state.reason)
+        }
+        DictationState.Idle -> onNote(null)
     }
 }
 
