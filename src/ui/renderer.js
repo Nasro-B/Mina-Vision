@@ -1169,6 +1169,7 @@ const wireCollapsibleSection = (toggleId, labelId, collapsibleId, storageKey) =>
   });
 };
 [
+  ['system-toggle', 'system-toggle-label', 'system-collapsible', 'mina.systemCollapsed'],
   ['settings-toggle', 'settings-toggle-label', 'settings-collapsible', 'mina.settingsCollapsed'],
   ['memory-panel-toggle', 'memory-panel-toggle-label', 'memory-panel-collapsible', 'mina.memoryPanelCollapsed'],
   ['analytics-toggle', 'analytics-toggle-label', 'analytics-collapsible', 'mina.analyticsCollapsed'],
@@ -1718,6 +1719,72 @@ Promise.all([api.sessionState(), api.groundingStatus()]).then(([sessionState, gr
   }
 }).catch(() => {});
 
+// Démarrage automatique Windows : la case reflète TOUJOURS l'état réel relu depuis Windows —
+// jamais l'intention. Si Windows refuse le réglage, la case revient et le dit.
+const startupState = document.querySelector('#startup-state');
+const startupEnabled = document.querySelector('#startup-enabled');
+const renderStartup = (state) => {
+  if (!startupEnabled || !startupState) return;
+  startupEnabled.checked = state?.enabled === true;
+  startupEnabled.disabled = state?.supported === false;
+  startupState.textContent = state?.supported === false
+    ? 'Non pris en charge'
+    : state?.enabled ? 'Activé' : 'Désactivé';
+  startupState.className = state?.enabled ? 'badge ready' : 'badge';
+};
+const refreshStartup = async () => renderStartup(await api.startupStatus());
+startupEnabled?.addEventListener('change', async () => {
+  const wanted = startupEnabled.checked;
+  try {
+    const result = await api.setStartup(wanted);
+    renderStartup({ ...result, supported: true });
+    log(result.applied
+      ? `Démarrage avec Windows : ${result.enabled ? 'activé' : 'désactivé'}.`
+      : `Démarrage avec Windows : Windows n'a pas appliqué le réglage (demandé ${wanted ? 'activé' : 'désactivé'}).`);
+  } catch (error) {
+    log(`Démarrage Windows : ${error.message}`);
+    await refreshStartup().catch(() => {});
+  }
+});
+
+// Catalogue de vérité : état réel de chaque domaine, avec la raison exacte d'une indisponibilité.
+const CAPABILITY_LABELS = { available: 'disponible', degraded: 'dégradé', unavailable: 'indisponible' };
+const renderCapabilities = (entries) => {
+  const list = document.querySelector('#capabilities-list');
+  if (!list) return;
+  list.textContent = '';
+  if (!Array.isArray(entries) || entries.length === 0) {
+    const empty = document.createElement('li');
+    empty.textContent = 'Aucune capacité publiée pour le moment.';
+    list.append(empty);
+    return;
+  }
+  for (const entry of entries) {
+    const item = document.createElement('li');
+    const name = document.createElement('strong');
+    name.textContent = entry.id;
+    const badge = document.createElement('span');
+    badge.className = entry.status === 'available' ? 'badge ready'
+      : entry.status === 'degraded' ? 'badge warning' : 'badge blocked';
+    badge.textContent = CAPABILITY_LABELS[entry.status] ?? entry.status;
+    item.append(name, ' ', badge);
+    if (entry.reason) {
+      const reason = document.createElement('span');
+      reason.className = 'muted';
+      reason.textContent = ` — ${entry.reason}`;
+      item.append(reason);
+    }
+    list.append(item);
+  }
+};
+const refreshCapabilities = async () => renderCapabilities(await api.capabilitiesList());
+document.querySelector('#capabilities-refresh')?.addEventListener('click', () => {
+  Promise.all([refreshCapabilities(), refreshStartup()])
+    .catch((error) => log(`État système : ${error.message}`));
+});
+
+refreshStartup().catch((error) => log(`Démarrage Windows : ${error.message}`));
+refreshCapabilities().catch((error) => log(`Capacités : ${error.message}`));
 refreshMemoryStatus().catch((error) => log(`Mémoire : ${error.message}`));
 refreshSettings().catch((error) => log(`Paramètres : ${error.message}`));
 elements.analyticsFrom.value = localDateTimeValue(new Date(Date.now() - 30 * 24 * 60 * 60 * 1_000));

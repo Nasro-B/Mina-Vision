@@ -121,6 +121,9 @@ function createPreloadApi(ipcRenderer) {
     capabilityCatalog: () => ipcRenderer.invoke('mina:capability-catalog'),
     // Catalogue de vérité runtime (Task 8) : état réel de chaque domaine avec raison.
     capabilitiesList: () => ipcRenderer.invoke('mina:capabilities:list'),
+    // Démarrage automatique avec Windows.
+    startupStatus: () => ipcRenderer.invoke('mina:startup:status'),
+    setStartup: (enabled) => ipcRenderer.invoke('mina:startup:set', { enabled }),
     // Domaines composés par la réconciliation (T11-T13).
     personalBriefing: (payload) => ipcRenderer.invoke('mina:personal:briefing', payload),
     personalTasks: () => ipcRenderer.invoke('mina:personal:tasks'),
