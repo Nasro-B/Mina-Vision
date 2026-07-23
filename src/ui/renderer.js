@@ -1829,6 +1829,20 @@ const refreshPersonal = async () => {
 document.querySelector('#personal-refresh')?.addEventListener('click', () => {
   refreshPersonal().catch(() => {});
 });
+// Briefing du jour : identityId explicite (le service l'exige — jamais deviné côté UI).
+document.querySelector('#personal-briefing-button')?.addEventListener('click', async () => {
+  try {
+    const briefing = await api.personalBriefing({ identityId: 'owner' });
+    renderList('#personal-briefing', briefing?.items ?? [], (entry) => ({
+      text: entry?.title ?? entry?.summary ?? 'élément',
+      badge: entry?.stale === true ? 'obsolète' : null,
+      badgeClass: 'badge warning',
+      muted: entry?.source ?? null,
+    }), { empty: 'Rien de notable aujourd’hui.' });
+  } catch (error) {
+    renderUnavailable('#personal-briefing', String(error?.message ?? error).slice(0, 160));
+  }
+});
 
 const refreshPrinting = async () => {
   const printers = await api.discoverPrinters();
@@ -1836,6 +1850,21 @@ const refreshPrinting = async () => {
 };
 document.querySelector('#printing-discover')?.addEventListener('click', () => {
   refreshPrinting().catch(failed('#printing-list'));
+});
+// Autoriser une imprimante : action à effet — passe par la confirmation locale du main process.
+document.querySelector('#printer-approve')?.addEventListener('click', async () => {
+  const printerId = document.querySelector('#printer-id')?.value?.trim();
+  if (!printerId) {
+    log('Impression : indiquez le nom exact de l’imprimante.');
+    return;
+  }
+  try {
+    await api.approvePrinter(printerId);
+    log(`Imprimante autorisée : ${printerId}.`);
+    await refreshPrinting().catch(() => {});
+  } catch (error) {
+    log(`Impression : ${error.message}`);
+  }
 });
 
 const refreshHome = async () => {
