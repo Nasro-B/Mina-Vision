@@ -197,6 +197,20 @@
       <p><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Échap</kbd>, ou dire <code>Mina, arrête</code> : annule immédiatement missions, recherches, envois et jobs sandbox en cours. Prioritaire sur toute file, confirmation ou automatisation. Après un arrêt, rien ne redémarre tout seul.</p>
     </section>
 
+    <section id="panneaux">
+      <h2>Les panneaux du tableau de bord</h2>
+      <p>Le rail de gauche ouvre six zones. Voici ce que chacune contient :</p>
+      <ul>
+        <li><strong>Mission</strong> — lancer une mission (voix ou texte), présence vocale, outils directs, téléphone.</li>
+        <li><strong>Config</strong> — <em>Système Windows</em> (démarrage automatique, état réel de chaque capacité, personnalité de Mina), réglages et clés, <em>Mémoire</em> (initialiser, déverrouiller, chercher, oublier définitivement), analyses et coûts.</li>
+        <li><strong>Auto</strong> — <em>Maison connectée</em> (appareils, santé des connecteurs, exécuter une commande), skills et bac à sable, automatisations, extensions.</li>
+        <li><strong>Auj.</strong> — <em>E-mail</em> (comptes, recherche), <em>organisation personnelle</em> (briefing du jour, tâches, routines, contacts), <em>impression</em> (détecter, autoriser, imprimer un fichier), documents et mode urgence.</li>
+        <li><strong>Diag</strong> — erreurs techniques expliquées avec leur remède, journal d'activité.</li>
+        <li><strong>Code</strong> — l'atelier où Mina analyse son propre code : contexte, plan, tests, Git, diff, journal.</li>
+      </ul>
+      <p class="note">Un panneau qui affiche « Indisponible — <em>raison</em> » ne cache pas une panne : il dit exactement quelle dépendance manque. C'est voulu — mieux vaut une liste honnêtement vide qu'un affichage rassurant et faux.</p>
+    </section>
+
     <section id="demarrage-windows">
       <h2>Démarrer avec Windows</h2>
       <p>Section <strong>Config → Système Windows</strong> : la case « Démarrer Mina Vision avec Windows » active ou désactive le lancement automatique à l'ouverture de ta session. Mina s'ouvre alors discrètement, sans voler le focus. Le réglage n'utilise que la clé de démarrage de <em>ta</em> session — aucune tâche système, aucune élévation, réversible en un clic. Si Windows refuse le réglage, Mina te le dit au lieu de faire semblant.</p>
