@@ -1,0 +1,63 @@
+rules_version = '2';
+
+// Règles du relais `mina_app`.
+//
+// POSTURE ASSUMÉE : Firebase est un TUYAU NON DE CONFIANCE. La clé d'API Android est dans
+// l'APK, donc n'importe qui peut techniquement obtenir une session anonyme. Ces règles limitent
+// l'abus (forme, taille, append-only) ; elles ne SONT PAS la sécurité du canal.
+//
+// La sécurité réelle est ailleurs, et elle tient même si ces règles tombent :
+//   - le contenu est chiffré (AES-256-GCM, clé d'époque connue seulement du PC et des appareils
+//     appairés) — Firebase ne voit que du ciphertext ;
+//   - chaque événement est signé (P-256) et la signature est vérifiée AVANT déchiffrement, donc
+//     un intrus qui écrit ici ne peut rien injecter que le PC accepte ;
+//   - l'AAD lie le ciphertext à son contexte : un événement déplacé casse au lieu de passer.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /relay/{eventId} {
+      function envelope() {
+        return request.resource.data;
+      }
+
+      // Seuls les 13 champs du contrat + 2 champs de routage. Tout champ supplémentaire est
+      // refusé : le relais ne doit pas devenir un canal auxiliaire pour des métadonnées.
+      function wellFormed() {
+        return envelope().keys().hasOnly([
+            'version', 'eventId', 'threadId', 'senderDeviceId', 'deviceSequence', 'keyEpoch',
+            'routingClass', 'createdAtMs', 'expiresAtMs', 'payloadCiphertext', 'nonce',
+            'authTag', 'signature', 'target', 'relayedAtMs'
+          ])
+          && envelope().version == 2
+          && envelope().eventId == eventId
+          && envelope().payloadCiphertext is string
+          && envelope().payloadCiphertext.size() <= 200000
+          && envelope().nonce is string
+          && envelope().authTag is string
+          && envelope().signature is string
+          && envelope().signature.size() <= 200
+          && envelope().senderDeviceId is string
+          && envelope().senderDeviceId.size() <= 160
+          && envelope().threadId is string
+          && envelope().threadId.size() <= 160
+          && envelope().target in ['pc', 'device']
+          && envelope().expiresAtMs is int
+          && envelope().expiresAtMs > request.time.toMillis();
+      }
+
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && wellFormed();
+      // Append-only : un événement relayé ne se réécrit jamais. Sans cette règle, un tiers
+      // pourrait remplacer un message en attente par un autre ciphertext.
+      allow update: if false;
+      // La suppression est le nettoyage normal après remise — le relais ne garde rien.
+      allow delete: if request.auth != null;
+    }
+
+    // Tout le reste reste fermé : le relais est la SEULE surface exposée.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

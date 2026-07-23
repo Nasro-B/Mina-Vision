@@ -170,6 +170,13 @@ uniquement** — aucune action externe implicite.
   l'appareil, l'application le dit au lieu d'afficher un micro inerte.
 - **Notification** à l'arrivée d'une réponse, uniquement quand l'écran de conversation n'est pas
   déjà affiché.
+- **Relais Firebase quand le téléphone n'est pas sur le réseau du PC** : le message passe par
+  Firestore au lieu d'attendre. Firebase ne voit que du chiffré, ne peut rien injecter (signature
+  vérifiée avant déchiffrement) et ne conserve rien (chaque document est supprimé après remise).
+  Le projet `mina-vision` a été configuré : base Firestore en **Europe (eur3)**, mode production,
+  authentification anonyme, règles publiées (collection `relay` seule, append-only, forme et
+  taille contraintes ; tout le reste refusé). Sans `google-services.json`, le canal reste
+  strictement local et le dit.
 
 Vérifié par exécution réelle : 2 911 tests unitaires + 48 tests d'intégration Node, 55 tests
 Kotlin, APK debug assemblée, et démarrage Electron réel confirmant le canal ouvert
@@ -197,6 +204,10 @@ tuait le processus), et Room nomme ses colonnes d'après le champ Kotlin si on n
   sur aucun appareil : la décision d'installer reste à Nasro.
 - **Pare-feu Windows** : autoriser le port `8771` sur le réseau privé, sinon le téléphone ne
   joindra pas le PC (l'application affichera « PC injoignable », ce qui sera exact).
+- **Plan Firebase Spark (gratuit)** : le relais tient dans les quotas gratuits pour un usage
+  personnel. Aucune carte bancaire n'a été ajoutée et aucun service payant n'a été activé.
+- **`google-services.json`** : copié depuis `env/` vers `android/app/` pour la compilation. Les
+  deux emplacements sont ignorés par git — ce fichier ne partira jamais sur GitHub.
 
 
 ### Publication GitHub

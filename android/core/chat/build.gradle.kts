@@ -39,6 +39,10 @@ dependencies {
     api(project(":core:transport"))
     implementation(platform(libs.okhttp.bom))
     implementation("com.squareup.okhttp3:okhttp")
+    // Relais de secours : Firebase ne voit que du ciphertext, jamais de clair.
+    implementation(platform(libs.firebase.bom))
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-auth")
     implementation(libs.androidx.room.runtime)
     kapt(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)

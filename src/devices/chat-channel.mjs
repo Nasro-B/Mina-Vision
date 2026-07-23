@@ -8,6 +8,7 @@
 import { hkdfSync } from 'node:crypto';
 import { createChatDeviceRegistry } from './chat-device-registry.mjs';
 import { createChatLedger } from './chat-ledger.mjs';
+import { createChatRelay } from './chat-relay.mjs';
 import { createChatServer } from './chat-server.mjs';
 
 const EPOCH_INFO = 'mina-chat-epoch-v1';
@@ -25,6 +26,9 @@ export function createChatChannel({
   identity,
   store,
   ledgerStore = null,
+  /** Façade Firestore ; absente, le canal fonctionne en direct SEUL et le dit. */
+  firestore = null,
+  publicKeyFromSpki = null,
   respond,
   port,
   host,
@@ -36,6 +40,7 @@ export function createChatChannel({
 
   let registry = createChatDeviceRegistry({ clock });
   const ledger = createChatLedger({ store: ledgerStore, clock });
+  let relay = null;
   let server = null;
   let listening = null;
   let lastError = null;
@@ -78,6 +83,14 @@ export function createChatChannel({
       server = createChatServer({
         identity, registry, respond, epochKeyFor, port, host, clock, logger, ledger,
       });
+      // Le relais Firebase est INDÉPENDANT du direct : il démarre même si le port local est
+      // pris, sinon un PC mal configuré perdrait aussi le chemin de secours.
+      if (firestore && publicKeyFromSpki && !relay) {
+        relay = createChatRelay({
+          firestore, identity, registry, epochKeyFor, ledger, respond, publicKeyFromSpki, clock, logger,
+        });
+        relay.start();
+      }
       try {
         listening = await server.listen();
         lastError = null;
@@ -91,6 +104,8 @@ export function createChatChannel({
     },
 
     async stop() {
+      relay?.stop();
+      relay = null;
       if (!server) return;
       await server.close();
       server = null;
@@ -107,6 +122,8 @@ export function createChatChannel({
         pairingOpen: registry.pairingOpen(),
         keyEpoch: registry.keyEpoch(),
         processedEvents: ledger.size(),
+        // Vérité sur le secours : « relais actif » seulement s'il écoute vraiment.
+        relay: relay?.status() ?? Object.freeze({ watching: false, handled: 0, rejected: 0, lastError: 'relais non configuré' }),
         generationsInFlight: ledger.inFlight(),
         connectedDevices: server?.connectedDevices?.() ?? [],
         devices: registry.list(),

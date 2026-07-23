@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { createHash, hkdfSync, randomUUID } from 'node:crypto';
+import { createHash, createPublicKey, hkdfSync, randomUUID } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { access, appendFile, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -94,6 +94,9 @@ import { createVersionedJsonStore } from '../core/versioned-json-store.mjs';
 import { createChatChannel } from '../devices/chat-channel.mjs';
 import { createChatResponder } from '../devices/chat-responder.mjs';
 import { loadOrCreatePcChatIdentity } from '../devices/pc-chat-identity.mjs';
+import {
+  createFirestoreRelayAdapter, firebaseConfigFromGoogleServices,
+} from '../devices/firestore-relay-adapter.mjs';
 import { createRuntimeCapabilityCatalog } from '../runtime/capability-catalog.mjs';
 import { registerMinaIpc } from './ipc/register-ipc.mjs';
 import { createRoutineRegistry } from '../routines/routine-registry.mjs';
@@ -2116,9 +2119,31 @@ app.whenReady().then(async () => {
         readFile,
         writeFile,
       });
+      // Relais Firebase : chemin de secours quand le téléphone n'est pas sur le réseau du PC.
+      // Il ne s'active QUE si google-services.json est présent — sans lui, le canal reste
+      // strictement local et l'onglet Système l'annonce, plutôt que de laisser croire à un
+      // secours qui n'existe pas.
+      let chatFirestore = null;
+      try {
+        const googleServicesPath = process.env.MINA_GOOGLE_SERVICES
+          ?? path.join(ROOT_DIR, 'env', 'google-services.json');
+        const googleServices = JSON.parse(await readFile(googleServicesPath, 'utf8'));
+        chatFirestore = await createFirestoreRelayAdapter({
+          config: firebaseConfigFromGoogleServices(googleServices),
+        });
+      } catch (error) {
+        void activityJournal?.append('chat_relay_indisponible', {
+          reason: String(error?.message ?? error).slice(0, 200),
+        });
+      }
+
       chatChannel = createChatChannel({
         masterKey: () => chatMasterKey,
         identity: chatIdentity,
+        firestore: chatFirestore,
+        publicKeyFromSpki: (spki) => createPublicKey({
+          key: Buffer.from(spki, 'base64'), format: 'der', type: 'spki',
+        }),
         store: createVersionedJsonStore({
           filename: path.join(app.getPath('userData'), 'chat-devices.json'),
           schemaVersion: 1,

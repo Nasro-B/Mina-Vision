@@ -108,22 +108,47 @@ class ChatEngine private constructor(context: Context) {
         pendingPairingCode = null
     }.getOrNull()
 
-    private val syncLoop = ChatSyncLoop(dao = database.chatDao(), link = link, scope = scope)
+    /**
+     * Relais de secours. Il n'est construit que si Firebase est réellement disponible dans
+     * l'application : sans google-services.json, l'objet reste null et le canal fonctionne en
+     * direct SEUL — sans prétendre avoir un secours.
+     */
+    private val relay: FirebaseChatRelay? = runCatching {
+        FirebaseChatRelay(
+            deviceId = deviceId,
+            onEvent = { event -> scope.launch { acceptFromPc(event) } },
+        )
+    }.getOrNull()
+
+    private val syncLoop = ChatSyncLoop(
+        dao = database.chatDao(),
+        link = link,
+        scope = scope,
+        relay = relay,
+    )
+
+    /** Vrai si le secours Firebase est réellement prêt (session ouverte), pas seulement présent. */
+    fun relayReady(): Boolean = relay?.isReady() == true
+
+    fun relayError(): String? = relay?.lastError
 
     val linkState: StateFlow<LinkState> get() = link.state
 
     fun lastLinkError(): String? = link.lastError()
 
     fun start() {
-        if (settings.isPaired()) {
-            link.connect()
-            syncLoop.start()
-        }
+        if (!settings.isPaired()) return
+        link.connect()
+        syncLoop.start()
+        // Le relais s'arme en parallèle du direct : c'est justement quand le direct échoue
+        // qu'on en a besoin, il ne peut donc pas dépendre de sa réussite.
+        relay?.ensureSession { ready -> if (ready) relay.watch() }
     }
 
     fun stop() {
         syncLoop.stop()
         link.disconnect()
+        relay?.stop()
     }
 
     /**
