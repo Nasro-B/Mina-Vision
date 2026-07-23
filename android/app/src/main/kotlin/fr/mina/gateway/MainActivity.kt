@@ -63,15 +63,23 @@ class MainActivity : Activity() {
             contentDescription = "Enregistrer la configuration propriétaire Mina Vision"
             setOnClickListener { provision(phone, telegramIds, token) }
         }
+        // Entrée principale : la conversation. La configuration passerelle reste en dessous,
+        // c'est un réglage — pas ce qu'on vient faire tous les jours.
+        val openChat = Button(this).apply {
+            text = "Ouvrir la conversation avec Mina"
+            contentDescription = "Ouvrir la conversation chiffrée avec Mina"
+            setOnClickListener { startActivity(Intent(this@MainActivity, ChatActivity::class.java)) }
+        }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(padding, padding, padding, padding)
             addView(TextView(context).apply {
-                text = "Mina Vision — passerelle Huawei"
+                text = "Mina Vision"
                 textSize = 24f
                 gravity = Gravity.CENTER
             })
+            addView(openChat)
             addView(TextView(context).apply {
                 text = "Appareil appairé : $deviceId\nLes secrets restent chiffrés dans Android Keystore + Room."
                 textSize = 15f

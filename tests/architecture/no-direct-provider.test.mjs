@@ -13,7 +13,10 @@ const RESTRICTED_PACKAGES = Object.freeze({
   'google-auth-library': ['mail'],
   '@azure/msal-node': ['mail'],
   'mqtt': ['home'],
-  'ws': ['home'],
+  // `ws` sert deux transports distincts : le pont domotique local (home) et le canal de
+  // l'application Mina sur téléphone appairé (devices/chat-server.mjs). Ce sont les deux
+  // adaptateurs réseau autorisés — aucun autre domaine ne parle WebSocket directement.
+  'ws': ['home', 'devices'],
   '@google/genai': ['providers'],
   '@google/generative-ai': ['providers'],
   'openai': ['providers'],

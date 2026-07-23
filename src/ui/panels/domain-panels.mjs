@@ -4,7 +4,7 @@
 
 const EMPTY = 'Rien à afficher.';
 
-function listItem(text, { badge = null, badgeClass = 'badge', muted = null } = {}) {
+function listItem(text, { badge = null, badgeClass = 'badge', muted = null, action = null } = {}) {
   const item = document.createElement('li');
   const label = document.createElement('strong');
   label.textContent = text;
@@ -20,6 +20,17 @@ function listItem(text, { badge = null, badgeClass = 'badge', muted = null } = {
     detail.className = 'muted';
     detail.textContent = ` — ${muted}`;
     item.append(detail);
+  }
+  if (action?.label && action?.name) {
+    // Bouton construit en DOM pur (jamais innerHTML) ; la valeur voyage par dataset, pas par
+    // une chaîne interpolée dans du HTML.
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ghost-button';
+    button.textContent = action.label;
+    button.dataset.action = action.name;
+    button.dataset.value = String(action.value ?? '');
+    item.append(' ', button);
   }
   return item;
 }
@@ -82,6 +93,18 @@ export const routineRow = (routine) => ({
 export const contactRow = (contact) => ({
   text: contact?.displayName ?? contact?.name ?? 'contact',
   muted: contact?.endpoint ?? contact?.email ?? null,
+});
+
+// Appareil appairé au canal `mina_app`. « Connecté » ne s'affiche que si le PC voit vraiment
+// une session ouverte — approuvé et connecté sont deux choses différentes.
+export const chatDeviceRow = (device) => ({
+  text: `${device?.label ?? device?.deviceId ?? 'appareil'} — époque ${device?.keyEpoch ?? '?'}`,
+  badge: device?.connected ? 'connecté' : 'appairé',
+  badgeClass: device?.connected ? 'badge ready' : 'badge',
+  muted: device?.lastSeenAtMs
+    ? `vu ${new Date(device.lastSeenAtMs).toLocaleString('fr-FR')}`
+    : 'jamais connecté depuis l’appairage',
+  action: { label: 'Révoquer', name: 'chat-revoke', value: device?.deviceId ?? '' },
 });
 
 export const printerRow = (printer) => ({

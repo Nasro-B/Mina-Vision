@@ -138,4 +138,28 @@ object ChatEventCodec {
     }
 
     fun decode(json: String): ChatEvent = decode(JSONObject(json))
+
+    /**
+     * Sérialise l'événement en n'écrivant QUE les 13 champs du contrat, puis se relit avec
+     * [decode] : un événement mal formé échoue ici, chez l'expéditeur, plutôt que d'être rejeté
+     * silencieusement à l'autre bout.
+     */
+    fun encode(event: ChatEvent): JSONObject {
+        val json = JSONObject()
+            .put("version", ENVELOPE_VERSION)
+            .put("eventId", event.eventId)
+            .put("threadId", event.threadId)
+            .put("senderDeviceId", event.senderDeviceId)
+            .put("deviceSequence", event.deviceSequence)
+            .put("keyEpoch", event.keyEpoch)
+            .put("routingClass", event.routingClass)
+            .put("createdAtMs", event.createdAtMs)
+            .put("expiresAtMs", event.expiresAtMs)
+            .put("payloadCiphertext", event.payloadCiphertext)
+            .put("nonce", event.nonce)
+            .put("authTag", event.authTag)
+            .put("signature", event.signature)
+        decode(json)
+        return json
+    }
 }
