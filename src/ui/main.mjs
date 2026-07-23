@@ -11,6 +11,7 @@ import { createMinaRuntime } from '../core/mina-runtime.mjs';
 import { createCapabilityBroker } from '../safety/capability-broker.mjs';
 import { createComputerActionAuthorizer } from '../safety/computer-action-authorizer.mjs';
 import { createLocalPathPermissions } from '../security/local-path-permissions.mjs';
+import { createStartupManager } from '../system/startup-manager.mjs';
 import { createClaimLedger } from '../grounding/claim-ledger.mjs';
 import { createSessionManager } from '../sessions/session-manager.mjs';
 import { createSessionStore } from '../sessions/session-store.mjs';
@@ -234,6 +235,17 @@ let browserExecutor = null;
 let desktopCursorOverlay = null;
 let shutdownStarted = false;
 let mailController = null;
+// Démarrage automatique Windows : construit une seule fois, sans état propre (Windows EST la
+// source de vérité — on ne cache jamais un réglage système côté app).
+const startupManager = createStartupManager({
+  getLoginItemSettings: (options) => app.getLoginItemSettings(options),
+  setLoginItemSettings: (settings) => app.setLoginItemSettings(settings),
+  executablePath: process.execPath,
+  // En dev (electron .), l'exécutable est electron.exe : sans le dossier du projet, un
+  // démarrage automatique lancerait Electron à vide.
+  launchArgs: [ROOT_DIR],
+  isPackaged: app.isPackaged,
+});
 // Catalogue de capacités runtime (Task 8) + domaines composés par la réconciliation (T11-T13).
 let runtimeCapabilityCatalog = null;
 let personalGraphDatabase = null;
@@ -1778,6 +1790,9 @@ const registerIpc = () => {
   });
   // Catalogue de vérité (Task 8) : lecture seule, état réel de CHAQUE domaine avec raison.
   ipcMain.handle('mina:capabilities:list', () => runtimeCapabilityCatalog?.list() ?? []);
+  // Démarrage automatique avec Windows : clé Run de l'utilisateur courant via l'API Electron.
+  ipcMain.handle('mina:startup:status', () => startupManager.status());
+  ipcMain.handle('mina:startup:set', (_event, payload) => startupManager.set(payload?.enabled === true));
   ipcMain.on('mina:voice-input', (_event, payload) => {
     const buffer = Buffer.from(payload ?? []);
     if (buffer.length === 0 || buffer.length > 1_000_000) return;

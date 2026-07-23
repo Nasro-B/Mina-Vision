@@ -178,6 +178,29 @@
 
       <div class="dashboard-zone view" data-view="config">
         <h2 class="dashboard-zone-title">Configuration &amp; mémoire</h2>
+        <section class="memory-panel" aria-labelledby="system-title">
+          <div class="activity-head">
+            <div><p class="eyebrow">Système Windows</p><h2 id="system-title">Démarrage et état réel</h2></div>
+            <div class="heading-actions">
+              <button class="ghost-button" id="system-toggle" type="button" aria-expanded="true" aria-controls="system-collapsible">
+                <span id="system-toggle-label">Masquer</span>
+              </button>
+              <button class="ghost-button" id="capabilities-refresh" type="button">Rafraîchir l’état</button>
+            </div>
+          </div>
+          <div class="collapsible" id="system-collapsible">
+            <div class="collapsible-inner">
+              <div class="settings-mode-row">
+                <label class="memory-option"><input id="startup-enabled" type="checkbox"> Démarrer Mina Vision avec Windows</label>
+                <span class="badge" id="startup-state">—</span>
+              </div>
+              <p class="sandbox-remediation">Au démarrage automatique, Mina s’ouvre discrètement (sans voler le focus). Le réglage utilise la clé de démarrage de votre session Windows uniquement — aucune tâche système, aucune élévation, réversible immédiatement.</p>
+              <h3>Capacités : état réel de chaque domaine</h3>
+              <ul id="capabilities-list" class="memory-results"></ul>
+              <p class="sandbox-remediation">Cette liste est la source de vérité du runtime : <strong>disponible</strong>, <strong>dégradé</strong> ou <strong>indisponible</strong> avec la raison exacte. Un domaine indisponible nomme la dépendance qui manque — jamais un état optimiste.</p>
+            </div>
+          </div>
+        </section>
         <section class="memory-panel" aria-labelledby="settings-title">
         <div class="activity-head">
           <div><p class="eyebrow">Configuration locale</p><h2 id="settings-title">Modèles, modes et variables</h2></div>
