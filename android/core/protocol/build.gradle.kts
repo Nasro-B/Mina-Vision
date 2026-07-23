@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "fr.mina.gateway.protocol"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig { minSdk = 29 }
 
