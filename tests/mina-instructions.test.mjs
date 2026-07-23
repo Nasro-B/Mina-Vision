@@ -54,7 +54,7 @@ describe('MINA.md instruction constitution', () => {
   it('rejects embedded secrets, keyring paths and token assignments', () => {
     expect(() => validateMinaInstructions(validDocument('OPENROUTER_API_KEY=sk-live-secret')))
       .toThrow('mina_instructions_secret_forbidden');
-    expect(() => validateMinaInstructions(validDocument('Lire C:\\Users\\Nasro\\.mina\\keyring.json.')))
+    expect(() => validateMinaInstructions(validDocument('Lire C:\\Users\\Exemple\\.mina\\keyring.json.')))
       .toThrow('mina_instructions_secret_path_forbidden');
     expect(() => validateMinaInstructions(validDocument('access_token: abcdefghijklmnopqrstuvwxyz')))
       .toThrow('mina_instructions_secret_forbidden');

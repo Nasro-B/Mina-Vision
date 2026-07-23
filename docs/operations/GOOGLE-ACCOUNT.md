@@ -8,13 +8,13 @@ Couvre Gmail, Google Calendar, Google Contacts (People API) et Google Tasks en u
 
 ## Étape 1 — Créer un client OAuth dans Google Cloud Console (Nasro uniquement)
 
-1. Aller sur [console.cloud.google.com](https://console.cloud.google.com), se connecter avec `mina.vision.ai@gmail.com`.
+1. Aller sur [console.cloud.google.com](https://console.cloud.google.com), se connecter avec `<votre-compte>@gmail.com`.
 2. Créer un projet (ex. « Mina Vision ») ou en sélectionner un existant.
 3. **APIs et services → Bibliothèque** : activer *Gmail API*, *Google Calendar API*, *People API*, *Google Tasks API*.
 4. **APIs et services → Écran de consentement OAuth** :
    - Type : *Externe* (compte Gmail standard, pas Google Workspace).
    - Renseigner nom de l'app (« Mina Vision »), e-mail de contact.
-   - Ajouter `mina.vision.ai@gmail.com` comme **utilisateur de test** (évite la revue de vérification Google pour un usage personnel).
+   - Ajouter `<votre-compte>@gmail.com` comme **utilisateur de test** (évite la revue de vérification Google pour un usage personnel).
 5. **APIs et services → Identifiants → Créer des identifiants → ID client OAuth** :
    - Type d'application : **Application de bureau** (« Desktop app ») — pas « Application Web ». Ce type accepte automatiquement n'importe quel port `127.0.0.1`, donc aucune URI de redirection à saisir manuellement.
    - Noter le **Client ID** et le **Client Secret** affichés.
@@ -27,7 +27,7 @@ npm run connect:google
 ```
 
 - Première exécution : l'outil demande le Client ID et le Client Secret de l'étape 1 (saisie visible dans ce terminal, jamais journalisée ni transmise ailleurs), puis les enregistre chiffrés pour les prochaines fois.
-- Le navigateur par défaut s'ouvre sur l'écran de consentement Google — se connecter avec `mina.vision.ai@gmail.com`, accepter les permissions demandées (Gmail, Calendrier, Contacts, Tâches).
+- Le navigateur par défaut s'ouvre sur l'écran de consentement Google — se connecter avec `<votre-compte>@gmail.com`, accepter les permissions demandées (Gmail, Calendrier, Contacts, Tâches).
 - Une fois validé, un onglet « Compte connecté » s'affiche — le terminal confirme la connexion et le jeton chiffré est enregistré dans le coffre local.
 
 ## Ce qui reste après la connexion
@@ -38,8 +38,8 @@ Les identifiants sont stockés et prêts, mais le câblage de `src/ui/main.mjs` 
 
 Le SDK Google Home 1.9 est un téléchargement distinct depuis une page Google authentifiée (pas la même chose que l'OAuth ci-dessus) :
 
-1. Se connecter sur la page officielle Google Home Developer avec `mina.vision.ai@gmail.com`.
+1. Se connecter sur la page officielle Google Home Developer avec `<votre-compte>@gmail.com`.
 2. Télécharger le SDK 1.9.
-3. Déposer le contenu sous `C:\Users\Nasro\.mina\sdk\google-home\1.9`.
+3. Déposer le contenu sous `%USERPROFILE%\.mina\sdk\google-home\1.9`.
 
 Détail : voir `Pour Nasro.md`.

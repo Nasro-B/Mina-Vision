@@ -49,7 +49,7 @@ function buildConnector(overrides = {}) {
     generateState: () => 'expected-state',
     scopes: ['scope-a', 'scope-b'],
     accountId: 'google-primary',
-    address: 'mina.vision.ai@gmail.com',
+    address: 'owner@example.com',
     clock: () => 1_700_000_000_000,
   });
   return { connector, keyring, mailAccountStore, oauthClient, loopbackServer, openExternal, prompt, storage };
@@ -117,7 +117,7 @@ describe('createGoogleAccountConnector.connect: exact plan scenario (consent, ca
     expect(mailAccountStore.saved).toEqual([{
       accountId: 'google-primary',
       record: {
-        provider: 'gmail', address: 'mina.vision.ai@gmail.com', mode: 1,
+        provider: 'gmail', address: 'owner@example.com', mode: 1,
         credentials: { accessToken: 'access-auth-code-1', refreshToken: 'refresh-auth-code-1', expiryDate: 1_700_000_000_000 },
       },
     }]);

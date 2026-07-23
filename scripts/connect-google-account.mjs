@@ -73,7 +73,8 @@ async function main() {
     openExternal: (url) => shell.openExternal(url),
     scopes: SCOPES,
     accountId: 'google-primary',
-    address: 'mina.vision.ai@gmail.com',
+    // Le compte vient de l'environnement — jamais d'adresse en dur dans le dépôt public.
+    address: process.env.MINA_GOOGLE_ACCOUNT ?? '',
   });
 
   const result = await connector.connect();

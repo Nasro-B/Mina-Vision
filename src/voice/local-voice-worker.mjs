@@ -10,7 +10,10 @@ import ESpeakNg from 'espeak-ng';
 import { floatToPcm16, sliceStyleVector, splitSentences } from './local-voice-synthesis.mjs';
 
 // Cache modèles → root canonique (déjà peuplé par la vérification d'installation).
-process.env.HF_HOME ??= 'G:\\Programmes Installés\\caches\\MinaVision\\models';
+// Cache des modèles : déportable par variable d'environnement (MINA_MODELS_ROOT, posée par le
+// processus principal), sinon le défaut du runtime — aucun chemin de disque en dur, sinon
+// l'app ne démarrerait que sur la machine d'origine.
+if (process.env.MINA_MODELS_ROOT) process.env.HF_HOME ??= process.env.MINA_MODELS_ROOT;
 
 const MAX_LINE_LENGTH = 1_000_000;
 const VOICE_PATH = fileURLToPath(new URL('../../assets/voices/ff_siwis.bin', import.meta.url));

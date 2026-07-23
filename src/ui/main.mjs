@@ -12,6 +12,7 @@ import { createCapabilityBroker } from '../safety/capability-broker.mjs';
 import { createComputerActionAuthorizer } from '../safety/computer-action-authorizer.mjs';
 import { createLocalPathPermissions } from '../security/local-path-permissions.mjs';
 import { createStartupManager } from '../system/startup-manager.mjs';
+import { resolveStorageRoots } from '../system/storage-roots.mjs';
 import { createClaimLedger } from '../grounding/claim-ledger.mjs';
 import { createSessionManager } from '../sessions/session-manager.mjs';
 import { createSessionStore } from '../sessions/session-store.mjs';
@@ -237,6 +238,11 @@ let shutdownStarted = false;
 let mailController = null;
 // Démarrage automatique Windows : construit une seule fois, sans état propre (Windows EST la
 // source de vérité — on ne cache jamais un réglage système côté app).
+// Racines de stockage portables : par défaut tout vit sous userData (l'app démarre sur
+// n'importe quelle machine) ; MINA_CACHE_ROOT/MINA_MODELS_ROOT/MINA_SANDBOX_ROOT permettent de
+// déporter les gros caches sur un autre disque. Propagé aux workers par l'environnement.
+const storageRoots = resolveStorageRoots({ userDataPath: app.getPath('userData') });
+process.env.MINA_MODELS_ROOT ??= storageRoots.modelsRoot;
 const startupManager = createStartupManager({
   getLoginItemSettings: (options) => app.getLoginItemSettings(options),
   setLoginItemSettings: (settings) => app.setLoginItemSettings(settings),
@@ -1918,10 +1924,11 @@ app.whenReady().then(async () => {
       ROOT_DIR,
       app.getPath('userData'),
       path.join(app.getPath('documents'), 'Mina Vision'),
-      'G:\\Programmes Installés\\caches\\MinaVision',
-      'G:\\MinaTests',
-      // Les racines de l'ancien projet (Mina AI/API/APP/Modal) sont définitivement retirées :
-      // l'ancien projet ne doit jamais être une cible d'écriture de confiance (R-06).
+      storageRoots.cacheRoot,
+      // Racines supplémentaires : UNIQUEMENT celles que l'utilisateur déclare lui-même via
+      // MINA_TRUSTED_WRITE_ROOTS. Aucune racine machine en dur — une installation neuve
+      // n'hérite jamais des dossiers de confiance d'une autre (R-06 généralisé).
+      ...storageRoots.extraTrustedRoots,
     ],
     confirmLocal: confirmSensitiveAction,
   });
@@ -2062,8 +2069,8 @@ app.whenReady().then(async () => {
     });
   const skillsRoot = path.join(app.getPath('userData'), 'skills');
   const quarantineRoot = path.join(app.getPath('userData'), 'skill-quarantine');
-  const sandboxRoot = path.join('G:\\Programmes Installés\\caches', 'MinaVision', 'sandbox');
-  const sandboxRuntimeRoot = path.join('G:\\Programmes Installés\\caches', 'MinaVision', 'sandbox-runtime');
+  const sandboxRoot = storageRoots.sandboxRoot;
+  const sandboxRuntimeRoot = storageRoots.sandboxRuntimeRoot;
   await Promise.all([mkdir(skillsRoot, { recursive: true }), mkdir(quarantineRoot, { recursive: true }), mkdir(sandboxRoot, { recursive: true })]);
   const skillRegistry = createSkillRegistry({ root: skillsRoot });
   const bundledSkillRegistry = createSkillRegistry({ root: path.join(ROOT_DIR, 'skills-reference') });

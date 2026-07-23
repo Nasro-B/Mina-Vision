@@ -24,9 +24,9 @@
     "test:unit": "vitest run --exclude tests/integration/**"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "author": "Nasserallah Berkoun",
+  "license": "SEE LICENSE IN LICENSE",
+  "description": "Agent vocal local Electron — pilote navigateur, bureau Windows et téléphone Android, avec mémoire chiffrée et garde-fous anti-hallucination.",
   "dependencies": {
     "@azure/msal-node": "5.4.0",
     "@google/genai": "2.11.0",

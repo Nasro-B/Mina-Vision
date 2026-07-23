@@ -6,7 +6,7 @@ describe('browser profile authentication', () => {
     const child = { pid: 4242, unref: vi.fn() };
     const spawnProcess = vi.fn(() => child);
     const authenticator = createBrowserProfileAuthenticator({
-      profileDir: 'C:\\Users\\Nasro\\AppData\\Roaming\\agentvisionsourire\\mina-chrome-profile',
+      profileDir: 'C:\\Users\\Exemple\\AppData\\Roaming\\agentvisionsourire\\mina-chrome-profile',
       chromeCandidates: ['C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'],
       exists: vi.fn(() => true),
       spawnProcess,
@@ -16,7 +16,7 @@ describe('browser profile authentication', () => {
     expect(spawnProcess).toHaveBeenCalledWith(
       'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
       expect.arrayContaining([
-        '--user-data-dir=C:\\Users\\Nasro\\AppData\\Roaming\\agentvisionsourire\\mina-chrome-profile',
+        '--user-data-dir=C:\\Users\\Exemple\\AppData\\Roaming\\agentvisionsourire\\mina-chrome-profile',
         '--profile-directory=Default',
         'https://accounts.google.com/ServiceLogin?service=mail',
       ]),

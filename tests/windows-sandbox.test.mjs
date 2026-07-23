@@ -31,7 +31,7 @@ const execution = Object.freeze({
     outPath: 'C:\\MinaJobs\\job-1\\out',
     bootstrapPath: 'C:\\MinaRuntime\\bootstrap',
   },
-  forbiddenRoots: ['C:\\Serveurs\\Mina Vision', 'C:\\Users\\Nasro'],
+  forbiddenRoots: ['C:\\Serveurs\\Mina Vision', 'C:\\Users\\Exemple'],
 });
 
 describe('Windows Sandbox fail-closed backend', () => {
