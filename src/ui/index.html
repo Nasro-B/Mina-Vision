@@ -198,6 +198,15 @@
               <h3>Capacités : état réel de chaque domaine</h3>
               <ul id="capabilities-list" class="memory-results"></ul>
               <p class="sandbox-remediation">Cette liste est la source de vérité du runtime : <strong>disponible</strong>, <strong>dégradé</strong> ou <strong>indisponible</strong> avec la raison exacte. Un domaine indisponible nomme la dépendance qui manque — jamais un état optimiste.</p>
+              <h3>Application Mina sur téléphone</h3>
+              <p class="sandbox-remediation" id="chat-channel-state" aria-live="polite">État du canal en cours de lecture…</p>
+              <div class="heading-actions">
+                <button class="ghost-button" id="chat-pairing-open" type="button">Ouvrir l’appairage</button>
+                <button class="ghost-button" id="chat-pairing-close" type="button">Fermer l’appairage</button>
+              </div>
+              <p class="sandbox-remediation" id="chat-pairing-code" aria-live="assertive"></p>
+              <ul id="chat-devices" class="memory-results"></ul>
+              <p class="sandbox-remediation">Un téléphone ne parle à Mina que s’il a été appairé ici avec un code à usage unique. Révoquer un appareil ouvre une nouvelle époque de clé : il ne lira plus les messages suivants. Le canal n’autorise que conversation, mémoire et médias — toute action sensible reste à confirmer sur ce PC.</p>
               <h3>Personnalité de Mina</h3>
               <ul id="personality-profile" class="memory-results" aria-live="polite"></ul>
               <p class="sandbox-remediation">Le style de Mina est isolé de la sécurité : modifier sa personnalité ne change aucune permission. Toute modification exige une confirmation locale sur ce PC.</p>

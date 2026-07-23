@@ -4,7 +4,7 @@ import { composeCapabilityBrief } from '../core/capability-brief.mjs';
 import { composeJournalBrief } from '../diagnostics/journal-brief.mjs';
 import {
   contactRow, homeDeviceRow, mailAccountRow, mailMessageRow, personalityRow,
-  printerRow, renderList, renderUnavailable, routineRow, taskRow,
+  chatDeviceRow, printerRow, renderList, renderUnavailable, routineRow, taskRow,
 } from './panels/domain-panels.mjs';
 import { assessFrameQuality, decideLensFlip, frameStatsFromGrayscale } from '../perception/frame-quality.mjs';
 import {
@@ -1804,9 +1804,72 @@ const renderCapabilities = (entries) => {
     list.append(item);
   }
 };
+// Canal `mina_app` : etat reel du serveur, appareils appaires, code d'appairage.
+// Aucun contenu de conversation n'est lu ici — l'ecran ne sert qu'a decider qui a le droit
+// de parler a Mina depuis un telephone.
+const renderChatChannel = (status) => {
+  const state = document.querySelector('#chat-channel-state');
+  if (state) {
+    if (!status || status.listening !== true) {
+      state.textContent = status?.vaultUnlocked === false
+        ? 'Canal ferme — memoire verrouillee. Deverrouillez la memoire pour que le telephone puisse joindre Mina.'
+        : `Canal ferme${status?.lastError ? ` — ${status.lastError}` : ''}.`;
+    } else {
+      const connected = Array.isArray(status.connectedDevices) ? status.connectedDevices.length : 0;
+      state.textContent = `A l'ecoute sur ${status.address} — epoque de cle ${status.keyEpoch}, ${connected} appareil(s) connecte(s).`;
+    }
+  }
+  const connectedSet = new Set(Array.isArray(status?.connectedDevices) ? status.connectedDevices : []);
+  renderList(
+    '#chat-devices',
+    (status?.devices ?? []).map((device) => ({ ...device, connected: connectedSet.has(device.deviceId) })),
+    chatDeviceRow,
+    { empty: 'Aucun telephone appaire.' },
+  );
+};
+
+const refreshChatChannel = async () => {
+  if (!api.chatStatus) return;
+  renderChatChannel(await api.chatStatus());
+};
+
+document.querySelector('#chat-pairing-open')?.addEventListener('click', () => {
+  api.chatOpenPairing()
+    .then((result) => {
+      const target = document.querySelector('#chat-pairing-code');
+      if (!target) return;
+      target.textContent = result?.ok
+        ? `Code d'appairage : ${result.code} — valable jusqu'a ${new Date(result.expiresAtMs).toLocaleTimeString('fr-FR')}, une seule fois.`
+        : `Appairage impossible : ${result?.reason ?? 'raison inconnue'}.`;
+    })
+    .then(refreshChatChannel)
+    .catch((error) => log(`Appairage telephone : ${error.message}`));
+});
+
+document.querySelector('#chat-pairing-close')?.addEventListener('click', () => {
+  api.chatClosePairing()
+    .then(() => {
+      const target = document.querySelector('#chat-pairing-code');
+      if (target) target.textContent = 'Appairage ferme.';
+    })
+    .then(refreshChatChannel)
+    .catch((error) => log(`Appairage telephone : ${error.message}`));
+});
+
+document.querySelector('#chat-devices')?.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-action="chat-revoke"]');
+  if (!button) return;
+  api.chatRevokeDevice(button.dataset.value)
+    .then((result) => log(result?.ok
+      ? `Appareil revoque — nouvelle epoque de cle ${result.keyEpoch}.`
+      : `Revocation refusee : ${result?.reason ?? 'raison inconnue'}.`))
+    .then(refreshChatChannel)
+    .catch((error) => log(`Revocation : ${error.message}`));
+});
+
 const refreshCapabilities = async () => renderCapabilities(await api.capabilitiesList());
 document.querySelector('#capabilities-refresh')?.addEventListener('click', () => {
-  Promise.all([refreshCapabilities(), refreshStartup()])
+  Promise.all([refreshCapabilities(), refreshStartup(), refreshChatChannel()])
     .catch((error) => log(`État système : ${error.message}`));
 });
 
@@ -1962,6 +2025,7 @@ const refreshPersonality = async () => {
 
 refreshStartup().catch((error) => log(`Démarrage Windows : ${error.message}`));
 refreshCapabilities().catch((error) => log(`Capacités : ${error.message}`));
+refreshChatChannel().catch((error) => log(`Canal téléphone : ${error.message}`));
 refreshMail().catch(failed('#mail-accounts'));
 refreshPersonal().catch(() => {});
 refreshPrinting().catch(failed('#printing-list'));

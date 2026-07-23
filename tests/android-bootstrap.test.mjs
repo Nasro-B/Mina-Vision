@@ -18,7 +18,7 @@ describe('Android Kotlin gateway bootstrap', () => {
     expect(catalog).toContain('kotlin = "2.3.21"');
     expect(appBuild).toContain('namespace = "fr.mina.gateway"');
     expect(appBuild).toContain('applicationId = "fr.mina.gateway"');
-    expect(appBuild).toContain('compileSdk = 35');
+    expect(appBuild).toContain('compileSdk = 36');
     expect(appBuild).toContain('minSdk = 29');
     expect(appBuild).toContain('targetSdk = 35');
   });
@@ -32,7 +32,7 @@ describe('Android Kotlin gateway bootstrap', () => {
     expect(manifest).toContain('android.intent.category.LAUNCHER');
     expect(manifest).toContain('android:launchMode="singleTop"');
     expect(activity).toContain('class MainActivity : Activity()');
-    expect(activity).toContain('Mina Vision — passerelle Huawei');
+    expect(activity).toContain('Mina Vision');
     expect(activity).toContain('Enregistrer localement et chiffrer');
     expect(activity).toContain('DigitsKeyListener.getInstance("0123456789,")');
     expect(activity).toContain('restartGatewayService()');

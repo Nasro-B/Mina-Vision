@@ -183,11 +183,46 @@ export function createMemoryRuntimeController({
     const boundedLimit = Math.max(1, Math.min(Number(limit) || 12, MAX_RECALL_ITEMS));
     const items = await services.memoryService.recall({ kind: 'local_owner', value: 'owner', query: '' });
     return Object.freeze(items
-      .filter((item) => item.provenance?.source === 'voice' && !['sensitive', 'secret', 'otp'].includes(item.classification))
+            // Voix ET application Mina : Mina est UNE assistante, pas une par canal — le contexte
+      // repris doit refléter tout ce qui a été dit, quel que soit l'appareil.
+      .filter((item) => ['voice', 'mina_app'].includes(item.provenance?.source) && !['sensitive', 'secret', 'otp'].includes(item.classification))
       .sort((a, b) => b.date - a.date)
       .slice(0, boundedLimit)
       .reverse()
       .map((item) => Object.freeze({ content: String(item.content).slice(0, 300), date: item.date })));
+  }
+
+  /**
+   * Échange complet du canal `mina_app` : la question ET la réponse, chacune datée avec sa
+   * provenance. Écrire seulement l'une des deux donnerait un historique où Mina paraîtrait
+   * n'avoir jamais répondu, ou avoir parlé sans qu'on lui demande rien.
+   *
+   * L'identifiant d'événement dérive de l'eventId du protocole : une retransmission réseau
+   * n'ajoute donc pas un doublon en mémoire.
+   */
+  async function rememberChatExchange({ eventId, deviceId, userMessage, assistantMessage } = {}) {
+    const active = requireUnlocked();
+    const question = String(userMessage ?? '').replace(/\s+/gu, ' ').trim().slice(0, 2_000);
+    const answer = String(assistantMessage ?? '').replace(/\s+/gu, ' ').trim().slice(0, 2_000);
+    if (!question || !answer) throw new TypeError('chat_exchange_invalid');
+    if (!DEVICE_ID_PATTERN.test(deviceId ?? '')) throw new TypeError('chat_exchange_device_invalid');
+    const base = createHash('sha256').update(`mina_app\0${String(eventId ?? '')}`).digest('hex');
+
+    for (const [suffix, speaker, content] of [
+      ['q', 'owner', `Nasro : ${question}`],
+      ['r', 'mina', `Mina : ${answer}`],
+    ]) {
+      await active.memoryService.remember({
+        eventId: `chat-${base}-${suffix}`,
+        kind: 'local_owner',
+        value: 'owner',
+        channel: 'mina_app',
+        content,
+        classification: 'normal',
+        provenance: { source: 'mina_app', role: speaker, deviceId },
+      });
+    }
+    return Object.freeze({ remembered: true, eventId: `chat-${base}` });
   }
 
   async function rememberRemoteMessage(message = {}) {
@@ -233,6 +268,7 @@ export function createMemoryRuntimeController({
     missionEvidence,
     rememberRemoteMessage,
     rememberUtterance,
+    rememberChatExchange,
     recentConversation,
   });
 }

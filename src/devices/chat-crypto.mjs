@@ -9,7 +9,10 @@
 // L'AAD lie chaque ciphertext à son contexte exact (expéditeur, fil, époque, dates) : déplacer
 // un message chiffré vers un autre en-tête casse le déchiffrement au lieu de passer inaperçu.
 
-import { createCipheriv, createDecipheriv, createSign, createVerify, hkdfSync, randomBytes } from 'node:crypto';
+import {
+  createCipheriv, createDecipheriv, createPrivateKey, createPublicKey, createSign, createVerify,
+  diffieHellman, hkdfSync, KeyObject, randomBytes,
+} from 'node:crypto';
 import { encodeChatHeader, encodeChatSignatureInput } from '../contracts/chat-binary-codec.mjs';
 
 const ALGORITHM = 'aes-256-gcm';
@@ -19,6 +22,7 @@ const KEY_BYTES = 32;
 
 const EPOCH_WRAP_PREFIX = 'MINA_EPOCH_WRAP_V1';
 const ATTACHMENT_INFO = 'mina-chat-attachment-v1';
+const DEVICE_WRAP_INFO = 'mina-chat-device-wrap-v1';
 
 const requireKey = (value, label) => {
   const key = Buffer.from(value ?? []);
@@ -34,6 +38,32 @@ export const deriveAttachmentKey = ({ epochKey, attachmentId }) => Buffer.from(h
   Buffer.from(ATTACHMENT_INFO, 'utf8'),
   KEY_BYTES,
 ));
+
+/**
+ * Clé d'enveloppement partagée PC ↔ appareil, dérivée par ECDH sur les clés d'identité P-256
+ * déjà utilisées pour signer. Aucun secret ne transite : chaque côté calcule la même valeur à
+ * partir de sa clé privée et de la clé publique de l'autre. Un tiers qui capture tout le trafic
+ * d'appairage ne peut pas la reconstituer.
+ *
+ * Le sel est l'identifiant de l'appareil : deux téléphones appairés au même PC n'obtiennent
+ * jamais la même clé d'enveloppement.
+ */
+export function deriveDeviceWrapKey({ privateKey, peerPublicKey, deviceId }) {
+  if (!privateKey || !peerPublicKey) throw new TypeError('device_wrap_cles_manquantes');
+  const identifier = String(deviceId ?? '');
+  if (!identifier) throw new TypeError('device_wrap_device_id_manquant');
+  const shared = diffieHellman({
+    privateKey: privateKey instanceof KeyObject ? privateKey : createPrivateKey(privateKey),
+    publicKey: peerPublicKey instanceof KeyObject ? peerPublicKey : createPublicKey(peerPublicKey),
+  });
+  return Buffer.from(hkdfSync(
+    'sha256',
+    shared,
+    Buffer.from(identifier, 'utf8'),
+    Buffer.from(DEVICE_WRAP_INFO, 'utf8'),
+    KEY_BYTES,
+  ));
+}
 
 // AAD binaire domain-separated pour l'enveloppement d'une clé d'époque : la clé enveloppée
 // n'est déchiffrable que pour CE couple (appareil, époque).

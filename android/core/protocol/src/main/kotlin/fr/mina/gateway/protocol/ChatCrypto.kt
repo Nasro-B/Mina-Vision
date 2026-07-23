@@ -26,6 +26,7 @@ object ChatCrypto {
     private const val KEY_BYTES = 32
     private const val EPOCH_WRAP_PREFIX = "MINA_EPOCH_WRAP_V1"
     private const val ATTACHMENT_INFO = "mina-chat-attachment-v1"
+    private const val DEVICE_WRAP_INFO = "mina-chat-device-wrap-v1"
     private val secureRandom = SecureRandom()
 
     private fun requireKey(key: ByteArray, label: String): ByteArray {
@@ -63,6 +64,28 @@ object ChatCrypto {
             counter += 1
         }
         return out.toByteArray().copyOf(length)
+    }
+
+    /**
+     * Clé d'enveloppement partagée PC ↔ appareil, dérivée par ECDH sur les clés d'identité
+     * P-256. Miroir exact de `deriveDeviceWrapKey` côté Node : aucun secret ne transite, chaque
+     * côté calcule la même valeur à partir de sa clé privée et de la clé publique de l'autre.
+     */
+    fun deriveDeviceWrapKey(
+        privateKey: java.security.PrivateKey,
+        peerPublicKey: java.security.PublicKey,
+        deviceId: String,
+    ): ByteArray {
+        require(deviceId.isNotEmpty()) { "device_wrap_device_id_manquant" }
+        val agreement = javax.crypto.KeyAgreement.getInstance("ECDH")
+        agreement.init(privateKey)
+        agreement.doPhase(peerPublicKey, true)
+        return hkdfSha256(
+            ikm = agreement.generateSecret(),
+            salt = deviceId.toByteArray(StandardCharsets.UTF_8),
+            info = DEVICE_WRAP_INFO.toByteArray(StandardCharsets.UTF_8),
+            length = KEY_BYTES,
+        )
     }
 
     private fun epochWrapAad(deviceId: String, keyEpoch: Int): ByteArray {

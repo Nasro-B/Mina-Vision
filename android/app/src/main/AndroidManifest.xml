@@ -26,6 +26,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".ChatActivity"
+            android:exported="false"
+            android:label="Conversation"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.MinaChat"
+            android:windowSoftInputMode="adjustResize" />
         <receiver
             android:name=".messaging.SmsBroadcastReceiver"
             android:directBootAware="false"

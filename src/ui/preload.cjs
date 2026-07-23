@@ -124,6 +124,12 @@ function createPreloadApi(ipcRenderer) {
     // Démarrage automatique avec Windows.
     startupStatus: () => ipcRenderer.invoke('mina:startup:status'),
     setStartup: (enabled) => ipcRenderer.invoke('mina:startup:set', { enabled }),
+    // Canal application Mina (téléphone appairé) : aucun contenu de conversation ne passe ici,
+    // uniquement l'état du canal et les décisions d'appairage.
+    chatStatus: () => ipcRenderer.invoke('mina:chat:status'),
+    chatOpenPairing: () => ipcRenderer.invoke('mina:chat:openPairing'),
+    chatClosePairing: () => ipcRenderer.invoke('mina:chat:closePairing'),
+    chatRevokeDevice: (deviceId) => ipcRenderer.invoke('mina:chat:revoke', { deviceId }),
     // Domaines composés par la réconciliation (T11-T13).
     personalBriefing: (payload) => ipcRenderer.invoke('mina:personal:briefing', payload),
     personalTasks: () => ipcRenderer.invoke('mina:personal:tasks'),

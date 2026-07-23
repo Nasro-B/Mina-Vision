@@ -91,6 +91,9 @@ import { composeInstructionState } from '../core/capability-brief.mjs';
 import { composeCapabilityCatalog } from '../core/capability-catalog.mjs';
 import { composeOperationalBudgets } from '../core/operational-budgets.mjs';
 import { createVersionedJsonStore } from '../core/versioned-json-store.mjs';
+import { createChatChannel } from '../devices/chat-channel.mjs';
+import { createChatResponder } from '../devices/chat-responder.mjs';
+import { loadOrCreatePcChatIdentity } from '../devices/pc-chat-identity.mjs';
 import { createRuntimeCapabilityCatalog } from '../runtime/capability-catalog.mjs';
 import { registerMinaIpc } from './ipc/register-ipc.mjs';
 import { createRoutineRegistry } from '../routines/routine-registry.mjs';
@@ -312,6 +315,10 @@ const technicalLog = createTechnicalLog({
 const technicalLogReader = createTechnicalLogReader({ technicalLog });
 let selfModel = null;
 let activityJournal = null;
+// Canal `mina_app` : la clé maîtresse n'est PAS conservée ailleurs — cette référence suit
+// exactement l'état du coffre, donc verrouiller la mémoire coupe aussi le canal téléphone.
+let chatChannel = null;
+let chatMasterKey = null;
 // Couche 2 du journal (Task 5) : textes chiffrés, armée au déverrouillage du coffre.
 let sensitiveJournalStore = null;
 // Porte du mot d'arrêt vocal : après « stop », les chunks audio restants du tour interrompu
@@ -1717,7 +1724,36 @@ const registerIpc = () => {
   });
   ipcMain.handle('memory.initialize', () => memoryController.initialize());
   ipcMain.handle('memory.unlock', (_event, request) => memoryController.unlock(request));
-  ipcMain.handle('memory.lock', () => memoryController.lock());
+  ipcMain.handle('memory.lock', () => {
+    // Verrouiller la mémoire coupe AUSSI le canal téléphone : sans clé maîtresse il n'y a plus
+    // de clé d'époque, donc plus de déchiffrement possible — autant l'annoncer franchement.
+    chatMasterKey?.fill(0);
+    chatMasterKey = null;
+    void chatChannel?.stop();
+    return memoryController.lock();
+  });
+
+  // Canal `mina_app` — état, appairage et révocation. Aucune de ces routes ne transporte de
+  // contenu de conversation : elles ne servent qu'à décider QUI a le droit de parler à Mina.
+  ipcMain.handle('mina:chat:status', () => chatChannel?.status() ?? {
+    listening: false, address: null, vaultUnlocked: Boolean(chatMasterKey), pairingOpen: false,
+    keyEpoch: 0, connectedDevices: [], devices: [], lastError: 'canal non démarré',
+  });
+  ipcMain.handle('mina:chat:openPairing', () => {
+    if (!chatChannel) return { ok: false, reason: 'canal_non_demarre' };
+    const opened = chatChannel.openPairing();
+    return { ok: true, ...opened };
+  });
+  ipcMain.handle('mina:chat:closePairing', () => {
+    chatChannel?.closePairing();
+    return { ok: true };
+  });
+  ipcMain.handle('mina:chat:revoke', async (_event, request) => {
+    const deviceId = String(request?.deviceId ?? '');
+    if (!/^[A-Za-z0-9._:-]{1,160}$/u.test(deviceId)) return { ok: false, reason: 'identifiant_invalide' };
+    if (!chatChannel) return { ok: false, reason: 'canal_non_demarre' };
+    return chatChannel.revoke(deviceId);
+  });
   ipcMain.handle('memory.search', (_event, request) => memoryController.search(request));
   ipcMain.handle('memory.proposeForget', (_event, request) => memoryController.proposeForget(request));
   ipcMain.handle('research.readFile', async (_event, request) => {
@@ -2034,6 +2070,7 @@ app.whenReady().then(async () => {
       // Le déverrouillage du coffre arme AUSSI la couche 2 du journal : clé dédiée dérivée par
       // HKDF (jamais la clé maître elle-même). Le tampon accumulé pendant le verrouillage est
       // chiffré et vidé ici.
+      chatMasterKey = Buffer.from(masterKey);
       try {
         const journalKey = Buffer.from(hkdfSync('sha256', Buffer.from(masterKey), Buffer.from('Mina Vision local memory v1', 'utf8'), Buffer.from('journal-sensible', 'utf8'), 32));
         sensitiveJournalStore?.enableEncryption(journalKey);
@@ -2067,6 +2104,52 @@ app.whenReady().then(async () => {
       technicalLog.record({ severity: 'warning', scope: 'memory', code: 'memory_auto_unlock_failed', message });
       void activityJournal?.append('memory_auto_unlock', { ok: false, error: message });
     });
+
+  // Canal `mina_app` (constitution : conversation, mémoire et médias depuis un appareil appairé).
+  // Il ne démarre QUE si le coffre est ouvert : les clés d'époque en dérivent, et l'identité du
+  // PC est chiffrée par lui. Coffre fermé, on ne fait pas semblant d'écouter.
+  try {
+    if (chatMasterKey) {
+      const chatIdentity = await loadOrCreatePcChatIdentity({
+        filePath: path.join(app.getPath('userData'), 'chat-pc-identity.json'),
+        masterKey: chatMasterKey,
+        readFile,
+        writeFile,
+      });
+      chatChannel = createChatChannel({
+        masterKey: () => chatMasterKey,
+        identity: chatIdentity,
+        store: createVersionedJsonStore({
+          filename: path.join(app.getPath('userData'), 'chat-devices.json'),
+          schemaVersion: 1,
+          readFile,
+          writeFile,
+          rename,
+        }),
+        respond: createChatResponder({
+          generate: async (input) => (await telegramTextGenerator()).generate(input),
+          memory: memoryController,
+          logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_app', entry) },
+        }),
+        port: Number(process.env.MINA_CHAT_PORT ?? 8771),
+        host: process.env.MINA_CHAT_HOST ?? '0.0.0.0',
+        logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_app', entry) },
+      });
+      await chatChannel.load();
+      const listening = await chatChannel.start();
+      void activityJournal?.append('chat_app_canal', {
+        listening: Boolean(listening),
+        port: listening?.port ?? null,
+        error: chatChannel.status().lastError,
+      });
+    } else {
+      void activityJournal?.append('chat_app_canal', { listening: false, error: 'coffre_verrouille' });
+    }
+  } catch (error) {
+    const message = String(error?.message ?? error).slice(0, 300);
+    technicalLog.record({ severity: 'warning', scope: 'chat', code: 'chat_app_canal_indisponible', message });
+    void activityJournal?.append('chat_app_canal', { listening: false, error: message });
+  }
   const skillsRoot = path.join(app.getPath('userData'), 'skills');
   const quarantineRoot = path.join(app.getPath('userData'), 'skill-quarantine');
   const sandboxRoot = storageRoots.sandboxRoot;
@@ -2498,6 +2581,7 @@ app.on('before-quit', (event) => {
   void (async () => {
     await minaCore?.shutdown({ timeoutMs: 2_000 });
     if (runtime) await runtime.close();
+    await chatChannel?.stop();
     memoryController?.lock();
     if (usageDatabase?.open) usageDatabase.close();
     if (mailDatabase?.open) mailDatabase.close();
