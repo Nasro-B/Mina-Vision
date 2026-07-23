@@ -429,6 +429,10 @@
           </div>
           <div class="collapsible" id="personal-collapsible">
             <div class="collapsible-inner">
+              <div class="settings-mode-row">
+                <button class="ghost-button" id="personal-briefing-button" type="button">Briefing du jour</button>
+              </div>
+              <ul id="personal-briefing" class="memory-results" aria-live="polite"></ul>
               <h3>Tâches</h3>
               <ul id="personal-tasks" class="memory-results" aria-live="polite"></ul>
               <h3>Routines</h3>
@@ -453,6 +457,10 @@
           <div class="collapsible" id="printing-collapsible">
             <div class="collapsible-inner">
               <ul id="printing-list" class="memory-results" aria-live="polite"></ul>
+              <div class="settings-mode-row">
+                <label><span>Autoriser une imprimante</span><input id="printer-id" type="text" placeholder="nom exact de l’imprimante"></label>
+                <button class="ghost-button" id="printer-approve" type="button">Autoriser</button>
+              </div>
               <p class="sandbox-remediation">Une imprimante doit être autorisée une fois avant tout envoi. Chaque impression demande ensuite une confirmation et son acceptation est vérifiée dans la file Windows réelle.</p>
             </div>
           </div>
