@@ -63,9 +63,9 @@ ne sont simplement plus suivis ni publiés.
 
 ## 6. Restes assumés (sans risque)
 
-- Chemins machine et nom d'utilisateur dans les **plans et specs datés** de
-  `docs/superpowers/` : ce sont des archives historiques du processus de développement, pas du
-  code exécuté. Elles documentent honnêtement ce qui a été fait.
+- Les **plans, spécifications et journal d'exécution** de `docs/superpowers/` sont désormais
+  EXCLUS de la publication (`.gitignore`) : documents de travail internes contenant des chemins
+  machine et l'historique détaillé du développement. Ils restent sur le disque local.
 - Adresses IP privées (`192.168.x.x`) dans des fixtures de test et dans `url-policy.mjs` : ce
   sont précisément les plages que la politique anti-SSRF doit **refuser** ; elles n'exposent
   aucun réseau réel.

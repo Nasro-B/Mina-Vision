@@ -1,10 +1,12 @@
 # Changelog Mina
 
-Ce fichier distingue strictement les capacités livrées (tests automatisés verts, gate du plan correspondant franchi) des évolutions encore planifiées. Une capacité ne passe de « Planned » à « Livré » que lorsque son plan d'exécution est intégralement coché avec preuve réelle (`docs/superpowers/EXECUTION-LOG.md`) — jamais par anticipation. Les entrées ci-dessous du 2026-07-22 ont été livrées hors de ce processus de plans formels (demandes directes de Nasro, TDD et vérification réelle à chaque étape) ; elles ne figurent donc pas dans `EXECUTION-LOG.md`, propre aux plans de `docs/superpowers/plans/`.
+Ce fichier distingue strictement les capacités livrées (tests automatisés verts, gate franchi) des évolutions encore planifiées. Une capacité ne passe de « planifiée » à « livrée » que lorsque son plan d'exécution est intégralement coché avec preuve réelle — jamais par anticipation.
+
+> Les plans d'exécution et spécifications de conception qui documentent ce processus sont des documents de travail internes, non publiés (ils contiennent des chemins machine et l'historique détaillé du développement). Ce changelog reste la source de vérité publique sur ce qui est livré.
 
 ## Livré (2026-07-22 après-midi — plan de réconciliation, vagues 0-4 amendées)
 
-Exécution du [plan de réconciliation exhaustive](docs/superpowers/plans/2026-07-22-mina-vision-reconciliation-exhaustive.md) dans sa version amendée (git au lieu de robocopy, journal double couche au lieu de la perte des textes, R-02 reformulé en durcissement, R-17 résolu par décision documentée). Un commit git par tâche — le projet est un **dépôt git local** depuis cette vague (aucun remote, aucun push).
+Exécution du plan de réconciliation exhaustive (document interne) dans sa version amendée (git au lieu de robocopy, journal double couche au lieu de la perte des textes, R-02 reformulé en durcissement, R-17 résolu par décision documentée). Un commit git par tâche — le projet est un **dépôt git local** depuis cette vague (aucun remote, aucun push).
 
 - **R-01 — Le Capability Broker est l'autorité de chaque action Computer Use** : sans grant de session borné (mission + durée), AUCUNE action n'atteint l'exécuteur (`authorization_denied`) ; toute action sensible exige une confirmation locale liée cryptographiquement au digest exact de l'action, consommée une seule fois. L'arrêt dur (`classifyAction`) reste devant le broker.
 - **Task 2 — Contrat d'action** : le provider OpenAI-compatible exige `intent` (but de l'action) et `safety_decision` (`allowed`/`require_confirmation`/`blocked`) dans chaque action ; `allowed` ne débloque rien, `blocked` n'est jamais « réparé ». (Le provider Gemini utilise le tool natif de l'API — schéma serveur, son `safety_decision` natif était déjà exploité.)
@@ -149,7 +151,7 @@ Spécification d'origine (contexte historique) : [canal Telegram propriétaire e
 
 - **Créer le dépôt GitHub** et le connecter (`git remote add origin …`). Le dépôt est local, sans remote : aucun push n'est possible tant que tu ne le fais pas.
 - **Vérifier le nom d'utilisateur des commits** : l'historique porte ton nom et ton adresse e-mail réelle. Si tu ne veux pas exposer cette adresse publiquement, configure une adresse GitHub `noreply` **avant** le premier push.
-- **Décider du sort des plans internes** : `docs/superpowers/plans/` et `specs/` contiennent des chemins de ta machine et l'historique détaillé du développement. Sans risque de sécurité, mais ce sont des documents internes — dis-moi si tu préfères les exclure de la publication.
+- ~~Décider du sort des plans internes~~ : **fait le 2026-07-23** — `docs/superpowers/plans/`, `specs/` et `EXECUTION-LOG.md` sont exclus de la publication (43 fichiers retirés du suivi git, conservés sur ton disque).
 - ~~Modèles volumineux~~ : **vérifié le 2026-07-23** — le dépôt suivi pèse 2,3 Mo au total ; les fichiers `config/models/*.json` sont des descripteurs (id, source, licence), pas des poids, et la voix locale `assets/voices/ff_siwis.bin` fait 510 Ko. Rien à exclure.
 
 
