@@ -1,84 +1,165 @@
-# Mina Vision — agent visuel local
+# Mina Vision
 
-Mina contrôle le navigateur, le bureau Windows (n'importe quelle application, pas seulement celles déjà ouvertes) et un téléphone Android autorisé en ADB. Elle peut écouter une instruction vocale (compréhension dynamique, pas un lexique figé), observer l’écran, cliquer, saisir, défiler, lancer et piloter des missions à la voix, exécuter la mission Google Photos dentaire, analyser son propre code, générer de vrais documents PDF/Word, et expliquer ses propres erreurs techniques avec un remède concret.
+**Agent vocal local qui pilote votre ordinateur.** Mina écoute, regarde l'écran, et agit : elle
+contrôle le navigateur, n'importe quelle application Windows, et un téléphone Android connecté
+en ADB. Tout tourne sur votre machine — mémoire chiffrée locale, modèles au choix, aucune
+dépendance à un service central.
 
-Guide complet des capacités, commandes vocales et limites : bouton ⚙️ dans l’app, ou `src/ui/help.html`.
+> Créé par **Nasserallah Berkoun**. Voir [LICENSE](LICENSE) : usage, étude et modification
+> libres ; le nom du produit et celui de son créateur sont protégés.
 
-## Sécurité avant premier usage
+---
 
-Les clés présentes pendant la configuration ont été exposées dans une sortie locale. Elles doivent être révoquées et recréées avant toute connexion. Ne réutilisez pas les anciennes valeurs.
+## Ce que Mina fait réellement
 
-Après rotation de `GEMINI_API_KEY`, `OPENROUTER_API_KEY` et des jetons Modal concernés, ajoutez dans `.env` :
+| Domaine | Capacité |
+|---|---|
+| **Voix** | Conversation temps réel, interruption immédiate (« stop »), mode pause, repli vocal local |
+| **Navigateur** | Missions pilotées à la voix : naviguer, chercher, cliquer, saisir, extraire |
+| **Bureau Windows** | Ouvre et pilote n'importe quelle application (souris, clavier, raccourcis) |
+| **Téléphone Android** | Caméra, SMS, commandes via ADB (USB ou Wi-Fi) |
+| **Mémoire** | Coffre chiffré local (argon2 + AEAD), recherche sémantique, phrase de récupération |
+| **Code** | Indexe et analyse son propre code : recherche, graphe d'appels, tests, revue de sécurité |
+| **Documents** | Génère de vrais PDF et Word ; met en quarantaine les documents reçus |
+| **Diagnostic** | Journal d'activité, erreurs techniques expliquées avec un remède concret |
+
+Un principe traverse tout le projet : **l'affichage dit la vérité**. Un domaine qui ne marche
+pas s'affiche « indisponible » avec la dépendance exacte qui manque — jamais un état optimiste,
+jamais une réponse inventée.
+
+## Sécurité par construction
+
+- **Autorité unique des actions** : aucune action sur la machine n'est exécutée sans une
+  autorisation de session bornée dans le temps. Une action sensible exige une confirmation liée
+  cryptographiquement à l'action exacte, consommable une seule fois.
+- **Interdits durs** : gestionnaires de mots de passe, terminaux et outils de sécurité sont
+  refusés au niveau du code, quelle que soit la demande.
+- **Contenus externes non fiables** : un e-mail, une page web ou un message ne peut jamais
+  accorder une permission ni déclencher un outil.
+- **Journal confidentiel** : aucun texte de conversation n'est écrit en clair sur le disque ;
+  le contenu intégral est chiffré avec une clé dérivée du coffre.
+- **Anti-SSRF** : adresses privées, loopback et métadonnées cloud refusées en recherche web.
+- **Arrêt d'urgence** transversal : `Ctrl + Alt + Échap` coupe voix, missions et actions.
+
+## Prérequis
+
+- **Windows 10/11**
+- **Node.js 22**
+- Facultatif : **ADB** pour le téléphone, **Windows Sandbox** pour l'exécution isolée,
+  **LM Studio** pour des modèles 100 % locaux
+
+## Installation
+
+```bash
+npm install
+```
+
+```bash
+cp .env.example .env
+```
+
+Renseignez dans `.env` au moins une clé de fournisseur IA (Gemini, OpenRouter, DeepSeek…), puis
+confirmez que ces clés sont bien les vôtres et n'ont jamais été partagées :
 
 ```env
 MINA_KEYS_ROTATED=true
 ```
 
-Sans ce marqueur, l’interface démarre mais bloque volontairement les fournisseurs IA. Les secrets ne sont jamais affichés dans le diagnostic.
+Sans ce marqueur, l'interface démarre mais les fournisseurs IA restent volontairement bloqués.
 
-## Lancer Mina
+## Lancer
 
-Double-cliquez sur `Mina` sur le Bureau ou sur `Lancer Mina.cmd` dans ce dossier. Le premier lancement peut prendre environ 25 à 30 secondes sur cette machine.
-
-Arrêt global : `Ctrl + Alt + Échap` ou le bouton **Arrêt d’urgence**.
-
-## Voix
-
-Activez **Live Stream**, puis utilisez l’une des phrases :
-
-- « Salut Mina »
-- « Bonjour Mina »
-- « Mina, comment ça va ? »
-- « Mina, <votre demande> » directement
-
-Vous pouvez donner l’instruction dans la même phrase ou juste après. Un verbe d’action seul en début de phrase (« lance… », « ouvre… », « cherche… ») suffit aussi, sans dire « Mina » avant.
-
-**Couper sa parole** : dites « stop », « chut », « tais-toi » ou « silence » à tout moment pendant qu’elle parle — coupure immédiate, y compris au tout début d’une phrase ; elle continue d’écouter. « Mina, arrête » va plus loin : elle se tait ET arrête complètement d’écouter.
-
-**Mode pause** : « mets-toi en pause » (ou juste « pause ») la fait taire et ignorer toute voix entendue — y compris une conversation ambiante — jusqu’à ce que son nom soit prononcé (« Mina », « reprends Mina »). Aucune mission, aucun outil, aucun son ne part pendant la pause.
-
-Mina comprend aussi des formulations jamais listées ici (compréhension dynamique via le modèle vocal) — la liste ci-dessus est une référence rapide, pas une limite de vocabulaire. Guide complet (bouton ⚙️ dans l’app) : `src/ui/help.html`.
-
-Pendant qu’une mission tourne, une nouvelle instruction vocale ne relance jamais une deuxième mission concurrente : elle est transmise à la mission en cours. Tant qu’une page média (YouTube…) reste ouverte, les phrases suivantes la pilotent directement (« mets cheb hasni », « la chanson 2 », « mets sur pause », « chanson suivante »).
-
-## Téléphone Android (Huawei par USB, Samsung par Wi-Fi)
-
-1. Activez les options développeur et le débogage USB sur le téléphone.
-2. Branchez-le, déverrouillez-le et acceptez l’empreinte RSA ADB.
-3. Dans Mina, cliquez **Détecter le Huawei**, puis **Ouvrir la caméra**.
-
-Mina exige exactement un appareil ADB autorisé. La caméra est pilotée sur le téléphone et prévisualisée avec scrcpy ; le flux n’est pas enregistré par défaut.
-
-Un second appareil (ex. Samsung) peut rester connecté en parallèle par Wi-Fi (débogage sans fil activé côté téléphone) : `MINA_SAMSUNG_ADB_SERIAL` dans `.env`. Mina retrouve automatiquement sa dernière adresse connue si l’annonce réseau du téléphone reste muette (comportement de certains constructeurs), toujours avec vérification d’identité avant reconnexion.
-
-## Google Photos dentaire
-
-`MINA_DRY_RUN=true` analyse sans sélectionner ni télécharger. Avec `false`, les images correspondantes sont sélectionnées, mais le téléchargement exige encore une confirmation native explicite.
-
-## Recherche, téléchargement et impression
-
-- **Navigateur** : ouvrir une URL, rechercher, cliquer, saisir du texte, défiler et télécharger après confirmation.
-- **Bureau** : contrôler Chrome et les fenêtres Windows, ouvrir `Ctrl+P`, choisir une imprimante déjà configurée sur le réseau et lancer l’impression après confirmation.
-
-L’ajout d’une nouvelle imprimante ou la modification de Windows reste une action système sensible. Mina demandera une autorisation et ne contournera jamais les identifiants ou permissions du réseau.
-
-## Mémoire locale chiffrée
-
-Se déverrouille automatiquement à chaque démarrage. Si le chiffrement Windows change (migration de profil, réinstallation), un déverrouillage avec la phrase de récupération suffit une seule fois — la réparation est ensuite automatique et permanente.
-
-## Mina Code — agent de développement (auto-analyse)
-
-Section « Code » du tableau de bord, ou à la voix (« Mina, analyse le code », « cherche dans le code… », « statut Git », « lance les tests », « revue du code »). Indexe et analyse le code source de Mina Vision elle-même — pas un projet externe. Lecture, recherche, tests et revue de sécurité sans confirmation ; toute écriture de fichier ou commit Git reste soumise à confirmation, jamais de `git push`.
-
-## Documents
-
-« Mina, génère-moi un [PDF ou Word] sur… » : elle rédige le contenu et crée un vrai fichier dans `Documents\Mina Vision\`, jamais d’écrasement d’un fichier existant.
-
-## Développement
-
-```powershell
-npm test
-npm run smoke
+```bash
+npm start
 ```
 
-Le profil Chrome de Mina est séparé du profil personnel. Les captures d’écran restent en mémoire et les applications sensibles, terminaux et gestionnaires de mots de passe sont bloqués — y compris au lancement d’une application.
+Au premier démarrage : **Config → Mémoire → Initialiser**, et **notez la phrase de récupération
+affichée une seule fois** — c'est le seul moyen de rouvrir le coffre si le chiffrement Windows
+change (migration de profil, réinstallation).
+
+Pour démarrer Mina automatiquement avec Windows : **Config → Système Windows**.
+
+Arrêt global : `Ctrl + Alt + Échap` ou le bouton **Arrêt d'urgence**.
+
+## Configuration avancée
+
+Toutes les données vivent par défaut sous le dossier utilisateur de l'application. Pour déporter
+les caches lourds sur un autre disque :
+
+| Variable | Effet |
+|---|---|
+| `MINA_CACHE_ROOT` | Racine commune de tous les caches |
+| `MINA_MODELS_ROOT` | Modèles locaux (voix, embeddings) |
+| `MINA_SANDBOX_ROOT` | Espace de travail du bac à sable |
+| `MINA_TRUSTED_WRITE_ROOTS` | Dossiers supplémentaires où écrire sans confirmation (séparés par `;`) |
+| `MINA_APPROVED_READ_ROOTS` | Dossiers supplémentaires lisibles sans confirmation |
+| `MINA_SAMSUNG_ADB_SERIAL` | Second téléphone connecté en Wi-Fi |
+
+## Voix — l'essentiel
+
+Activez **Live Stream**, puis parlez :
+
+- « Mina, ouvre YouTube et cherche une recette »
+- **Couper sa parole** : « stop », « chut », « tais-toi », « silence »
+- **Silence total** : « mets-toi en pause » → elle ignore tout jusqu'à ce que vous disiez « Mina »
+- **Tout arrêter** : « Mina, arrête »
+
+Mina comprend des formulations qui ne figurent nulle part dans cette liste : la compréhension
+est dynamique, pas un lexique figé. Pendant qu'une mission tourne, une nouvelle instruction ne
+lance jamais une seconde mission concurrente — elle est transmise à la mission en cours.
+
+## Téléphone Android
+
+1. Activez les options développeur et le débogage USB sur le téléphone.
+2. Branchez-le, déverrouillez-le et acceptez l'empreinte RSA ADB.
+3. Dans Mina : **Détecter le téléphone**, puis **Ouvrir la caméra**.
+
+Un second appareil peut rester connecté en Wi-Fi (`MINA_SAMSUNG_ADB_SERIAL`). Mina retrouve sa
+dernière adresse connue si l'annonce réseau reste muette, toujours avec vérification d'identité
+avant reconnexion.
+
+## Tests
+
+```bash
+npm test
+```
+
+Exécute la suite unitaire **puis** les tests d'intégration — « vert » ne peut pas mentir par
+omission. Boucle rapide pendant le développement :
+
+```bash
+npm run test:unit
+```
+
+## Documentation
+
+| Ressource | Contenu |
+|---|---|
+| Guide intégré (bouton ⚙️ dans l'app) | Capacités, commandes vocales, limites |
+| [CHANGELOG.md](CHANGELOG.md) | Ce qui est livré et prouvé, ce qui est planifié |
+| [MINA.md](MINA.md) | Constitution : règles de sécurité et canaux autorisés |
+| [docs/LICENCES.md](docs/LICENCES.md) | Licences des dépendances et décisions |
+| [docs/operations/AUDIT-PRE-PUBLICATION.md](docs/operations/AUDIT-PRE-PUBLICATION.md) | Audit de confidentialité du dépôt |
+
+## État du projet
+
+Mina Vision est un projet réel, utilisé quotidiennement par son auteur, avec une suite de tests
+étendue et un principe de vérification systématique contre la réalité. Certains domaines sont
+livrés et prouvés, d'autres sont volontairement publiés comme « indisponibles » tant qu'une
+dépendance manque — **Config → Capacités** affiche l'état exact de chacun.
+
+Le profil Chrome de Mina est séparé du profil personnel. Les captures d'écran restent en
+mémoire ; les applications sensibles sont bloquées, y compris au lancement.
+
+## Contribuer
+
+Les contributions sont bienvenues. Deux règles non négociables issues de la licence : le nom du
+projet et celui de son créateur restent intacts, et aucune contribution ne doit affaiblir les
+garde-fous de sécurité décrits plus haut.
+
+## Licence
+
+Licence source disponible — voir [LICENSE](LICENSE). Usage, étude, modification et
+redistribution autorisés ; **les noms « Mina », « Mina Vision » et « Nasserallah Berkoun » sont
+protégés** et ne peuvent être retirés, remplacés ni détournés. Une œuvre dérivée publiée doit
+porter un nom distinct et créditer « Basé sur Mina Vision, créé par Nasserallah Berkoun ».
