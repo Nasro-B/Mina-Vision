@@ -10,7 +10,7 @@ const paths = Object.freeze({
 describe('hardened Windows Sandbox configuration', () => {
   it('disables guest integrations and maps only sources/bootstrap read-only plus out writable', () => {
     const xml = buildWsbConfig(paths, {
-      forbiddenRoots: ['C:\\Serveurs\\Mina Vision', 'C:\\Users\\Nasro', 'C:\\Users\\Nasro\\.mina'],
+      forbiddenRoots: ['C:\\Serveurs\\Mina Vision', 'C:\\Users\\Exemple', 'C:\\Users\\Exemple\\.mina'],
     });
     for (const setting of [
       '<Networking>Disable</Networking>',
@@ -27,13 +27,13 @@ describe('hardened Windows Sandbox configuration', () => {
     expect(xml).toContain('<ReadOnly>true</ReadOnly>');
     expect(xml).toContain('<ReadOnly>false</ReadOnly>');
     expect(xml).not.toContain('C:\\Serveurs\\Mina Vision');
-    expect(xml).not.toContain('C:\\Users\\Nasro');
+    expect(xml).not.toContain('C:\\Users\\Exemple');
   });
 
   it('rejects project, profile, Mina home and overlapping mapped folders', () => {
-    for (const hostile of ['C:\\Serveurs\\Mina Vision', 'C:\\Users\\Nasro', 'C:\\Users\\Nasro\\.mina\\skills']) {
+    for (const hostile of ['C:\\Serveurs\\Mina Vision', 'C:\\Users\\Exemple', 'C:\\Users\\Exemple\\.mina\\skills']) {
       expect(() => buildWsbConfig({ ...paths, sourcePath: hostile }, {
-        forbiddenRoots: ['C:\\Serveurs\\Mina Vision', 'C:\\Users\\Nasro', 'C:\\Users\\Nasro\\.mina'],
+        forbiddenRoots: ['C:\\Serveurs\\Mina Vision', 'C:\\Users\\Exemple', 'C:\\Users\\Exemple\\.mina'],
       })).toThrow('sandbox_mapped_folder_forbidden');
     }
     expect(() => buildWsbConfig({ ...paths, outPath: paths.sourcePath }, { forbiddenRoots: [] }))

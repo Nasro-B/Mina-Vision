@@ -1,0 +1,103 @@
+Mina Vision — Licence source disponible avec protection du nom et de l'attribution
+Version 1.0 — 23 juillet 2026
+
+Copyright (c) 2026 Nasserallah Berkoun. Tous droits réservés.
+
+« Mina », « Mina Vision » et le nom de l'auteur, Nasserallah Berkoun, sont l'identité de
+ce projet. Cette licence autorise largement l'usage, l'étude et la modification du code,
+mais protège cette identité de manière stricte.
+
+
+1. DÉFINITIONS
+
+« Le Logiciel » désigne Mina Vision, son code source, ses ressources et sa documentation.
+« L'Auteur » désigne Nasserallah Berkoun, créateur et titulaire des droits.
+« Œuvre Dérivée » désigne toute copie modifiée, adaptation, portage ou traduction du Logiciel.
+« Noms Protégés » désigne « Mina », « Mina Vision », « MinaVision » et « Nasserallah Berkoun ».
+
+
+2. DROITS ACCORDÉS
+
+Sous réserve des sections 3 et 4, l'Auteur accorde gratuitement à toute personne obtenant une
+copie du Logiciel le droit de :
+
+  a) utiliser le Logiciel sans limite, à titre personnel, éducatif, professionnel ou commercial ;
+  b) étudier, compiler et exécuter le code source ;
+  c) modifier le Logiciel et créer des Œuvres Dérivées ;
+  d) redistribuer le Logiciel et ses Œuvres Dérivées, gratuitement ou non.
+
+
+3. PROTECTION DES NOMS ET DE L'ATTRIBUTION — CLAUSE INTANGIBLE
+
+Ces obligations sont la contrepartie des droits de la section 2. Toute violation met fin
+automatiquement et immédiatement à ces droits.
+
+  3.1  Le nom de l'Auteur, Nasserallah Berkoun, doit être conservé intégralement et
+       lisiblement dans le Logiciel, dans toute Œuvre Dérivée, dans les fichiers de licence
+       et dans toute mention « À propos », page d'aide ou écran de démarrage. Il ne peut être
+       ni retiré, ni remplacé, ni abrégé, ni relégué à un endroit non visible.
+
+  3.2  Les Noms Protégés ne peuvent être ni supprimés, ni modifiés, ni détournés dans le
+       Logiciel lui-même. Le produit d'origine reste identifié comme « Mina Vision, créé par
+       Nasserallah Berkoun ».
+
+  3.3  Une Œuvre Dérivée distribuée publiquement DOIT porter un nom distinct qui ne prête pas
+       à confusion avec les Noms Protégés, et indiquer clairement : « Basé sur Mina Vision,
+       créé par Nasserallah Berkoun ». Il est interdit de présenter une Œuvre Dérivée comme
+       étant Mina Vision, ni de laisser croire qu'elle est approuvée par l'Auteur.
+
+  3.4  Les Noms Protégés ne confèrent aucune licence de marque : ils ne peuvent être utilisés
+       pour nommer un autre produit, un service, une société, un domaine ou un compte, ni dans
+       une communication laissant entendre un lien officiel, sans accord écrit de l'Auteur.
+
+  3.5  Il est interdit de retirer, d'altérer ou de masquer les mentions de copyright, cette
+       licence, ou les avis d'attribution présents dans les fichiers source.
+
+
+4. CONDITIONS DE REDISTRIBUTION
+
+  4.1  Cette licence, dans son intégralité, accompagne toute copie ou portion substantielle
+       du Logiciel.
+  4.2  Les modifications apportées à une Œuvre Dérivée sont signalées de manière identifiable.
+  4.3  Les composants tiers conservent leurs propres licences ; l'inventaire figure dans
+       docs/LICENCES.md. En cas de conflit, la licence du composant tiers prévaut pour ce
+       composant uniquement.
+
+
+5. USAGE RESPONSABLE
+
+Mina Vision pilote un ordinateur, un navigateur et un téléphone. Quiconque l'exécute ou le
+redistribue est seul responsable de son usage, du respect des lois applicables, de la
+protection des données des personnes concernées, et des conditions d'utilisation des services
+tiers qu'il connecte.
+
+
+6. ABSENCE DE GARANTIE
+
+LE LOGICIEL EST FOURNI « EN L'ÉTAT », SANS GARANTIE D'AUCUNE SORTE, EXPRESSE OU IMPLICITE, Y
+COMPRIS SANS S'Y LIMITER LES GARANTIES DE QUALITÉ MARCHANDE, D'ADÉQUATION À UN USAGE
+PARTICULIER ET D'ABSENCE DE CONTREFAÇON.
+
+
+7. LIMITATION DE RESPONSABILITÉ
+
+EN AUCUN CAS L'AUTEUR NE POURRA ÊTRE TENU RESPONSABLE D'UNE RÉCLAMATION, D'UN DOMMAGE OU
+D'UNE AUTRE RESPONSABILITÉ, CONTRACTUELLE, DÉLICTUELLE OU AUTRE, DÉCOULANT DU LOGICIEL, DE SON
+UTILISATION OU DE TOUTE AUTRE OPÉRATION LIÉE AU LOGICIEL.
+
+
+8. RÉSILIATION
+
+Les droits accordés en section 2 prennent fin automatiquement, sans préavis, en cas de
+manquement à la section 3 ou 4. Ils sont rétablis dès que le manquement est corrigé, sauf
+notification contraire de l'Auteur.
+
+
+9. DROIT APPLICABLE
+
+Cette licence est régie par le droit français. Les droits moraux de l'Auteur sur son œuvre,
+notamment le droit à la paternité, sont incessibles et perpétuels conformément à ce droit.
+
+
+Pour toute demande dépassant le cadre de cette licence — usage des Noms Protégés, partenariat,
+licence commerciale spécifique — contacter l'Auteur.

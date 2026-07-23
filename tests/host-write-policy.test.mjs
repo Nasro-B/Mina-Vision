@@ -3,7 +3,7 @@ import { createHostWritePolicy } from '../src/files/host-write-policy.mjs';
 
 const trustedRoots = [
   'C:\\Serveurs\\Mina Vision',
-  'C:\\Users\\Nasro\\AppData\\Roaming\\agentvisionsourire',
+  'C:\\Users\\Exemple\\AppData\\Roaming\\agentvisionsourire',
   'G:\\Programmes Installés\\caches\\MinaVision',
 ];
 
@@ -12,7 +12,7 @@ describe('host write policy', () => {
     const policy = createHostWritePolicy({ trustedRoots, confirmLocal: vi.fn() });
 
     expect(policy.classify('C:\\Serveurs\\Mina Vision\\notes\\session.md')).toBe('allow');
-    expect(policy.classify('C:\\Users\\Nasro\\Desktop\\note.md')).toBe('confirm');
+    expect(policy.classify('C:\\Users\\Exemple\\Desktop\\note.md')).toBe('confirm');
     expect(policy.classify('G:\\Docs\\rapport.pdf')).toBe('confirm');
   });
 
@@ -41,7 +41,7 @@ describe('host write policy', () => {
   it('refuses an external write when the creator declines confirmation', async () => {
     const policy = createHostWritePolicy({ trustedRoots, confirmLocal: vi.fn(async () => false) });
 
-    await expect(policy.authorize('C:\\Users\\Nasro\\Desktop\\note.md'))
+    await expect(policy.authorize('C:\\Users\\Exemple\\Desktop\\note.md'))
       .rejects.toThrow('host_write_confirmation_refused');
   });
 

@@ -35,3 +35,9 @@ emergency/
 coverage/
 *.perdu-*
 mina-recuperation*
+
+# Prototype historique (dépendance @google/generative-ai retirée le 2026-07-22) — hors publication.
+agent_vision_sourire.js
+debug_dom.js
+diagnostic_scroll.js
+modal_vision_app.py

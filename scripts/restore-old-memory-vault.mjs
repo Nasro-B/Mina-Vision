@@ -18,14 +18,19 @@
 // Préalable : fermer Mina Vision.
 
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { app, safeStorage } from 'electron';
 import { encryptAead, createAad } from '../src/crypto/aead.mjs';
 import { generateRecoveryPhrase, normalizeRecoveryPhrase } from '../src/crypto/recovery-phrase.mjs';
 import argon2 from 'argon2';
 
-const OLD_DIR = 'C:/Users/Nasro/AppData/Roaming/agentvisionsourire';
-const NEW_DIR = 'C:/Users/Nasro/AppData/Roaming/Mina Vision';
+// Chemins dérivés de l'environnement — aucun chemin machine en dur dans le dépôt public.
+const APP_DATA = process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming');
+const OLD_DIR = join(APP_DATA, 'agentvisionsourire');
+const NEW_DIR = join(APP_DATA, 'Mina Vision');
+const DOCUMENTS_DIR = join(homedir(), 'Documents', 'Mina Vision');
 const RECOVERY_AAD = createAad({ version: 1, type: 'keyring_recovery', id: 'master' });
 
 app.setPath('userData', OLD_DIR);
@@ -82,9 +87,9 @@ app.whenReady().then(async () => {
 
     // 6. La phrase — remise au propriétaire via un FICHIER local (jamais dans une console
     //    potentiellement journalisée). À lire, noter ailleurs, puis SUPPRIMER.
-    const phraseFile = 'C:/Users/Nasro/Documents/Mina Vision/PHRASE-RECUPERATION-A-LIRE-PUIS-SUPPRIMER.txt';
+    const phraseFile = join(DOCUMENTS_DIR, 'PHRASE-RECUPERATION-A-LIRE-PUIS-SUPPRIMER.txt');
     const { mkdirSync } = await import('node:fs');
-    mkdirSync('C:/Users/Nasro/Documents/Mina Vision', { recursive: true });
+    mkdirSync(DOCUMENTS_DIR, { recursive: true });
     writeFileSync(phraseFile, [
       'NOUVELLE PHRASE DE RÉCUPÉRATION du coffre mémoire de Mina Vision',
       `(générée le ${new Date().toLocaleString('fr-FR')})`,

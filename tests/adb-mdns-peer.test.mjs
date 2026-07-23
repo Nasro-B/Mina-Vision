@@ -2,14 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { createAdbMdnsPeerKeeper, findAdbMdnsEndpoint } from '../src/executors/adb-mdns-peer.mjs';
 
 const MDNS = `List of discovered mdns services
-adb-RZ8R20J2G6W-a80QcZ\t_adb-tls-connect._tcp\t192.168.1.10:39509
+adb-FIXTURESERIAL01-a80QcZ\t_adb-tls-connect._tcp\t192.168.1.10:39509
 adb-L2N4C19515006599\t_adb._tcp\t192.168.1.11:5555
 adb-G86DVB0CHOD00849993\t_adb._tcp\t192.168.1.13:5555
 `;
 
 describe('ADB mDNS peer keeper', () => {
   it('selects only the Samsung serial and never another network device', () => {
-    expect(findAdbMdnsEndpoint(MDNS, 'RZ8R20J2G6W')).toBe('192.168.1.10:39509');
+    expect(findAdbMdnsEndpoint(MDNS, 'FIXTURESERIAL01')).toBe('192.168.1.10:39509');
     expect(findAdbMdnsEndpoint(MDNS, 'UNKNOWN')).toBeNull();
   });
 
@@ -17,10 +17,10 @@ describe('ADB mDNS peer keeper', () => {
     const run = vi.fn()
       .mockResolvedValueOnce({ stdout: MDNS, stderr: '' })
       .mockResolvedValueOnce({ stdout: 'connected to 192.168.1.10:39509', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'RZ8R20J2G6W\n', stderr: '' });
+      .mockResolvedValueOnce({ stdout: 'FIXTURESERIAL01\n', stderr: '' });
     const statuses = [];
     const keeper = createAdbMdnsPeerKeeper({
-      run, adbPath: 'adb.exe', serial: 'RZ8R20J2G6W', role: 'samsung', onStatus: (value) => statuses.push(value),
+      run, adbPath: 'adb.exe', serial: 'FIXTURESERIAL01', role: 'samsung', onStatus: (value) => statuses.push(value),
     });
 
     await expect(keeper.tick()).resolves.toMatchObject({ connected: true, role: 'samsung', endpoint: '192.168.1.10:39509' });
@@ -36,7 +36,7 @@ describe('ADB mDNS peer keeper', () => {
       .mockResolvedValueOnce({ stdout: 'connected', stderr: '' })
       .mockResolvedValueOnce({ stdout: 'WRONG-SERIAL\n', stderr: '' })
       .mockResolvedValueOnce({ stdout: 'disconnected', stderr: '' });
-    const keeper = createAdbMdnsPeerKeeper({ run, adbPath: 'adb.exe', serial: 'RZ8R20J2G6W', role: 'samsung' });
+    const keeper = createAdbMdnsPeerKeeper({ run, adbPath: 'adb.exe', serial: 'FIXTURESERIAL01', role: 'samsung' });
 
     await expect(keeper.tick()).rejects.toThrow('adb_mdns_peer_identity_mismatch');
     expect(run).toHaveBeenLastCalledWith('adb.exe', ['disconnect', '192.168.1.10:39509'], { binary: false });
