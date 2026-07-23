@@ -2039,7 +2039,7 @@ app.whenReady().then(async () => {
   // PLUS avalé en silence : il part au journal technique ET au journal d'activité — c'est la
   // seule façon de savoir POURQUOI « la mémoire est encore bloquée ».
   await memoryController.unlock()
-    .then(() => void activityJournal?.append('memory_auto_unlock', { ok: true }))
+    .then(() => void activityJournal?.append('memory_auto_unlock', { ok: true, locked: memoryController.status()?.locked }))
     .catch((error) => {
       const message = String(error?.message ?? error).slice(0, 300);
       technicalLog.record({ severity: 'warning', scope: 'memory', code: 'memory_auto_unlock_failed', message });
