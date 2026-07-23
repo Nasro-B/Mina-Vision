@@ -148,7 +148,7 @@ Spécification d'origine (contexte historique) : [canal Telegram propriétaire e
 ### Publication GitHub
 
 - **Créer le dépôt GitHub** et le connecter (`git remote add origin …`). Le dépôt est local, sans remote : aucun push n'est possible tant que tu ne le fais pas.
-- **Vérifier le nom d'utilisateur des commits** : l'historique porte `Nasro <berkoun.nasserallah@gmail.com>`. Si tu ne veux pas exposer cette adresse publiquement, configure une adresse GitHub `noreply` **avant** le premier push.
+- **Vérifier le nom d'utilisateur des commits** : l'historique porte ton nom et ton adresse e-mail réelle. Si tu ne veux pas exposer cette adresse publiquement, configure une adresse GitHub `noreply` **avant** le premier push.
 - **Décider du sort des plans internes** : `docs/superpowers/plans/` et `specs/` contiennent des chemins de ta machine et l'historique détaillé du développement. Sans risque de sécurité, mais ce sont des documents internes — dis-moi si tu préfères les exclure de la publication.
 - ~~Modèles volumineux~~ : **vérifié le 2026-07-23** — le dépôt suivi pèse 2,3 Mo au total ; les fichiers `config/models/*.json` sont des descripteurs (id, source, licence), pas des poids, et la voix locale `assets/voices/ff_siwis.bin` fait 510 Ko. Rien à exclure.
 

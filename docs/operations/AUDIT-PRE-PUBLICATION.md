@@ -1,6 +1,6 @@
 # Audit avant publication GitHub — 2026-07-23
 
-> Portée : les **945 fichiers réellement suivis par git** (ceux qui partiraient sur GitHub).
+> Portée : les **903 fichiers réellement suivis par git** (ceux qui partiraient sur GitHub).
 > Méthode : scan par motifs de secrets et de données personnelles, puis vérification manuelle
 > de chaque alerte. Aucune alerte n'a été classée sans être ouverte.
 
@@ -11,8 +11,8 @@ fixtures de test manifestement factices, vérifiées une par une :
 
 | Alerte | Fichier | Valeur réelle trouvée | Verdict |
 |---|---|---|---|
-| Clé Google | `tests/code/code-review.test.mjs`, `code-verifier.test.mjs` | `AIzaSyA1234567890abcdefghijklmnopqrstuv` | Fixture (suite `1234567890abcdef…`) |
-| Clé OpenAI | `tests/secret-handling.test.mjs` | `REDACTED_DEEPSEEK_FIXTURE` | Fixture |
+| Clé Google | `tests/code/code-review.test.mjs`, `code-verifier.test.mjs` | préfixe Google suivi de la suite `1234567890abcdef…` | Fixture (suite `1234567890abcdef…`) |
+| Clé OpenAI | `tests/secret-handling.test.mjs` | préfixe OpenAI suivi de `abcdef1234…` | Fixture |
 | Clé privée PEM | `tests/credential-document.test.mjs` | corps = littéralement `fixture` | Fixture |
 | JWT | `tests/secret-handling.test.mjs` | payload `{"sub":"1234567890"}` | Exemple public jwt.io |
 

@@ -1,7 +1,17 @@
+# Secrets et identifiants — JAMAIS publiés. Le dossier env/ contient les fichiers OAuth
+# (client_secret_*.json, comptes de service) : tout son contenu reste local.
 .env
 .env.*
 !.env.example
 env/
+env/**
+*.env
+
+# Documents de travail internes (plans d'exécution, spécifications de conception) : ils
+# contiennent des chemins machine et l'historique détaillé du développement — hors publication.
+docs/superpowers/plans/
+docs/superpowers/specs/
+docs/superpowers/EXECUTION-LOG.md
 node_modules/
 artifacts/
 captures/
