@@ -15,6 +15,7 @@ dist/
 android/**/build/
 android/.gradle/
 android/local.properties
+android/app/google-services.json
 *.apk
 *.aab
 

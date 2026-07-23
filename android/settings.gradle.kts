@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "MinaVisionGateway"
-include(":app", ":core:protocol", ":core:transport", ":feature:camera")
+include(":app", ":core:protocol", ":core:transport", ":core:chat", ":feature:camera", ":feature:chat", ":feature:voice")
