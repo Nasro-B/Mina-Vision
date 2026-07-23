@@ -55,6 +55,7 @@
         <article>
           <h3>Application Mina sur téléphone (conversation chiffrée)</h3>
           <p>Une application Android permet d'écrire à Mina depuis un téléphone appairé. Pour appairer : onglet <strong>Configuration &amp; mémoire</strong> &rsaquo; <strong>Système Windows</strong> &rsaquo; <em>Ouvrir l'appairage</em>, puis saisir sur le téléphone l'adresse du PC et le code à 6 chiffres affiché — le code ne sert qu'une fois et expire en 5 minutes.</p>
+          <p>Deux chemins existent : le lien direct sur votre réseau local, et un relais Firebase quand le téléphone est ailleurs (4G, autre Wi-Fi). Le relais transporte la même enveloppe chiffrée — Firebase ne voit jamais le contenu et ne peut rien injecter. Un message arrivé par les deux chemins ne reçoit qu'une seule réponse.</p>
           <p>Les messages sont chiffrés de bout en bout : le téléphone ne stocke que du texte chiffré, et la clé de conversation est dérivée du coffre de la mémoire. <strong>Mémoire verrouillée, le canal est fermé</strong> et l'application le dit clairement au lieu de laisser croire qu'elle attend une réponse. PC éteint, le message reste en file sur le téléphone et part au retour du PC — personne ne répond à la place de Mina. Le canal autorise conversation, mémoire et médias ; toute action sensible reste à confirmer sur ce PC. Révoquer un appareil depuis la même section l'empêche de lire les messages suivants.</p>
         </article>
         <article>

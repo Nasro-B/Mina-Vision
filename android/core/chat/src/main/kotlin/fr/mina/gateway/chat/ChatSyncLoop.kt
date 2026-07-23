@@ -21,6 +21,8 @@ class ChatSyncLoop(
     private val scope: CoroutineScope,
     private val now: () -> Long = System::currentTimeMillis,
     private val tickMs: Long = 2_000,
+    /** Chemin de secours ; null = direct seul, et l'échec est annoncé comme tel. */
+    private val relay: FirebaseChatRelay? = null,
 ) {
     companion object {
         const val MAX_ATTEMPTS = 12
@@ -53,9 +55,11 @@ class ChatSyncLoop(
 
         if (link.state.value != LinkState.ONLINE) {
             link.connect()
-            // Rien n'a été envoyé : on le dit clairement plutôt que d'annoncer un succès.
-            due.forEach { markWaiting(it) }
-            return 0
+            // Direct indisponible : on tente le relais AVANT de faire attendre. Un message
+            // envoyé depuis la 4G doit partir, pas patienter jusqu'au retour sur le Wi-Fi.
+            val relayed = relayPending(due)
+            due.drop(relayed).forEach { markWaiting(it) }
+            return relayed
         }
 
         var sent = 0
@@ -73,6 +77,27 @@ class ChatSyncLoop(
             } else {
                 markWaiting(row)
             }
+        }
+        return sent
+    }
+
+    /**
+     * Dépose par le relais ce qui peut l'être. Retourne le nombre RÉELLEMENT déposé : un échec
+     * silencieux compté comme succès ferait disparaître le message de la file sans qu'il parte.
+     */
+    private suspend fun relayPending(rows: List<OutboxRow>): Int {
+        val relayLink = relay ?: return 0
+        if (!relayLink.isReady()) return 0
+        var sent = 0
+        for (row in rows) {
+            val event = dao.findEvent(row.eventId)?.toEvent() ?: continue
+            val accepted = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+                relayLink.send(event) { ok -> continuation.resume(ok) { _, _, _ -> } }
+            }
+            if (!accepted) break
+            dao.updateDeliveryState(row.eventId, DeliveryState.CLOUD_QUEUED)
+            dao.rescheduleOutbox(row.eventId, row.attemptCount + 1, now() + backoff(row.attemptCount), null)
+            sent += 1
         }
         return sent
     }

@@ -145,7 +145,21 @@ téléphone : saisir l'adresse du PC et ce code.
 - **Révoquer** un appareil ouvre une nouvelle époque de clé : il ne lit plus les messages
   suivants (on ne prétend pas effacer ce qu'il a déjà lu).
 
-Réglages : `MINA_CHAT_PORT` (8771 par défaut), `MINA_CHAT_HOST` (`0.0.0.0`).
+**Deux chemins, une seule réponse.** Le chemin normal est le lien direct sur le réseau local.
+Quand le téléphone n'est pas sur ce réseau (4G, Wi-Fi étranger), le message passe par un relais
+Firestore. Le relais transporte **exactement la même enveloppe chiffrée et signée** : Firebase ne
+voit jamais de clair et ne peut rien injecter, puisque la signature est vérifiée avant tout
+déchiffrement. Un message arrivé par les deux chemins ne reçoit qu'**une** réponse — les deux
+partagent le même registre d'événements traités.
+
+Le relais est optionnel : sans `google-services.json`, le canal reste strictement local et
+l'onglet Système l'annonce, au lieu de laisser croire à un secours inexistant. Les règles
+Firestore publiées sont dans [`firebase/firestore.rules`](firebase/firestore.rules) — elles
+limitent l'abus (forme, taille, append-only) mais ne **sont pas** la sécurité du canal, qui tient
+au chiffrement et à la signature.
+
+Réglages : `MINA_CHAT_PORT` (8771 par défaut), `MINA_CHAT_HOST` (`0.0.0.0`),
+`MINA_GOOGLE_SERVICES` (chemin du `google-services.json`, sinon `env/google-services.json`).
 
 ## Tests
 
