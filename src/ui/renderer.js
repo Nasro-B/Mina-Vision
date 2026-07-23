@@ -2,6 +2,10 @@ import { applyEnvironmentSelection, computeVoiceStartTime, formatGroundingLabel 
 import { createMinaDialogue, SELF_KNOWLEDGE_FALLBACK } from '../personality/mina-dialogue.mjs';
 import { composeCapabilityBrief } from '../core/capability-brief.mjs';
 import { composeJournalBrief } from '../diagnostics/journal-brief.mjs';
+import {
+  contactRow, homeDeviceRow, mailAccountRow, mailMessageRow, personalityRow,
+  printerRow, renderList, renderUnavailable, routineRow, taskRow,
+} from './panels/domain-panels.mjs';
 import { assessFrameQuality, decideLensFlip, frameStatsFromGrayscale } from '../perception/frame-quality.mjs';
 import {
   cloudzirPaletteColors, createBargeInDetector, createCloudzirPalettePreference,
@@ -1170,6 +1174,10 @@ const wireCollapsibleSection = (toggleId, labelId, collapsibleId, storageKey) =>
 };
 [
   ['system-toggle', 'system-toggle-label', 'system-collapsible', 'mina.systemCollapsed'],
+  ['mail-toggle', 'mail-toggle-label', 'mail-collapsible', 'mina.mailCollapsed'],
+  ['personal-toggle', 'personal-toggle-label', 'personal-collapsible', 'mina.personalCollapsed'],
+  ['printing-toggle', 'printing-toggle-label', 'printing-collapsible', 'mina.printingCollapsed'],
+  ['home-toggle', 'home-toggle-label', 'home-collapsible', 'mina.homeCollapsed'],
   ['settings-toggle', 'settings-toggle-label', 'settings-collapsible', 'mina.settingsCollapsed'],
   ['memory-panel-toggle', 'memory-panel-toggle-label', 'memory-panel-collapsible', 'mina.memoryPanelCollapsed'],
   ['analytics-toggle', 'analytics-toggle-label', 'analytics-collapsible', 'mina.analyticsCollapsed'],
@@ -1783,8 +1791,101 @@ document.querySelector('#capabilities-refresh')?.addEventListener('click', () =>
     .catch((error) => log(`État système : ${error.message}`));
 });
 
+// Panneaux de domaine : e-mail, organisation personnelle, impression, maison, personnalité.
+// Chaque domaine dit la VÉRITÉ — un domaine non composé affiche « indisponible » avec sa
+// raison plutôt qu'une liste vide qui laisserait croire à un état sain.
+const failed = (target) => (error) => renderUnavailable(target, String(error?.message ?? error).slice(0, 160));
+
+const refreshMail = async () => {
+  const accounts = await api.listMailAccounts();
+  renderList('#mail-accounts', accounts, mailAccountRow, { empty: 'Aucun compte e-mail connecté.' });
+};
+document.querySelector('#mail-refresh')?.addEventListener('click', () => {
+  refreshMail().catch(failed('#mail-accounts'));
+});
+document.querySelector('#mail-search')?.addEventListener('click', async () => {
+  const query = document.querySelector('#mail-query')?.value ?? '';
+  try {
+    const results = await api.searchMail({ query });
+    renderList('#mail-results', results?.messages ?? results, mailMessageRow, { empty: 'Aucun message trouvé.' });
+  } catch (error) {
+    renderUnavailable('#mail-results', String(error?.message ?? error).slice(0, 160));
+  }
+});
+
+const refreshPersonal = async () => {
+  await Promise.all([
+    api.personalTasks()
+      .then((tasks) => renderList('#personal-tasks', tasks, taskRow, { empty: 'Aucune tâche.' }))
+      .catch(failed('#personal-tasks')),
+    api.routinesList()
+      .then((routines) => renderList('#personal-routines', routines, routineRow, { empty: 'Aucune routine.' }))
+      .catch(failed('#personal-routines')),
+    api.graphListContacts()
+      .then((contacts) => renderList('#personal-contacts', contacts, contactRow, { empty: 'Aucun contact.' }))
+      .catch(failed('#personal-contacts')),
+  ]);
+};
+document.querySelector('#personal-refresh')?.addEventListener('click', () => {
+  refreshPersonal().catch(() => {});
+});
+
+const refreshPrinting = async () => {
+  const printers = await api.discoverPrinters();
+  renderList('#printing-list', printers, printerRow, { empty: 'Aucune imprimante détectée.' });
+};
+document.querySelector('#printing-discover')?.addEventListener('click', () => {
+  refreshPrinting().catch(failed('#printing-list'));
+});
+
+const refreshHome = async () => {
+  // connectorHealth() est l'état RÉEL des connecteurs ; auditHistory(commandId) sert à relire
+  // le reçu d'UNE commande précise et n'est donc pas un historique global (contrat vérifié
+  // sur le controller — appel sans argument = home_ui_request_invalid).
+  const [devices, health] = await Promise.all([api.listHomeDevices(), api.homeConnectorHealth()]);
+  renderList('#home-devices', devices, homeDeviceRow, { empty: 'Aucun appareil enregistré.' });
+  renderList('#home-audit', Object.entries(health ?? {}), ([id, state]) => ({
+    text: id,
+    badge: state?.available === true ? 'disponible' : 'indisponible',
+    badgeClass: state?.available === true ? 'badge ready' : 'badge warning',
+    muted: state?.reason ?? null,
+  }), { empty: 'Aucun connecteur configuré.' });
+  const state = document.querySelector('#home-state');
+  if (state) {
+    const count = Array.isArray(devices) ? devices.length : 0;
+    state.textContent = count > 0 ? `${count} appareil(s)` : 'aucun connecteur';
+    state.className = count > 0 ? 'badge ready' : 'badge warning';
+  }
+};
+document.querySelector('#home-refresh')?.addEventListener('click', () => {
+  refreshHome().catch(failed('#home-devices'));
+});
+document.querySelector('#home-discover')?.addEventListener('click', async () => {
+  try {
+    await api.discoverHomeDevices();
+    await refreshHome();
+  } catch (error) {
+    renderUnavailable('#home-devices', String(error?.message ?? error).slice(0, 160));
+  }
+});
+
+const refreshPersonality = async () => {
+  const profile = await api.personalityGet();
+  renderList('#personality-profile', [
+    ['Nom', profile?.displayName],
+    ['Ton', profile?.tone],
+    ['Langue', profile?.language],
+    ['Version', profile?.version],
+  ], personalityRow, { empty: 'Personnalité non configurée.' });
+};
+
 refreshStartup().catch((error) => log(`Démarrage Windows : ${error.message}`));
 refreshCapabilities().catch((error) => log(`Capacités : ${error.message}`));
+refreshMail().catch(failed('#mail-accounts'));
+refreshPersonal().catch(() => {});
+refreshPrinting().catch(failed('#printing-list'));
+refreshHome().catch(failed('#home-devices'));
+refreshPersonality().catch(failed('#personality-profile'));
 refreshMemoryStatus().catch((error) => log(`Mémoire : ${error.message}`));
 refreshSettings().catch((error) => log(`Paramètres : ${error.message}`));
 elements.analyticsFrom.value = localDateTimeValue(new Date(Date.now() - 30 * 24 * 60 * 60 * 1_000));

@@ -198,6 +198,9 @@
               <h3>Capacités : état réel de chaque domaine</h3>
               <ul id="capabilities-list" class="memory-results"></ul>
               <p class="sandbox-remediation">Cette liste est la source de vérité du runtime : <strong>disponible</strong>, <strong>dégradé</strong> ou <strong>indisponible</strong> avec la raison exacte. Un domaine indisponible nomme la dépendance qui manque — jamais un état optimiste.</p>
+              <h3>Personnalité de Mina</h3>
+              <ul id="personality-profile" class="memory-results" aria-live="polite"></ul>
+              <p class="sandbox-remediation">Le style de Mina est isolé de la sécurité : modifier sa personnalité ne change aucune permission. Toute modification exige une confirmation locale sur ce PC.</p>
             </div>
           </div>
         </section>
@@ -295,6 +298,31 @@
 
       <div class="dashboard-zone view" data-view="automation">
         <h2 class="dashboard-zone-title">Automatisation &amp; capacités</h2>
+
+        <section class="memory-panel" aria-labelledby="home-title">
+          <div class="activity-head">
+            <div><p class="eyebrow">Maison connectée</p><h2 id="home-title">Appareils et commandes</h2></div>
+            <div class="heading-actions">
+              <button class="ghost-button section-toggle" id="home-toggle" type="button" aria-expanded="true" aria-controls="home-collapsible">
+                <span id="home-toggle-label">Masquer</span>
+              </button>
+              <div class="memory-badges"><span class="badge" id="home-state">—</span></div>
+            </div>
+          </div>
+          <div class="collapsible" id="home-collapsible">
+            <div class="collapsible-inner">
+              <div class="settings-mode-row">
+                <button class="ghost-button" id="home-discover" type="button">Détecter les appareils</button>
+                <button class="ghost-button" id="home-refresh" type="button">Actualiser</button>
+              </div>
+              <ul id="home-devices" class="memory-results" aria-live="polite"></ul>
+              <h3>Connecteurs</h3>
+              <ul id="home-audit" class="memory-results"></ul>
+              <p class="sandbox-remediation">Aucune commande n’est envoyée sans autorisation explicite du connecteur concerné. Les actions à risque restent confirmables localement uniquement&nbsp;; un connecteur absent est affiché « indisponible », jamais simulé.</p>
+            </div>
+          </div>
+        </section>
+
         <section class="skills-sandbox-panel" aria-labelledby="skills-sandbox-title">
         <div class="activity-head">
           <div><p class="eyebrow">Constitution, skills et exécution isolée</p><h2 id="skills-sandbox-title">Skills et Windows Sandbox</h2></div>
@@ -365,6 +393,71 @@
 
       <div class="dashboard-zone view" data-view="today">
         <h2 class="dashboard-zone-title">Aujourd’hui &amp; documents</h2>
+
+        <section class="memory-panel" aria-labelledby="mail-title">
+          <div class="activity-head">
+            <div><p class="eyebrow">Boîte e-mail</p><h2 id="mail-title">Comptes et messages</h2></div>
+            <div class="heading-actions">
+              <button class="ghost-button section-toggle" id="mail-toggle" type="button" aria-expanded="true" aria-controls="mail-collapsible">
+                <span id="mail-toggle-label">Masquer</span>
+              </button>
+              <button class="ghost-button" id="mail-refresh" type="button">Actualiser</button>
+            </div>
+          </div>
+          <div class="collapsible" id="mail-collapsible">
+            <div class="collapsible-inner">
+              <ul id="mail-accounts" class="memory-results" aria-live="polite"></ul>
+              <div class="settings-mode-row">
+                <label><span>Rechercher dans les messages</span><input id="mail-query" type="text" placeholder="expéditeur, sujet…"></label>
+                <button class="ghost-button" id="mail-search" type="button">Chercher</button>
+              </div>
+              <ul id="mail-results" class="memory-results"></ul>
+              <p class="sandbox-remediation">Le corps d’un e-mail reçu est une donnée non fiable&nbsp;: il ne déclenche aucun outil. Tout envoi passe par une proposition puis une confirmation locale explicite.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="memory-panel" aria-labelledby="personal-title">
+          <div class="activity-head">
+            <div><p class="eyebrow">Routines &amp; entourage</p><h2 id="personal-title">Organisation personnelle</h2></div>
+            <div class="heading-actions">
+              <button class="ghost-button section-toggle" id="personal-toggle" type="button" aria-expanded="true" aria-controls="personal-collapsible">
+                <span id="personal-toggle-label">Masquer</span>
+              </button>
+              <button class="ghost-button" id="personal-refresh" type="button">Actualiser</button>
+            </div>
+          </div>
+          <div class="collapsible" id="personal-collapsible">
+            <div class="collapsible-inner">
+              <h3>Tâches</h3>
+              <ul id="personal-tasks" class="memory-results" aria-live="polite"></ul>
+              <h3>Routines</h3>
+              <ul id="personal-routines" class="memory-results"></ul>
+              <h3>Contacts</h3>
+              <ul id="personal-contacts" class="memory-results"></ul>
+              <p class="sandbox-remediation">Ces données viennent de la mémoire chiffrée locale et des comptes Google réellement connectés. Un service non connecté affiche « indisponible », jamais une liste vide trompeuse.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="memory-panel" aria-labelledby="printing-title">
+          <div class="activity-head">
+            <div><p class="eyebrow">Impression</p><h2 id="printing-title">Imprimantes autorisées</h2></div>
+            <div class="heading-actions">
+              <button class="ghost-button section-toggle" id="printing-toggle" type="button" aria-expanded="true" aria-controls="printing-collapsible">
+                <span id="printing-toggle-label">Masquer</span>
+              </button>
+              <button class="ghost-button" id="printing-discover" type="button">Détecter</button>
+            </div>
+          </div>
+          <div class="collapsible" id="printing-collapsible">
+            <div class="collapsible-inner">
+              <ul id="printing-list" class="memory-results" aria-live="polite"></ul>
+              <p class="sandbox-remediation">Une imprimante doit être autorisée une fois avant tout envoi. Chaque impression demande ensuite une confirmation et son acceptation est vérifiée dans la file Windows réelle.</p>
+            </div>
+          </div>
+        </section>
+
         <section class="memory-panel" aria-labelledby="today-title">
         <div class="activity-head">
           <div><p class="eyebrow">Organisation personnelle</p><h2 id="today-title">Aujourd’hui</h2></div>
