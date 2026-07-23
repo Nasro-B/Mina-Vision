@@ -83,7 +83,9 @@ firebase.json
 
 ---
 
-### Task 0: Gate constitutionnel `mina_app` et baseline post-réconciliation
+### Task 0: Gate constitutionnel `mina_app` et baseline post-réconciliation ✅ FAIT (2026-07-23)
+
+> Amendement MINA.md validé explicitement par Nasro (AskUserQuestion) ; ligne ajoutée dans `## Canaux` ; test `tests/architecture/mina-app-constitution.test.mjs` vert. Baseline : arbre git propre, gates verts (2803+48 au dernier gate). Firebase : décision Nasro « projet réel créé par Claude via navigateur à la vague qui l'utilise ». Sous-agents : AUCUN (décision Nasro — tout inline, gates specialists faits inline).
 
 **Files:**
 - Modify only after explicit approval: `MINA.md`
