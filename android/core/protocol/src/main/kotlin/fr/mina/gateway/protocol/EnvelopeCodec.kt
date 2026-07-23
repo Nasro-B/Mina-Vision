@@ -16,7 +16,8 @@ object EnvelopeCodec {
         "version", "id", "correlationId", "channel", "kind", "createdAt", "expiresAt",
         "sender", "counter", "algorithms", "payloadCiphertext", "nonce", "authTag", "signature",
     )
-    private val channels = setOf("local", "voice", "sms", "telegram")
+    // `mina_app` = chat natif de cette application, autorisé par MINA.md § Canaux.
+    private val channels = setOf("local", "voice", "sms", "telegram", "mina_app")
 
     fun decodeJson(json: String): MinaEnvelope {
         val value = JSONObject(json)

@@ -1,0 +1,7 @@
+{
+  "_comment": "Vecteurs binaires de référence pour l'événement de mina-chat-event-v2.json. Node ET Kotlin DOIVENT produire exactement ces octets : c'est le contrat d'interopérabilité. Si l'un des deux diverge, la signature ES256 ne vérifiera jamais côté opposé.",
+  "aadHex": "4d494e415f434841545f4556454e545f56320000020000001a303141525a334e44454b545356345252464651363947354641560000000b7468726561642d6d61696e0000000e6465766963652d73616d73756e67000000000000000100000001000000076d6573736167650000019f8a573980000001a024d60180",
+  "signatureInputLength": 200,
+  "aadPrefix": "MINA_CHAT_EVENT_V2",
+  "signaturePrefix": "MINA_CHAT_SIGNATURE_V1"
+}

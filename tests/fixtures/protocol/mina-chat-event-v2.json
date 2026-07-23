@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "eventId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "threadId": "thread-main",
+  "senderDeviceId": "device-samsung",
+  "deviceSequence": 1,
+  "keyEpoch": 1,
+  "routingClass": "message",
+  "createdAtMs": 1784732400000,
+  "expiresAtMs": 1787324400000,
+  "payloadCiphertext": "Y2lwaGVydGV4dA==",
+  "nonce": "MDEyMzQ1Njc4OWFi",
+  "authTag": "MDEyMzQ1Njc4OWFiY2RlZg==",
+  "signature": "MAYCAQECAQE="
+}

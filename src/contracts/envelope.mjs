@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-export const CHANNELS = Object.freeze(['local', 'voice', 'sms', 'telegram']);
+// `mina_app` = chat natif de l'application Android appairée (constitution MINA.md § Canaux).
+// Les enveloppes v1 (SMS/Telegram) gardent ce schéma ; les événements du chat utilisent la
+// version 2 définie dans chat.mjs — les deux coexistent sans se casser.
+export const CHANNELS = Object.freeze(['local', 'voice', 'sms', 'telegram', 'mina_app']);
 
 const identifierSchema = z.string().min(1).max(128);
 const isoDateSchema = z.string().datetime({ offset: true });
