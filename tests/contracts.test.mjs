@@ -60,7 +60,9 @@ function validClaim(overrides = {}) {
 
 describe('versioned contracts', () => {
   it('exposes the closed channel and claim-status sets', () => {
-    expect(CHANNELS).toEqual(['local', 'voice', 'sms', 'telegram']);
+    // `mina_app` ajouté le 2026-07-23 après l'amendement constitutionnel validé par Nasro
+    // (MINA.md § Canaux). L'ensemble reste FERMÉ : ce test refuse tout canal non constitutionnel.
+    expect(CHANNELS).toEqual(['local', 'voice', 'sms', 'telegram', 'mina_app']);
     expect(CLAIM_STATUS).toEqual([
       'verified',
       'inference',
