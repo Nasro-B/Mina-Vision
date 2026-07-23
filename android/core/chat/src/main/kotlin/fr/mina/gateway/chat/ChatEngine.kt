@@ -135,8 +135,18 @@ class ChatEngine private constructor(context: Context) {
         val key = pcPublicKey() ?: return
         if (!signer.verify(event, key)) return
         if (event.senderDeviceId == deviceId) return
+        val known = database.chatDao().findEvent(event.eventId) != null
         repository.ingest(event, fromAssistant = true)
+        // Notifier UNIQUEMENT sur un événement nouveau : une retransmission ne doit pas
+        // rappeler une deuxième fois pour le même message.
+        if (!known) {
+            repository.readMessage(event.eventId)?.let { message -> onAssistantMessage?.invoke(message) }
+        }
     }
+
+    /** Prévenu à chaque NOUVELLE réponse de Mina — sert à poser une notification. */
+    @Volatile
+    var onAssistantMessage: ((ChatMessage) -> Unit)? = null
 
     /**
      * Appairage : enregistre l'adresse du PC et présente le code affiché sur Windows. La clé du

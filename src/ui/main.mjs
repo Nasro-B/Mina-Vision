@@ -2126,6 +2126,15 @@ app.whenReady().then(async () => {
           writeFile,
           rename,
         }),
+        // Ledger durable : après un redémarrage du PC, un message redélivré n'obtient pas une
+        // SECONDE réponse, différente de la première.
+        ledgerStore: createVersionedJsonStore({
+          filename: path.join(app.getPath('userData'), 'chat-ledger.json'),
+          schemaVersion: 1,
+          readFile,
+          writeFile,
+          rename,
+        }),
         respond: createChatResponder({
           generate: async (input) => (await telegramTextGenerator()).generate(input),
           memory: memoryController,

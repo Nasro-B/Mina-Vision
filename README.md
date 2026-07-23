@@ -118,6 +118,35 @@ Un second appareil peut rester connecté en Wi-Fi (`MINA_SAMSUNG_ADB_SERIAL`). M
 dernière adresse connue si l'annonce réseau reste muette, toujours avec vérification d'identité
 avant reconnexion.
 
+## Application Mina sur téléphone
+
+Une application Android (`android/`) permet de converser avec Mina depuis un téléphone appairé,
+en chiffrement de bout en bout.
+
+```bash
+cd android && ./gradlew assembleDebug
+```
+
+**Appairage.** Sur le PC : onglet *Configuration & mémoire* › *Système Windows* › **Ouvrir
+l'appairage** — un code à 6 chiffres s'affiche, valable 5 minutes et une seule fois. Sur le
+téléphone : saisir l'adresse du PC et ce code.
+
+**Ce que le protocole garantit.**
+
+- Le téléphone ne stocke que du **texte chiffré** ; le clair n'existe qu'en mémoire vive.
+- La clé de conversation est livrée enveloppée par une clé dérivée en **ECDH P-256** : aucun
+  secret ne transite à l'appairage, et un observateur du réseau ne peut pas la reconstituer.
+- Chaque message est **signé** ; la signature est vérifiée **avant** tout déchiffrement.
+- Les clés de conversation dérivent du coffre de la mémoire : **mémoire verrouillée, canal
+  fermé**, annoncé comme tel plutôt que silencieusement inerte.
+- **PC éteint** : le message reste dans une file durable sur le téléphone et part au retour du
+  PC. Rien n'est perdu, et aucun substitut ne répond à la place de Mina.
+- Un message livré deux fois (retransmission) ne produit qu'**une seule** réponse.
+- **Révoquer** un appareil ouvre une nouvelle époque de clé : il ne lit plus les messages
+  suivants (on ne prétend pas effacer ce qu'il a déjà lu).
+
+Réglages : `MINA_CHAT_PORT` (8771 par défaut), `MINA_CHAT_HOST` (`0.0.0.0`).
+
 ## Tests
 
 ```bash

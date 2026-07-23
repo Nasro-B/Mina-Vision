@@ -24,6 +24,7 @@ kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 
 dependencies {
     implementation(project(":core:chat"))
+    implementation(project(":feature:voice"))
     implementation(project(":core:protocol"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)

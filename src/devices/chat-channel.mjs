@@ -7,6 +7,7 @@
 
 import { hkdfSync } from 'node:crypto';
 import { createChatDeviceRegistry } from './chat-device-registry.mjs';
+import { createChatLedger } from './chat-ledger.mjs';
 import { createChatServer } from './chat-server.mjs';
 
 const EPOCH_INFO = 'mina-chat-epoch-v1';
@@ -23,6 +24,7 @@ export function createChatChannel({
   masterKey,
   identity,
   store,
+  ledgerStore = null,
   respond,
   port,
   host,
@@ -33,6 +35,7 @@ export function createChatChannel({
   if (typeof respond !== 'function') throw new TypeError('chat_channel_respond_requis');
 
   let registry = createChatDeviceRegistry({ clock });
+  const ledger = createChatLedger({ store: ledgerStore, clock });
   let server = null;
   let listening = null;
   let lastError = null;
@@ -63,6 +66,7 @@ export function createChatChannel({
       if (!store?.load) return;
       const loaded = await store.load({ defaults: null }).catch(() => null);
       if (loaded?.data) registry = createChatDeviceRegistry({ clock, persisted: loaded.data });
+      await ledger.load();
     },
 
     async start() {
@@ -72,7 +76,7 @@ export function createChatChannel({
         return null;
       }
       server = createChatServer({
-        identity, registry, respond, epochKeyFor, port, host, clock, logger,
+        identity, registry, respond, epochKeyFor, port, host, clock, logger, ledger,
       });
       try {
         listening = await server.listen();
@@ -102,6 +106,8 @@ export function createChatChannel({
         vaultUnlocked: Boolean(masterKey()),
         pairingOpen: registry.pairingOpen(),
         keyEpoch: registry.keyEpoch(),
+        processedEvents: ledger.size(),
+        generationsInFlight: ledger.inFlight(),
         connectedDevices: server?.connectedDevices?.() ?? [],
         devices: registry.list(),
         lastError,
@@ -129,6 +135,7 @@ export function createChatChannel({
 
     async persistNow() {
       await persist();
+      await ledger.persist();
     },
 
     devices: () => registry.list(),
