@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "fr.mina.gateway.feature.voice"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig { minSdk = 29 }
 

@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "fr.mina.gateway.camera"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig { minSdk = 29 }
 
@@ -24,6 +24,12 @@ dependencies {
     implementation("androidx.camera:camera-core:1.5.3")
     implementation("androidx.camera:camera-camera2:1.5.3")
     implementation("androidx.camera:camera-lifecycle:1.5.3")
+    // ProcessCameraProvider.getInstance() retourne un ListenableFuture de Guava : le type
+    // appartient à l'API publique utilisée ICI, il doit donc être déclaré par ce module et non
+    // hérité par transitivité (sinon la compilation casse dès qu'une dépendance amont change).
+    // La variante -android est la seule supportée sur Android (la variante -jre tire des
+    // classes absentes du runtime Android).
+    implementation("com.google.guava:guava:33.4.8-android")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")
 }

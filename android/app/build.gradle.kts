@@ -14,7 +14,7 @@ if (file("google-services.json").exists()) {
 
 android {
     namespace = "fr.mina.gateway"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "fr.mina.gateway"
