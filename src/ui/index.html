@@ -264,6 +264,11 @@
               <button id="web-read" type="button">Lire</button>
             </div>
             <ol id="memory-results" class="memory-results" aria-live="polite"></ol>
+            <div class="settings-mode-row">
+              <label><span>Oublier définitivement</span><input id="forget-criteria" type="text" placeholder="ce que Mina doit oublier"></label>
+              <button class="ghost-button" id="memory-forget" type="button">Proposer l’oubli</button>
+            </div>
+            <p class="sandbox-remediation">L’oubli est définitif et se propage aux sauvegardes chiffrées. Mina demande toujours une confirmation locale avant de supprimer, et ne ressuscite jamais une donnée oubliée depuis une sauvegarde.</p>
           </div>
         </div>
       </section>
@@ -316,6 +321,11 @@
                 <button class="ghost-button" id="home-refresh" type="button">Actualiser</button>
               </div>
               <ul id="home-devices" class="memory-results" aria-live="polite"></ul>
+              <div class="settings-mode-row">
+                <label><span>Appareil</span><input id="home-target" type="text" placeholder="identifiant de l’appareil"></label>
+                <label><span>Commande</span><input id="home-command" type="text" placeholder="ex. allumer"></label>
+                <button class="ghost-button" id="home-execute" type="button">Exécuter</button>
+              </div>
               <h3>Connecteurs</h3>
               <ul id="home-audit" class="memory-results"></ul>
               <p class="sandbox-remediation">Aucune commande n’est envoyée sans autorisation explicite du connecteur concerné. Les actions à risque restent confirmables localement uniquement&nbsp;; un connecteur absent est affiché « indisponible », jamais simulé.</p>
@@ -460,6 +470,10 @@
               <div class="settings-mode-row">
                 <label><span>Autoriser une imprimante</span><input id="printer-id" type="text" placeholder="nom exact de l’imprimante"></label>
                 <button class="ghost-button" id="printer-approve" type="button">Autoriser</button>
+              </div>
+              <div class="settings-mode-row">
+                <label><span>Imprimer un fichier</span><input id="print-file-path" type="text" placeholder="chemin complet du fichier"></label>
+                <button class="ghost-button" id="print-file-send" type="button">Imprimer</button>
               </div>
               <p class="sandbox-remediation">Une imprimante doit être autorisée une fois avant tout envoi. Chaque impression demande ensuite une confirmation et son acceptation est vérifiée dans la file Windows réelle.</p>
             </div>

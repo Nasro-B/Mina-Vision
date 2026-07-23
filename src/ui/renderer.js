@@ -1647,6 +1647,25 @@ elements.memoryUnlock.addEventListener('click', async () => {
     log(`Mémoire : ${error.message}`);
   }
 });
+// Droit à l'oubli : suppression DÉFINITIVE, propagée aux sauvegardes. Le main process exige
+// une confirmation locale ; l'UI ne fait que proposer le critère.
+document.querySelector('#memory-forget')?.addEventListener('click', async () => {
+  const criteria = document.querySelector('#forget-criteria')?.value?.trim();
+  if (!criteria) {
+    log('Oubli : indiquez ce que Mina doit oublier.');
+    return;
+  }
+  try {
+    const result = await api.proposeForget({ criteria });
+    log(result?.forgotten === false
+      ? 'Oubli annulé : confirmation refusée.'
+      : `Oubli effectué : ${criteria}.`);
+    const field = document.querySelector('#forget-criteria');
+    if (field) field.value = '';
+  } catch (error) {
+    log(`Oubli : ${error.message}`);
+  }
+});
 elements.memoryLock.addEventListener('click', async () => {
   updateMemoryStatus(await api.lockMemory());
   elements.memoryResults.textContent = '';
@@ -1851,6 +1870,22 @@ const refreshPrinting = async () => {
 document.querySelector('#printing-discover')?.addEventListener('click', () => {
   refreshPrinting().catch(failed('#printing-list'));
 });
+// Imprimer un fichier : le main process vérifie que l'imprimante est AUTORISÉE, demande une
+// confirmation, puis vérifie l'acceptation réelle dans la file Windows.
+document.querySelector('#print-file-send')?.addEventListener('click', async () => {
+  const printerId = document.querySelector('#printer-id')?.value?.trim();
+  const filePath = document.querySelector('#print-file-path')?.value?.trim();
+  if (!printerId || !filePath) {
+    log('Impression : indiquez l’imprimante ET le chemin du fichier.');
+    return;
+  }
+  try {
+    const job = await api.printFile({ printerId, filePath, copies: 1 });
+    log(`Impression : ${job?.status ?? 'envoyée'} (${filePath}).`);
+  } catch (error) {
+    log(`Impression : ${error.message}`);
+  }
+});
 // Autoriser une imprimante : action à effet — passe par la confirmation locale du main process.
 document.querySelector('#printer-approve')?.addEventListener('click', async () => {
   const printerId = document.querySelector('#printer-id')?.value?.trim();
@@ -1888,6 +1923,23 @@ const refreshHome = async () => {
 };
 document.querySelector('#home-refresh')?.addEventListener('click', () => {
   refreshHome().catch(failed('#home-devices'));
+});
+// Piloter un appareil : action à EFFET réel — la politique maison et le broker décident, l'UI
+// ne fait que transmettre. Un refus est affiché tel quel, jamais masqué.
+document.querySelector('#home-execute')?.addEventListener('click', async () => {
+  const deviceId = document.querySelector('#home-target')?.value?.trim();
+  const command = document.querySelector('#home-command')?.value?.trim();
+  if (!deviceId || !command) {
+    log('Maison : indiquez l’appareil ET la commande.');
+    return;
+  }
+  try {
+    const receipt = await api.executeHomeCommand({ deviceId, command });
+    log(`Maison : ${command} sur ${deviceId} — ${receipt?.status ?? 'transmis'}.`);
+    await refreshHome().catch(() => {});
+  } catch (error) {
+    log(`Maison : ${error.message}`);
+  }
 });
 document.querySelector('#home-discover')?.addEventListener('click', async () => {
   try {

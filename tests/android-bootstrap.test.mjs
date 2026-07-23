@@ -8,7 +8,12 @@ describe('Android Kotlin gateway bootstrap', () => {
     const [settings, catalog, appBuild] = await Promise.all([
       read('settings.gradle.kts'), read('gradle/libs.versions.toml'), read('app/build.gradle.kts'),
     ]);
-    expect(settings).toContain('include(":app", ":core:protocol", ":core:transport", ":feature:camera")');
+    // Les modules du chat natif (core:chat, feature:chat, feature:voice) ont été ajoutés le
+    // 2026-07-23 (Task 1 du plan chat natif) : on vérifie la présence de chaque module plutôt
+    // qu'une liste figée, pour que l'ajout d'un module ne casse pas ce contrat de toolchain.
+    for (const module of ['":app"', '":core:protocol"', '":core:transport"', '":feature:camera"']) {
+      expect(settings).toContain(module);
+    }
     expect(catalog).toContain('agp = "8.13.2"');
     expect(catalog).toContain('kotlin = "2.3.21"');
     expect(appBuild).toContain('namespace = "fr.mina.gateway"');
