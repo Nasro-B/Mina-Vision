@@ -18,6 +18,7 @@ import { createSessionManager } from '../sessions/session-manager.mjs';
 import { createSessionStore } from '../sessions/session-store.mjs';
 import { createKeyring } from '../crypto/keyring.mjs';
 import { createKeyringFileStorage } from '../crypto/keyring-file-storage.mjs';
+import { createVaultRepair } from '../memory/vault-repair.mjs';
 import { createMemoryServices } from '../memory/composition.mjs';
 import { composeBackupDomain } from '../backup/compose-backup-domain.mjs';
 import { createCustomTokenMinter } from '../backup/custom-token-minter.mjs';
@@ -290,6 +291,7 @@ let memoryController = null;
 let capabilityProbes = null;
 let settingsController = null;
 let providerSecretStore = null;
+let vaultRepair = null;
 let analyticsController = null;
 let usageDatabase = null;
 let skillsSandboxController = null;
@@ -1860,6 +1862,33 @@ const registerIpc = () => {
   });
   ipcMain.handle('memory.initialize', () => memoryController.initialize());
   ipcMain.handle('memory.unlock', (_event, request) => memoryController.unlock(request));
+  // G1 — état RÉEL du coffre pour l'UI : sain / non-initialisé / DPAPI définitivement bloqué.
+  // Permet à l'écran mémoire de ne proposer « repartir à neuf » QUE dans le cas irrécupérable.
+  ipcMain.handle('memory.probe', async () => {
+    try { return await vaultRepair.probe(); } catch (error) { return { state: 'corrupt', reason: String(error?.message ?? error).slice(0, 160) }; }
+  });
+  // G1 — « repartir à neuf » : réservé au cas où NI DPAPI NI phrase ne rouvrent le coffre. Archive
+  // l'ancien (jamais supprimé) puis ré-initialise → nouvelle phrase AFFICHÉE UNE FOIS (cause racine
+  // corrigée). Confirmation locale forte exigée : c'est une action lourde.
+  ipcMain.handle('memory.reinitializeFresh', async () => {
+    const probe = await vaultRepair.probe();
+    if (probe.state !== 'dpapi_unrecoverable') {
+      return { ok: false, reason: `refuse:${probe.state}`, detail: 'La ré-initialisation n’est offerte que si le coffre est réellement irrécupérable.' };
+    }
+    const approved = await confirmSensitiveAction({
+      reason: 'Repartir avec une mémoire NEUVE ? L’ancienne (illisible, chiffrement Windows changé) sera ARCHIVÉE, jamais supprimée. Une nouvelle phrase de récupération s’affichera — notez-la.',
+      action: { name: 'reinitialiser_memoire' },
+    });
+    if (!approved) return { ok: false, reason: 'refuse_localement' };
+    try {
+      const archive = await vaultRepair.archiveUnrecoverable();
+      const fresh = await memoryController.initialize();
+      void activityJournal?.append('memory_reinitialisee', { archived: archive.archived.length, suffix: archive.suffix });
+      return { ok: true, recoveryPhrase: fresh.recoveryPhrase, archived: archive.archived, suffix: archive.suffix };
+    } catch (error) {
+      return { ok: false, reason: String(error?.message ?? error).slice(0, 200) };
+    }
+  });
   ipcMain.handle('memory.lock', () => {
     // Verrouiller la mémoire coupe AUSSI le canal téléphone : sans clé maîtresse il n'y a plus
     // de clé d'époque, donc plus de déchiffrement possible — autant l'annoncer franchement.
@@ -2177,9 +2206,24 @@ app.whenReady().then(async () => {
     ],
     confirmLocal: confirmSensitiveAction,
   });
+  const keyringFilename = path.join(app.getPath('userData'), 'mina-keyring.json');
   const keyring = createKeyring({
-    storage: createKeyringFileStorage({ filename: path.join(app.getPath('userData'), 'mina-keyring.json') }),
+    storage: createKeyringFileStorage({ filename: keyringFilename }),
     safeStorage,
+  });
+  // G1 — sortie SÛRE quand le coffre est définitivement bloqué (blob DPAPI indéchiffrable + phrase
+  // jamais notée). Archive (jamais supprime) et ne s'arme QUE dans ce cas précis.
+  vaultRepair = createVaultRepair({
+    safeStorage,
+    keyringPath: keyringFilename,
+    archiveTargets: [
+      path.join(app.getPath('userData'), 'mina-memory.sqlite'),
+      path.join(app.getPath('userData'), 'mina-memory.sqlite-wal'),
+      path.join(app.getPath('userData'), 'mina-memory.sqlite-shm'),
+    ],
+    readFile,
+    rename,
+    access,
   });
   providerSecretStore = createProviderSecretStore({ keyring });
   const envPath = path.join(ROOT_DIR, '.env');

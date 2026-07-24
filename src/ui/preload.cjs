@@ -48,6 +48,8 @@ function createPreloadApi(ipcRenderer) {
     memoryStatus: () => ipcRenderer.invoke('memory.status'),
     initializeMemory: () => ipcRenderer.invoke('memory.initialize'),
     unlockMemory: (request) => ipcRenderer.invoke('memory.unlock', request),
+    probeMemory: () => ipcRenderer.invoke('memory.probe'),
+    reinitializeMemoryFresh: () => ipcRenderer.invoke('memory.reinitializeFresh'),
     lockMemory: () => ipcRenderer.invoke('memory.lock'),
     searchMemory: (request) => ipcRenderer.invoke('memory.search', request),
     proposeForget: (request) => ipcRenderer.invoke('memory.proposeForget', request),
