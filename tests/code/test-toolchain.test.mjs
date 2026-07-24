@@ -74,22 +74,25 @@ describe('test-runner', () => {
     expect(createTestRunner({ runCommand: runner, projectRoot: 'C:/p', projectContext: { dependencies: {}, tree: [] } }).detectFramework()).toBeNull();
   });
 
-  it('runAll lance vitest run et parse le résultat', async () => {
+  it('runAll lance vitest via Node (pas npx — échoue depuis Electron/Windows) et parse', async () => {
     const runner = createFakeRunner({ code: 0, stdout: VITEST_GREEN, stderr: '' });
-    const testRunner = createTestRunner({ runCommand: runner, projectRoot: 'C:/p', projectContext: vitestContext });
+    const testRunner = createTestRunner({ runCommand: runner, projectRoot: 'C:/p', projectContext: vitestContext, nodeBin: 'node' });
     const result = await testRunner.runAll();
-    expect(runner.calls[0].command).toBe('npx');
-    expect(runner.calls[0].args).toEqual(['vitest', 'run']);
+    // Binaire Node courant + entrée JS locale de vitest — jamais `npx` (execFile ne peut pas lancer npx.cmd).
+    expect(runner.calls[0].command).toBe('node');
+    expect(runner.calls[0].args).toEqual(['node_modules/vitest/vitest.mjs', 'run']);
+    // ELECTRON_RUN_AS_NODE transmis pour qu'Electron agisse en Node.
+    expect(runner.calls[0].options.env.ELECTRON_RUN_AS_NODE).toBe('1');
     expect(result).toMatchObject({ passed: 220, failed: 0, crashed: false, framework: 'vitest' });
   });
 
   it('bail et runFile passent les bons arguments', async () => {
     const runner = createFakeRunner({ code: 0, stdout: VITEST_GREEN, stderr: '' });
-    const testRunner = createTestRunner({ runCommand: runner, projectRoot: 'C:/p', projectContext: vitestContext });
+    const testRunner = createTestRunner({ runCommand: runner, projectRoot: 'C:/p', projectContext: vitestContext, nodeBin: 'node' });
     await testRunner.runAll({ bail: true });
-    expect(runner.calls[0].args).toEqual(['vitest', 'run', '--bail=1']);
+    expect(runner.calls[0].args).toEqual(['node_modules/vitest/vitest.mjs', 'run', '--bail=1']);
     await testRunner.runFile('tests/a.test.mjs');
-    expect(runner.calls[1].args).toEqual(['vitest', 'run', 'tests/a.test.mjs']);
+    expect(runner.calls[1].args).toEqual(['node_modules/vitest/vitest.mjs', 'run', 'tests/a.test.mjs']);
     await expect(testRunner.runFile('')).rejects.toThrow(/file_required/u);
   });
 
