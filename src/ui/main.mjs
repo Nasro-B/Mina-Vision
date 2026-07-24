@@ -301,6 +301,9 @@ let skillRouter = null;
 let skillSessions = null;
 let sandboxManager = null;
 let browserExecutor = null;
+// Navigateur de RECHERCHE de fond (headless, invisible), distinct du navigateur de missions
+// interactives : lire une page web pour répondre ne doit JAMAIS faire surgir de fenêtre Chrome.
+let researchBrowser = null;
 let desktopCursorOverlay = null;
 let shutdownStarted = false;
 let mailController = null;
@@ -884,6 +887,20 @@ const getBrowserExecutor = async () => {
     });
   }
   return browserExecutor;
+};
+
+// Navigateur de recherche de fond : HEADLESS (invisible) + profil séparé (évite le verrou de profil
+// du navigateur visible). Utilisé UNIQUEMENT par research.readWeb — « cherche/réfléchit » ne fait
+// donc plus surgir de fenêtre Chrome à l'écran.
+const getResearchBrowser = async () => {
+  if (researchBrowser?.isClosed?.()) researchBrowser = null;
+  if (!researchBrowser) {
+    researchBrowser = await createBrowserExecutor({
+      headless: true,
+      profileDir: path.join(app.getPath('userData'), 'mina-chrome-research-profile'),
+    });
+  }
+  return researchBrowser;
 };
 
 // "Ferme le navigateur" / "arrête la musique" (voice): closes only the browser the mission executor
@@ -1499,6 +1516,12 @@ const startGeminiVoice = async () => {
     // oreilles Deepgram sinon. Avant : Mina restait sourde/muette jusqu'à un reboot manuel.
     onEvent: (event) => {
       send('mina:event', { ...event, type: `voice_${event.type}` });
+      // Reprise de session après coupure : Gemini rejoue le tour en cours au reconnect. Sans vider
+      // la file audio locale, l'audio rejoué s'empile sur le reliquat non encore joué → Mina répète
+      // le début de sa phrase. On jette la file locale AVANT que le flux rejoué n'arrive — canal
+      // DÉDIÉ (drop-playback), inconditionnel et sans re-dire (voice-interrupted re-dirait dans sa
+      // fenêtre anti-écho, ce qui aggraverait la répétition).
+      if (event.type === 'session_resuming') send('mina:voice-drop-playback');
       if (event.type === 'session_end' && event.reason === 'remote_close') {
         voice = null;
         const timer = setTimeout(() => {
@@ -2489,7 +2512,7 @@ app.whenReady().then(async () => {
         masterKey,
         databasePath: path.join(app.getPath('userData'), 'mina-memory.sqlite'),
         approvedRoots,
-        getWebPage: async () => (await getBrowserExecutor()).getPage(),
+        getWebPage: async () => (await getResearchBrowser()).getPage(),
         backupConfigured: firebaseConfigured,
         nativeBinding,
         embedder,
@@ -3237,5 +3260,6 @@ app.on('before-quit', (event) => {
     printerRepository?.close();
     if (personalCalendarDatabase?.open) personalCalendarDatabase.close();
     if (browserExecutor) await browserExecutor.close();
+    if (researchBrowser) await researchBrowser.close();
   })().finally(() => app.exit(0));
 });

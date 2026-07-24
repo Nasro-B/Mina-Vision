@@ -172,6 +172,9 @@ function createPreloadApi(ipcRenderer) {
     onVoiceAudio: (callback) => subscribe('mina:voice-audio', callback),
     onVoiceInterrupted: (callback) => subscribe('mina:voice-interrupted', callback),
     onVoiceStopSpeech: (callback) => subscribe('mina:voice-stop-speech', callback),
+    // Vidage INCONDITIONNEL de la file audio (reprise de session) : jette le reliquat sans la
+    // logique anti-écho de voice-interrupted (qui, elle, peut re-dire une réplique).
+    onVoiceDropPlayback: (callback) => subscribe('mina:voice-drop-playback', callback),
     onCameraFrame: (callback) => subscribe('mina:camera-frame', callback),
     onCameraStatus: (callback) => subscribe('mina:camera-status', callback),
     onSandboxEvent: (callback) => subscribe('mina:sandbox:event', callback),
