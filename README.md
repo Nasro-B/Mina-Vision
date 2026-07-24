@@ -5,7 +5,7 @@ contrôle le navigateur, n'importe quelle application Windows, et un téléphone
 en ADB. Tout tourne sur votre machine — mémoire chiffrée locale, modèles au choix, aucune
 dépendance à un service central.
 
-> Créé par **Nasro Berkoun**. Voir [LICENSE](LICENSE) : usage, étude et modification
+> Créé par **Nasro Berkoun**, en collaboration avec **Sol** et **Fable**. Voir [LICENSE](LICENSE) : usage, étude et modification
 > libres ; le nom du produit et celui de son créateur sont protégés.
 
 ---
@@ -216,6 +216,6 @@ garde-fous de sécurité décrits plus haut.
 Licence source disponible — voir [LICENSE](LICENSE). Usage, étude, modification et
 redistribution autorisés ; **les noms « Mina », « Mina Vision » et « Nasro Berkoun » sont
 protégés** et ne peuvent être retirés, remplacés ni détournés. Une œuvre dérivée publiée doit
-porter un nom distinct et créditer « Basé sur Mina Vision, créé par Nasro Berkoun ».
+porter un nom distinct et créditer « Basé sur Mina Vision, créé par Nasro Berkoun, en collaboration avec Sol et Fable ».
 
 Réclamations et service client : mina.vision.ai@gmail.com
