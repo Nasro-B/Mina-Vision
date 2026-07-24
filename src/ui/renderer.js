@@ -644,17 +644,59 @@ const refreshSettings = async () => {
     elements.settingsMode.append(option);
   });
   elements.settingsOffline.checked = state.config.inference.offline;
+  // Libellés HUMAINS : l'utilisateur ne doit jamais voir le nom brut d'une variable (ex.
+  // « LM_STUDIO_ENABLED ») comme seul texte. Le nom technique reste affiché en indice discret.
+  const SETTINGS_LABELS = {
+    LM_STUDIO_ENABLED: { label: 'Activer les modèles locaux (LM Studio)', help: 'Cherche un serveur LM Studio local pour texte, vision et mémoire sémantique.' },
+    LM_STUDIO_BASE_URL: { label: 'Adresse du serveur LM Studio', help: 'Loopback + HTTP, ex. http://127.0.0.1:1234/v1.' },
+    LM_STUDIO_TEXT_MODEL: { label: 'Modèle texte local', help: 'Nom exact du modèle chargé dans LM Studio.' },
+    LM_STUDIO_VISION_MODEL: { label: 'Modèle vision local', help: 'Analyse d’images en local.' },
+    LM_STUDIO_EMBEDDING_MODEL: { label: 'Modèle embeddings local', help: 'Recherche mémoire par sens.' },
+    LM_STUDIO_TIMEOUT_MS: { label: 'Délai max requête locale (ms)', help: 'Défaut 240000.' },
+    GEMINI_MODEL: { label: 'Modèle Gemini' },
+    DEEPSEEK_BASE_URL: { label: 'Adresse API DeepSeek' },
+    DEEPSEEK_MODEL: { label: 'Modèle DeepSeek' },
+    OPENROUTER_BASE_URL: { label: 'Adresse API OpenRouter' },
+    OPENROUTER_VISION_MODEL: { label: 'Modèle vision OpenRouter' },
+    MODAL_ENDPOINT: { label: 'Endpoint Modal (inférence privée)' },
+    MODAL_MODEL: { label: 'Modèle Modal' },
+    HF_INFERENCE_BASE_URL: { label: 'Adresse inférence Hugging Face' },
+    HF_TEXT_MODEL: { label: 'Modèle texte Hugging Face' },
+    HTTPSMS_BASE_URL: { label: 'Adresse du serveur httpSMS', help: 'Cloud api.httpsms.com ou votre serveur.' },
+    HTTPSMS_FROM_NUMBER: { label: 'Numéro httpSMS', help: 'Numéro de la SIM du téléphone-passerelle (E.164).' },
+    HTTPSMS_SMS_MODE: { label: 'Routage SMS httpSMS', help: 'native-first / httpsms-first / native-only / httpsms-only.' },
+    TELEGRAM_OWNER_CHAT_ID: { label: 'ID Telegram du propriétaire', help: 'ID numérique via @userinfobot.' },
+    SMS_SEND_MODE: { label: 'Mode d’envoi SMS', help: 'confirm_every_send / auto_allowlisted / draft_only.' },
+    SMS_ALLOWLIST: { label: 'Numéros SMS autorisés', help: 'E.164 séparés par des virgules.' },
+    SMS_QUIET_HOURS_START: { label: 'Heures calmes SMS — début', help: 'Heure 0–23. Vide = désactivé.' },
+    SMS_QUIET_HOURS_END: { label: 'Heures calmes SMS — fin', help: 'Heure 0–23. Vide = désactivé.' },
+    SMS_MAX_PER_MINUTE: { label: 'SMS maximum par minute' },
+    SMS_MAX_PER_DAY: { label: 'SMS maximum par jour' },
+  };
   elements.settingsFields.textContent = '';
   schema.nonSensitiveKeys.filter((key) => !['MINA_INFERENCE_MODE', 'MINA_OFFLINE'].includes(key)).forEach((key) => {
+    const meta = SETTINGS_LABELS[key] ?? { label: key };
+    const isCheckbox = key.endsWith('_ENABLED');
     const label = document.createElement('label');
     const title = document.createElement('span');
     const input = document.createElement('input');
-    title.textContent = key;
+    title.textContent = meta.label;
     input.dataset.envKey = key;
-    input.type = key.endsWith('_ENABLED') ? 'checkbox' : 'text';
-    if (input.type === 'checkbox') input.checked = settingValue(key, state) === true;
-    else input.value = settingValue(key, state) ?? '';
-    label.append(title, input);
+    input.type = isCheckbox ? 'checkbox' : 'text';
+    if (isCheckbox) {
+      // Coche PUIS libellé sur la même ligne (jamais un carré sans texte à côté).
+      input.checked = settingValue(key, state) === true;
+      label.className = 'settings-toggle';
+      label.append(input, title);
+    } else {
+      input.value = settingValue(key, state) ?? '';
+      label.append(title, input);
+    }
+    // Indice : le texte d'aide + le nom technique de la variable (pour qui le cherche).
+    const hint = document.createElement('small');
+    hint.className = 'settings-hint';
+    hint.textContent = meta.help ? `${meta.help} · ${key}` : key;
+    label.append(hint);
     elements.settingsFields.append(label);
   });
   const secretStatus = new Map(state.secrets.map((entry) => [entry.providerId, entry.configured]));
