@@ -6,7 +6,7 @@ const REMEDIATION = Object.freeze({
   windows_sandbox_executable_missing: 'Windows Sandbox n’est pas installé sur cette édition de Windows.',
   virtualization_unavailable: 'Activez la virtualisation matérielle dans l’UEFI/BIOS.',
   sandbox_workspace_not_ntfs: 'Placez l’espace de travail du sandbox sur un volume NTFS.',
-  sandbox_runtimes_unavailable: 'Installez et vérifiez les runtimes portables signés de Mina Vision.',
+  sandbox_runtimes_unavailable: 'Runtimes portables non installés. Lance « node scripts/provision-sandbox-runtimes.mjs » (télécharge Python/Node/PowerShell signés, ~120 Mo), puis redémarre Mina. Détail : docs/guides/sandbox-runtimes.md.',
   'sandbox_probe_failed:feature': "La détection de Windows Sandbox a échoué ; l’état n’est pas présenté comme désactivé.",
   'sandbox_probe_failed:executable': "La détection de l’exécutable Windows Sandbox a échoué.",
   'sandbox_probe_failed:virtualization': "La détection de la virtualisation a échoué.",

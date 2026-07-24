@@ -791,16 +791,38 @@ const syncPhoneMessages = async () => {
   return result;
 };
 
+// État de la boucle de sync (persiste entre les ticks) : sert à NE PAS marteler l'ADB ni inonder
+// le journal quand le téléphone est injoignable (endpoint Wi-Fi mort, port éphémère changé).
+let syncFailureStreak = 0;
+let lastSyncErrorCode = null;
+let lastSyncErrorLoggedAt = 0;
+let syncTickCount = 0;
+
 const startPhoneMessageSyncLoop = () => {
   if (phoneMessageSyncTimer) return;
   const tick = () => {
     if (memoryController?.status().locked !== false) return;
-    void syncPhoneMessages().catch((error) => technicalLog.record({
-      severity: 'error',
-      scope: 'telegram:sync',
-      code: String(error?.message ?? 'telegram_sync_failed').slice(0, 120),
-      message: String(error?.message ?? error).slice(0, 500),
-    }));
+    syncTickCount += 1;
+    // Anti-martèlement : après des échecs répétés, on espace les tentatives (backoff exponentiel)
+    // au lieu de bombarder l'ADB toutes les 5 s — 2,4,8,16,32 ticks (jusqu'à ~2,5 min).
+    if (syncFailureStreak > 0) {
+      const skip = Math.min(2 ** Math.min(syncFailureStreak, 5), 32);
+      if (syncTickCount % skip !== 0) return;
+    }
+    void syncPhoneMessages()
+      .then(() => { syncFailureStreak = 0; lastSyncErrorCode = null; })
+      .catch((error) => {
+        syncFailureStreak += 1;
+        const code = String(error?.message ?? 'telegram_sync_failed').slice(0, 120);
+        const now = Date.now();
+        // Anti-spam du journal : une erreur IDENTIQUE n'est réécrite qu'une fois toutes les 5 min.
+        // La PREMIÈRE occurrence reste visible ; on n'ensevelit plus le diagnostic sous 300 répétitions.
+        if (code !== lastSyncErrorCode || now - lastSyncErrorLoggedAt > 5 * 60_000) {
+          lastSyncErrorCode = code;
+          lastSyncErrorLoggedAt = now;
+          technicalLog.record({ severity: 'error', scope: 'telegram:sync', code, message: String(error?.message ?? error).slice(0, 500) });
+        }
+      });
   };
   phoneMessageSyncTimer = setInterval(tick, 5_000);
   phoneMessageSyncTimer.unref?.();
