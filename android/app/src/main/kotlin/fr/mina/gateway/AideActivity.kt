@@ -55,6 +55,15 @@ private val GUIDE = listOf(
             "« Mina répond », « répondu »).",
     ),
     GuideSection(
+        "Photos et notes vocales",
+        "Le bouton « Photo » envoie une image : elle est redimensionnée et ses métadonnées de position " +
+            "(GPS) retirées avant l'envoi, puis chiffrée comme un message. Mina la regarde côté PC et te dit " +
+            "ce qu'elle voit. Le bouton « Vocale » enregistre une note audio courte (appuie pour démarrer, " +
+            "« ● Fin » pour l'envoyer) ; elle part chiffrée et Mina la garde (elle la transcrira si la " +
+            "transcription hors-ligne est activée sur le PC). Tout part par l'outbox : rien n'est perdu si le " +
+            "PC est éteint. Si le PC n'est pas à jour, l'app te le dit au lieu d'envoyer dans le vide.",
+    ),
+    GuideSection(
         "Verrou biométrique (facultatif)",
         "Sur l'accueil, active « Verrou biométrique » pour exiger ton empreinte ou ton visage avant " +
             "d'afficher la conversation. Si aucune empreinte n'est enrôlée sur le téléphone, le verrou reste " +
