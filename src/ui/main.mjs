@@ -1613,7 +1613,16 @@ const registerIpc = () => {
   });
   ipcMain.handle('mina:dental', (_event, request) => runDentalMission(request));
   ipcMain.handle('mina:stop', () => stopEverything());
-  ipcMain.handle('mina:phone-detect', async () => getPhoneBridge().detect());
+  ipcMain.handle('mina:phone-detect', async () => {
+    const bridge = getPhoneBridge();
+    // Découverte Wi-Fi AVANT le scan : connecte les téléphones qui s'annoncent en débogage sans
+    // fil (Android 11+), donc « Détecter » les trouve sans câble USB. Best-effort — mDNS absent
+    // n'empêche pas la détection USB. detect() vérifie ensuite l'identité signée : un appareil
+    // du réseau qui n'est pas un téléphone Mina reste ignoré.
+    const wifi = await bridge.discoverWifiPhones().catch(() => null);
+    if (wifi?.connected > 0) void activityJournal?.append('phone_wifi_discovered', { connected: wifi.connected });
+    return bridge.detect();
+  });
   ipcMain.handle('mina:phone-camera', async () => {
     return startLiveCamera();
   });

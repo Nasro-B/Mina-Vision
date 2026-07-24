@@ -110,9 +110,12 @@ lance jamais une seconde mission concurrente — elle est transmise à la missio
 
 ## Téléphone Android
 
-1. Activez les options développeur et le débogage USB sur le téléphone.
-2. Branchez-le, déverrouillez-le et acceptez l'empreinte RSA ADB.
-3. Dans Mina : **Détecter le téléphone**, puis **Ouvrir la caméra**.
+1. Activez les options développeur sur le téléphone.
+2. **Wi-Fi (Android 11+)** : activez le *débogage sans fil* — Mina le détecte alors sans câble
+   via mDNS et s'y connecte. **USB** : branchez, déverrouillez et acceptez l'empreinte RSA ADB.
+   *(Android 10 comme le Huawei : une première activation du débogage Wi-Fi via USB reste
+   nécessaire — la plateforme ne l'expose pas autrement.)*
+3. Dans Mina : **Détecter le téléphone** (cherche USB **et** Wi-Fi), puis **Ouvrir la caméra**.
 
 Un second appareil peut rester connecté en Wi-Fi (`MINA_SAMSUNG_ADB_SERIAL`). Mina retrouve sa
 dernière adresse connue si l'annonce réseau reste muette, toujours avec vérification d'identité

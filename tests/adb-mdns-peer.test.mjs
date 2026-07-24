@@ -42,3 +42,31 @@ describe('ADB mDNS peer keeper', () => {
     expect(run).toHaveBeenLastCalledWith('adb.exe', ['disconnect', '192.168.1.10:39509'], { binary: false });
   });
 });
+
+import { parseAdbMdnsEndpoints } from '../src/executors/adb-mdns-peer.mjs';
+
+describe('parseAdbMdnsEndpoints', () => {
+  it('retourne tous les endpoints privés annoncés, dédupliqués', () => {
+    const output = [
+      'List of discovered mdns services',
+      'adb-RZ8R20J2G6W-a80QcZ	_adb-tls-connect._tcp	192.168.1.10:38361',
+      'adb-G86DVB0CHOD00849993	_adb._tcp	192.168.1.12:5555',
+      'adb-G86DVB0CHOD00849993	_adb._tcp	192.168.1.12:5555',
+    ].join('\n');
+    expect(parseAdbMdnsEndpoints(output)).toEqual(['192.168.1.10:38361', '192.168.1.12:5555']);
+  });
+
+  it('ignore les adresses publiques et les lignes non-adb', () => {
+    const output = [
+      'adb-EVIL	_adb._tcp	8.8.8.8:5555',
+      'printer	_ipp._tcp	192.168.1.9:631',
+      'adb-OK	_adb._tcp	10.0.0.4:5555',
+    ].join('\n');
+    expect(parseAdbMdnsEndpoints(output)).toEqual(['10.0.0.4:5555']);
+  });
+
+  it('tolère une sortie vide', () => {
+    expect(parseAdbMdnsEndpoints('')).toEqual([]);
+    expect(parseAdbMdnsEndpoints(null)).toEqual([]);
+  });
+});
