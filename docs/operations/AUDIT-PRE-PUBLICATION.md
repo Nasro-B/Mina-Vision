@@ -58,8 +58,10 @@ installation neuve n'hérite **jamais** des dossiers de confiance d'une autre.
 
 `agent_vision_sourire.js` (prototype important `@google/generative-ai`, dépendance
 désinstallée le 2026-07-22 : le fichier ne pouvait plus s'exécuter), `debug_dom.js`,
-`diagnostic_scroll.js`, `modal_vision_app.py`. Les fichiers restent sur le disque local, ils
-ne sont simplement plus suivis ni publiés.
+`diagnostic_scroll.js`, `modal_vision_app.py`. D'abord gitignorés (non suivis ni publiés), ils
+ont été **supprimés du projet le 2026-07-24** (sauvegardés hors dépôt) — ils polluaient la revue
+de Mina Code par des faux positifs. Depuis, l'indexeur de Mina Code respecte `.gitignore`, donc
+tout fichier ignoré est de toute façon exclu de l'analyse et de la revue.
 
 ## 6. Restes assumés (sans risque)
 
