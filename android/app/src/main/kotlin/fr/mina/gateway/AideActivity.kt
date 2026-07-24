@@ -64,6 +64,14 @@ private val GUIDE = listOf(
             "PC est éteint. Si le PC n'est pas à jour, l'app te le dit au lieu d'envoyer dans le vide.",
     ),
     GuideSection(
+        "Fichiers reçus du PC et appels",
+        "Mina peut aussi t'ENVOYER une image ou un audio depuis le PC (panneau Système → « Envoyer un " +
+            "fichier ») : la bulle 📷/🎙 apparaît dans la conversation, déchiffrée à l'affichage seulement — " +
+            "rien ne traîne en clair, et les morceaux de plus de 14 jours sont purgés automatiquement. " +
+            "Si Mina te propose un appel, la bulle 📞 ouvre le COMPOSEUR pré-rempli : c'est toujours TOI " +
+            "qui appuies sur « appeler », jamais l'application.",
+    ),
+    GuideSection(
         "Verrou biométrique (facultatif)",
         "Sur l'accueil, active « Verrou biométrique » pour exiger ton empreinte ou ton visage avant " +
             "d'afficher la conversation. Si aucune empreinte n'est enrôlée sur le téléphone, le verrou reste " +
