@@ -100,6 +100,7 @@ import { createChatChannel } from '../devices/chat-channel.mjs';
 import { createChatMediaHandler } from '../chat/chat-media-handler.mjs';
 import { createMediaAssembler } from '../chat/media-assembler.mjs';
 import { createMediaStore } from '../chat/media-store.mjs';
+import { createMediaPerception } from '../chat/media-perception.mjs';
 import { createChatResponder } from '../devices/chat-responder.mjs';
 import { loadOrCreatePcChatIdentity } from '../devices/pc-chat-identity.mjs';
 import {
@@ -2318,6 +2319,32 @@ app.whenReady().then(async () => {
         });
       }
 
+      // Stockage chiffré des médias reçus, partagé entre le handler (écriture) et la perception
+      // (relecture pour vision/transcription). Une seule clé HKDF dédiée, jamais la clé maître.
+      const chatMediaStore = createMediaStore({
+        directory: path.join(app.getPath('userData'), 'chat-media'),
+        key: Buffer.from(hkdfSync('sha256', chatMasterKey, Buffer.from('Mina Vision local memory v1', 'utf8'), Buffer.from('chat-media', 'utf8'), 32)),
+        writeFile, readFile, rename, mkdir,
+      });
+      // W7 — perception des médias : à la complétion, Mina « voit » l'image (fournisseur de vision
+      // réutilisé de la caméra) et retient l'échange en mémoire. Honnête : si la vision/STT n'est
+      // pas configurée ou échoue, la note le dit, jamais une légende inventée. La transcription
+      // locale n'est pas provisionnée par défaut → transcribe null → note « non activée ».
+      const chatMediaPerception = createMediaPerception({
+        loadMedia: (mediaId) => chatMediaStore.load(mediaId),
+        rememberExchange: (entry) => memoryController.rememberChatExchange(entry),
+        visionAnalyze: async ({ image, mimeType, prompt }) => {
+          if (!cameraVision) {
+            const runtime = createCameraVisionRuntime({ config: requireRotatedCredentials() });
+            cameraVision = runtime.cameraVision;
+          }
+          return cameraVision.analyze({ image, mimeType, prompt });
+        },
+        transcribe: null,
+        notify: (event) => send('mina:event', event),
+        logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_media', entry) },
+      });
+
       chatChannel = createChatChannel({
         masterKey: () => chatMasterKey,
         identity: chatIdentity,
@@ -2351,11 +2378,8 @@ app.whenReady().then(async () => {
         // jointe …] » — jamais le binaire. Le texte v1 est totalement inchangé par ce chemin.
         handleMedia: createChatMediaHandler({
           assembler: createMediaAssembler(),
-          store: createMediaStore({
-            directory: path.join(app.getPath('userData'), 'chat-media'),
-            key: Buffer.from(hkdfSync('sha256', chatMasterKey, Buffer.from('Mina Vision local memory v1', 'utf8'), Buffer.from('chat-media', 'utf8'), 32)),
-            writeFile, readFile, rename, mkdir,
-          }),
+          store: chatMediaStore,
+          onComplete: (media) => chatMediaPerception.perceive(media),
           logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_app', entry) },
         }),
         port: Number(process.env.MINA_CHAT_PORT ?? 8771),
