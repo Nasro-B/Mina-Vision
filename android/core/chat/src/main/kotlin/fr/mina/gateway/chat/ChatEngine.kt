@@ -152,6 +152,11 @@ class ChatEngine private constructor(context: Context) {
         // Le relais s'arme en parallèle du direct : c'est justement quand le direct échoue
         // qu'on en a besoin, il ne peut donc pas dépendre de sa réussite.
         relay?.ensureSession { ready -> if (ready) relay.watch() }
+        // C2 — rétention 14 j : purge des chunks binaires expirés à chaque démarrage du moteur.
+        // Les bulles (méta) restent — l'app dira « incomplète » plutôt que d'effacer l'historique.
+        scope.launch {
+            runCatching { database.chatDao().purgeExpiredChunks(System.currentTimeMillis() - MEDIA_RETENTION_MS) }
+        }
     }
 
     fun stop() {
@@ -214,6 +219,9 @@ class ChatEngine private constructor(context: Context) {
     companion object {
         @Volatile
         private var instance: ChatEngine? = null
+
+        /** C2 — rétention des chunks média : 14 jours (décision du plan extras chat). */
+        private const val MEDIA_RETENTION_MS = 14L * 24 * 60 * 60 * 1_000
 
         fun get(context: Context): ChatEngine =
             instance ?: synchronized(this) {

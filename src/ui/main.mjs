@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { createHash, createPublicKey, hkdfSync, randomUUID } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { access, appendFile, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { access, appendFile, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, safeStorage, screen, session, Tray } from 'electron';
@@ -102,6 +102,7 @@ import { createChatMediaHandler } from '../chat/chat-media-handler.mjs';
 import { createMediaAssembler } from '../chat/media-assembler.mjs';
 import { createMediaStore } from '../chat/media-store.mjs';
 import { createMediaPerception } from '../chat/media-perception.mjs';
+import { createMediaPurge } from '../chat/media-purge.mjs';
 import { createChatResponder } from '../devices/chat-responder.mjs';
 import { loadOrCreatePcChatIdentity } from '../devices/pc-chat-identity.mjs';
 import {
@@ -2442,6 +2443,19 @@ app.whenReady().then(async () => {
         port: listening?.port ?? null,
         error: chatChannel.status().lastError,
       });
+
+      // C2 — rétention 14 j des médias chiffrés reçus : purge au démarrage puis toutes les 6 h.
+      // Bornée aux fichiers *.media de userData/chat-media, journalisée (jamais silencieuse).
+      const chatMediaPurge = createMediaPurge({
+        directory: path.join(app.getPath('userData'), 'chat-media'),
+        readdir,
+        stat,
+        rm: (target) => rm(target, { force: false }),
+        logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_media_purge', entry) },
+      });
+      void chatMediaPurge.run().catch(() => {});
+      const chatMediaPurgeTimer = setInterval(() => void chatMediaPurge.run().catch(() => {}), 6 * 60 * 60 * 1000);
+      chatMediaPurgeTimer.unref?.();
     } else {
       void activityJournal?.append('chat_app_canal', { listening: false, error: 'coffre_verrouille' });
     }

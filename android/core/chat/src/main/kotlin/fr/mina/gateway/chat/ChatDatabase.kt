@@ -85,6 +85,14 @@ interface ChatDao {
     @Query("UPDATE chat_events SET delivery_state = :state WHERE event_id = :eventId")
     suspend fun updateDeliveryState(eventId: String, state: String)
 
+    /**
+     * C2 — rétention 14 j des médias : purge les CHUNKS binaires (routing_class = 'stream') plus
+     * vieux que la coupure. Les bulles (méta) restent : après purge, l'app dit honnêtement
+     * « incomplète ou illisible » au lieu de faire disparaître l'historique.
+     */
+    @Query("DELETE FROM chat_events WHERE routing_class = 'stream' AND created_at_ms < :beforeMs")
+    suspend fun purgeExpiredChunks(beforeMs: Long): Int
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun enqueue(row: OutboxRow): Long
 
