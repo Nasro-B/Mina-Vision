@@ -75,6 +75,33 @@ describe('découverte Wi-Fi du téléphone (mDNS + connect, sans USB)', () => {
     await expect(bridge.discoverWifiPhones()).resolves.toEqual({ discovered: 0, connected: 0, excluded: 0, endpoints: [] });
   });
 
+  it('G4 — hôtes Wi-Fi STATIQUES tentés même sans mDNS (Samsung tcpip + Huawei hors mDNS)', async () => {
+    const run = vi.fn()
+      .mockRejectedValueOnce(new Error('adb: unknown command mdns')) // mDNS indispo
+      .mockResolvedValueOnce({ stdout: 'connected', stderr: '' }) // 192.168.1.10:5555
+      .mockResolvedValueOnce({ stdout: 'connected', stderr: '' }); // 192.168.1.11:5555
+    const bridge = createPhoneBridge({
+      run, adbPath: 'adb.exe', readArpTable: async () => new Map(), resolveDeviceIdentity: resolveIdentity,
+      wifiHosts: ['192.168.1.10:5555', '192.168.1.11:5555'],
+    });
+    const result = await bridge.discoverWifiPhones();
+    expect(result.connected).toBe(2);
+    expect(result.endpoints).toEqual(['192.168.1.10:5555', '192.168.1.11:5555']);
+    expect(run).toHaveBeenNthCalledWith(2, 'adb.exe', ['connect', '192.168.1.10:5555'], { binary: false });
+  });
+
+  it('G4 — un hôte statique mal formé (ou non ip:port) est ignoré', async () => {
+    const run = vi.fn()
+      .mockResolvedValueOnce({ stdout: 'List of discovered mdns services', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'connected', stderr: '' });
+    const bridge = createPhoneBridge({
+      run, adbPath: 'adb.exe', readArpTable: async () => new Map(), resolveDeviceIdentity: resolveIdentity,
+      wifiHosts: ['pas-une-ip', '192.168.1.10:5555'],
+    });
+    const result = await bridge.discoverWifiPhones();
+    expect(result.endpoints).toEqual(['192.168.1.10:5555']);
+  });
+
   it('n\'appelle JAMAIS adb connect sur un appareil exclu (télé Condor 09:8d:05)', async () => {
     const mdns = [
       'List of discovered mdns services',
