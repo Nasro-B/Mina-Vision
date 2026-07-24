@@ -39,6 +39,10 @@ const elements = {
   cameraStatus: document.querySelector('#camera-status'),
   webcamVision: document.querySelector('#webcam-vision-button'),
   webcamVisionStatus: document.querySelector('#webcam-vision-status'),
+  visionFile: document.querySelector('#vision-file-button'),
+  visionFileStatus: document.querySelector('#vision-file-status'),
+  conversationTool: document.querySelector('#conversation-button'),
+  conversationStatus: document.querySelector('#conversation-status'),
   cameraPreview: document.querySelector('#camera-preview'),
   cameraSwitch: document.querySelector('#camera-switch-button'),
   workspace: document.querySelector('#workspace'),
@@ -993,7 +997,11 @@ elements.phone.addEventListener('click', async () => {
   } catch (error) {
     elements.phoneStatus.textContent = 'Non connecté / non autorisé';
     void reportTechnicalError('phone', 'phone_detection_failed', error);
-    log(`Téléphone : ${error.message}`);
+    // Message actionnable : la détection Wi-Fi passe par MINA_ADB_WIFI_HOSTS (Samsung/Huawei hors mDNS).
+    const hint = /identité|gateway|autoris/iu.test(error.message)
+      ? ' — le téléphone doit être appairé et déverrouillé (USB, ou Wi-Fi via MINA_ADB_WIFI_HOSTS dans .env).'
+      : '';
+    log(`Téléphone : ${error.message}${hint}`);
   }
 });
 elements.camera.addEventListener('click', async () => {
@@ -1066,6 +1074,33 @@ const analyzeWebcamPc = async (question) => {
   }
 };
 if (elements.webcamVision) elements.webcamVision.addEventListener('click', () => { void analyzeWebcamPc(); });
+
+// G5 — « Décrire une image » : Mina décrit un fichier image choisi par Nasro (boîte système).
+if (elements.visionFile) elements.visionFile.addEventListener('click', async () => {
+  const target = elements.visionFileStatus;
+  if (target) target.textContent = 'Choix du fichier…';
+  try {
+    const result = await api.analyzeVisionFile({});
+    if (result?.ok) { if (target) target.textContent = `Décrit : ${result.name}`; log(`Image « ${result.name} » : ${result.text}`); void say(result.text); }
+    else if (result?.reason === 'annule') { if (target) target.textContent = 'Choisis un fichier · Mina te dit ce qu’elle voit'; }
+    else { if (target) target.textContent = 'Analyse indisponible'; log(`Décrire une image : ${result?.reason ?? 'inconnu'}.`); }
+  } catch (error) { if (target) target.textContent = 'Erreur'; log(`Décrire une image : ${error.message}`); }
+});
+
+// G5 — « Conversation téléphone » : bascule sur l'onglet Config (canal mina_app) et rafraîchit son état.
+if (elements.conversationTool) elements.conversationTool.addEventListener('click', async () => {
+  document.querySelector('.rail-btn[data-view="config"]')?.click();
+  try {
+    const status = await api.chatStatus();
+    const connected = Array.isArray(status?.connectedDevices) ? status.connectedDevices.length : 0;
+    if (elements.conversationStatus) {
+      elements.conversationStatus.textContent = status?.listening
+        ? `À l'écoute · ${connected} téléphone(s) connecté(s)`
+        : (status?.vaultUnlocked === false ? 'Mémoire verrouillée — déverrouille pour ouvrir le canal' : 'Canal fermé');
+    }
+    await refreshChatChannel();
+  } catch (error) { log(`Conversation : ${error.message}`); }
+});
 
 const flipCameraLens = async () => {
   if (!cameraStreaming) { log('Caméra : démarre le flux avant d’inverser l’objectif.'); return; }
@@ -1837,7 +1872,14 @@ elements.phoneSync.addEventListener('click', async () => {
     const result = await api.syncPhoneMessages();
     log(`Messages synchronisés : ${result.stored} mémorisé(s), ${result.acked} acquitté(s).`);
   } catch (error) {
-    log(`Synchronisation messages : ${error.message}`);
+    // Cause n°1 quand « ça ne marche pas » : la mémoire est verrouillée (la sync écrit dans le
+    // coffre chiffré). Message actionnable plutôt qu'un code brut.
+    const msg = /memory_locked/u.test(error.message)
+      ? 'Déverrouille d’abord la mémoire (onglet Config → Mémoire) : la synchronisation y écrit.'
+      : /identité|autoris|détect|gateway/iu.test(error.message)
+        ? `Aucun téléphone Mina prêt : ${error.message}. Vérifie l’appairage et l’ADB (USB ou Wi-Fi).`
+        : error.message;
+    log(`Synchronisation messages : ${msg}`);
   }
 });
 elements.settingsSave.addEventListener('click', async () => {
