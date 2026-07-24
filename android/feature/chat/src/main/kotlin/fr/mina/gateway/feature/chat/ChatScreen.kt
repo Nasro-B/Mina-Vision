@@ -36,6 +36,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -82,6 +83,7 @@ fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
                 messages = messages,
                 state = state,
                 onSend = viewModel::send,
+                onSendImage = viewModel::sendImage,
                 onRetry = viewModel::retryLink,
                 onDismissError = viewModel::dismissSendError,
                 onUnpair = viewModel::unpair,
@@ -96,6 +98,7 @@ fun ChatScreen(
     messages: List<ChatMessage>,
     state: ChatUiState,
     onSend: (String) -> Unit,
+    onSendImage: (android.net.Uri) -> Unit,
     onRetry: () -> Unit,
     onDismissError: () -> Unit,
     onUnpair: () -> Unit,
@@ -140,7 +143,7 @@ fun ChatScreen(
                 ErrorStrip(text = error, onDismiss = onDismissError)
             }
 
-            Composer(onSend = onSend)
+            Composer(onSend = onSend, onSendImage = onSendImage)
         }
     }
 }
@@ -292,13 +295,19 @@ private fun ErrorStrip(text: String, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun Composer(onSend: (String) -> Unit) {
+private fun Composer(onSend: (String) -> Unit, onSendImage: (android.net.Uri) -> Unit) {
     var draft by remember { mutableStateOf("") }
     var dictationNote by remember { mutableStateOf<String?>(null) }
     var listening by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val dictation = remember { VoiceDictation(context) }
     DisposableEffect(Unit) { onDispose { dictation.stop() } }
+
+    // Sélecteur de photo « moderne » (PickVisualMedia) : aucune permission de stockage requise,
+    // l'utilisateur choisit une image, elle est préparée (redimensionnée, EXIF retiré) puis envoyée.
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) onSendImage(uri)
+    }
 
     // La permission micro est demandée au moment du besoin, jamais au lancement : Mina n'écoute
     // que si Nasro appuie sur le micro.
@@ -322,6 +331,11 @@ private fun Composer(onSend: (String) -> Unit) {
                 Spacer(Modifier.size(6.dp))
             }
             Row(verticalAlignment = Alignment.Bottom) {
+                TextButton(
+                    onClick = { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = "Envoyer une photo" },
+                ) { Text("Photo") }
+                Spacer(Modifier.size(4.dp))
                 OutlinedTextField(
                     value = draft,
                     onValueChange = { draft = it },

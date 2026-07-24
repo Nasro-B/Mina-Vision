@@ -3,6 +3,7 @@ package fr.mina.gateway.chat
 import fr.mina.gateway.protocol.ChatBinaryCodec
 import fr.mina.gateway.protocol.ChatCrypto
 import fr.mina.gateway.protocol.ChatEvent
+import fr.mina.gateway.protocol.MediaChunker
 import fr.mina.gateway.protocol.MonotonicUlid
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -70,10 +71,27 @@ class ChatRepository(
      */
     suspend fun sendText(threadId: String, text: String): String {
         require(text.isNotBlank()) { "chat_message_vide" }
-        val outboxSize = dao.outboxSize()
-        // Borne dure : au-delà, on refuse plutôt que de gonfler indéfiniment le stockage.
-        require(outboxSize < MAX_OUTBOX) { "chat_outbox_pleine" }
+        // Le texte v1 reste des octets UTF-8 bruts (jamais de payload v2) — contrat inchangé.
+        return sealAndEnqueue(threadId, "message", text.toByteArray(Charsets.UTF_8))
+    }
 
+    /**
+     * Envoie un média (image recompressée ou note vocale m4a) : un événement de métadonnées
+     * (payload v2) puis N chunks binaires. Chaque événement est chiffré+signé comme un message.
+     * Retourne le mediaId. Réutilise l'outbox durable : rien n'est perdu si le PC est éteint.
+     */
+    suspend fun sendMedia(threadId: String, bytes: ByteArray, mime: String, extraMeta: Map<String, Any> = emptyMap()): String {
+        val piece = MediaChunker.chunk(bytes, mime, extraMeta)
+        // Borne : refuse si l'outbox ne peut pas accueillir méta + tous les chunks.
+        require(dao.outboxSize() + piece.chunkPayloads.size + 1 < MAX_OUTBOX) { "chat_outbox_pleine" }
+        sealAndEnqueue(threadId, "message", piece.metaPayload)
+        for (chunk in piece.chunkPayloads) sealAndEnqueue(threadId, "stream", chunk)
+        return piece.mediaId
+    }
+
+    /** Chiffre+signe un payload (octets déjà encodés) et le met en file. Cœur commun texte/média. */
+    private suspend fun sealAndEnqueue(threadId: String, routingClass: String, payload: ByteArray): String {
+        require(dao.outboxSize() < MAX_OUTBOX) { "chat_outbox_pleine" }
         val epoch = currentEpoch()
         val epochKey = epochKeyProvider(epoch) ?: throw IllegalStateException("chat_coffre_verrouille")
         val createdAt = now()
@@ -87,7 +105,7 @@ class ChatRepository(
             senderDeviceId = deviceId,
             deviceSequence = sequence,
             keyEpoch = epoch,
-            routingClass = "message",
+            routingClass = routingClass,
             createdAtMs = createdAt,
             expiresAtMs = createdAt + TTL_MS,
             payloadCiphertext = "",
@@ -100,7 +118,7 @@ class ChatRepository(
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(epochKey, "AES"), GCMParameterSpec(TAG_BITS, nonce))
         cipher.updateAAD(ChatBinaryCodec.encodeHeader(header))
-        val sealed = cipher.doFinal(text.toByteArray(Charsets.UTF_8))
+        val sealed = cipher.doFinal(payload)
         val encoder = Base64.getEncoder()
 
         val sealedEvent = header.copy(
