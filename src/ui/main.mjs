@@ -107,6 +107,7 @@ import {
   createFirestoreRelayAdapter, firebaseConfigFromGoogleServices,
 } from '../devices/firestore-relay-adapter.mjs';
 import { createRuntimeCapabilityCatalog } from '../runtime/capability-catalog.mjs';
+import { composeGovernanceDomains } from '../core/compose-governance-domains.mjs';
 import { registerMinaIpc } from './ipc/register-ipc.mjs';
 import { createRoutineRegistry } from '../routines/routine-registry.mjs';
 import { createDailyBriefingService } from '../personal/daily-briefing-service.mjs';
@@ -417,6 +418,7 @@ let activityJournal = null;
 // exactement l'état du coffre, donc verrouiller la mémoire coupe aussi le canal téléphone.
 let chatChannel = null;
 let chatMasterKey = null;
+let governanceDomains = null;
 // Couche 2 du journal (Task 5) : textes chiffrés, armée au déverrouillage du coffre.
 let sensitiveJournalStore = null;
 // Porte du mot d'arrêt vocal : après « stop », les chunks audio restants du tour interrompu
@@ -2718,21 +2720,131 @@ app.whenReady().then(async () => {
     reportCapability('personality', 'unavailable', String(error?.message ?? error).slice(0, 200));
   }
 
-  // Tasks 10/13/14/15/16 — domaines dont une dépendance runtime N'EXISTE PAS dans le code :
-  // publiés indisponibles avec la dépendance manquante NOMMÉE — jamais composés sur des
-  // simulacres, jamais masqués. (Task 14 home et Task 15 biométrie : composés plus haut en
-  // dégradé réel ; Task 16 backup : état de configuration réel.)
-  reportCapability('automation', 'unavailable', 'dependances_absentes:domain_registry.invoke,budget_estimator,disclosure_classifier');
-  reportCapability('recovery', 'unavailable', 'dependance_absente:automation_runner');
-  reportCapability('evaluation', 'unavailable', 'dependance_absente:model_router.route');
-  reportCapability('emergency', 'unavailable', 'dependances_absentes:network_policy,device_guard');
-  reportCapability('approvals', 'unavailable', 'dependance_absente:state_observer (les approbations distantes Telegram restent servies par la passerelle Android)');
-  reportCapability('connectors', 'unavailable', 'dependances_absentes:zip_inspector,dependency_scanner');
-  // Automation : les modules (stores, ledger, policy, runner) existent et sont testés, mais la
-  // SIMULATION exige un registre de domaines exposant simulate() qui n'est pas encore construit —
-  // composer à moitié donnerait une automatisation qui « fait semblant » de simuler. Rapporté
-  // honnêtement indisponible plutôt que branché en trompe-l'œil (principe fail-loud).
-  reportCapability('automation', 'unavailable', 'composant_absent:domain_registry.simulate (definitions/grants/ledger prets, simulation a construire)');
+  // Tasks 10/13 — domaines de gouvernance composés avec leurs VRAIS fournisseurs (registre
+  // invocable + estimateur de budget + classificateur de divulgation + politique réseau + garde
+  // périphériques + observateur d'état + inspecteur zip + scanner de dépendances). Chaque état
+  // publié vient de la composition elle-même — un domaine dont une dépendance manque le DIT.
+  try {
+    const governanceBroker = createCapabilityBroker({
+      grants: [{
+        sessionId: 'governance-runtime',
+        capabilities: ['notify.*', 'journal.*', 'home.*'],
+        effects: ['read', 'execute', 'write'],
+        resources: ['*'],
+        // Borne temporelle : la session runtime (renouvelée à chaque démarrage, jamais infinie).
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      }],
+    });
+    const governanceLogger = { append: (entry) => void activityJournal?.append(entry.event ?? 'gouvernance', entry) };
+    const emergencyDir = path.join(app.getPath('userData'), 'emergency');
+    await mkdir(emergencyDir, { recursive: true }).catch(() => {});
+    const connectorsDir = path.join(app.getPath('userData'), 'connectors');
+    await mkdir(path.join(connectorsDir, 'quarantine'), { recursive: true }).catch(() => {});
+
+    governanceDomains = composeGovernanceDomains({
+      clock: Date.now,
+      openAutomationDatabase: () => new BetterSqlite3(path.join(app.getPath('userData'), 'mina-automation.sqlite'), { nativeBinding }),
+      automationRepositories: {
+        definitions: createJsonRepository({ filename: path.join(app.getPath('userData'), 'mina-automation-definitions.sqlite'), table: 'definitions', nativeBinding }),
+        grants: createJsonRepository({ filename: path.join(app.getPath('userData'), 'mina-automation-grants.sqlite'), table: 'grants', nativeBinding }),
+      },
+      capabilityBroker: governanceBroker,
+      budgetGuard,
+      handlers: [
+        {
+          prefix: 'notify',
+          handler: {
+            describe: 'notification locale PC',
+            simulate: async (action) => ({ effect: { delivered: true, preview: String(action?.payload?.message ?? '').slice(0, 120) } }),
+            invoke: async (action) => {
+              send('mina:event', { type: 'automation_notification', message: String(action?.payload?.message ?? '').slice(0, 500) });
+              return { effect: { delivered: true } };
+            },
+          },
+        },
+        {
+          prefix: 'journal',
+          handler: {
+            describe: 'note au journal d’activité',
+            simulate: async () => ({ effect: { recorded: true } }),
+            invoke: async (action) => {
+              void activityJournal?.append('automation_note', { note: String(action?.payload?.note ?? '').slice(0, 500) });
+              return { effect: { recorded: true } };
+            },
+          },
+        },
+        ...(homeServiceRef ? [{
+          prefix: 'home',
+          handler: {
+            describe: 'commande maison connectée',
+            external: true,
+            // Pas de simulate maison : l'incertitude honnête du registre suffit ; l'invoke passe
+            // par le service réel (politique + vérification internes au domaine home).
+            invoke: async (action) => {
+              const result = await homeServiceRef.execute?.(action?.payload ?? {});
+              return { effect: { executed: true }, detail: result ?? null };
+            },
+          },
+        }] : []),
+      ],
+      generate: async ({ text }) => (await telegramTextGenerator()).generate({ text }),
+      networkGates: [
+        {
+          id: 'sync_telephone',
+          disable: async () => { if (phoneMessageSyncTimer) { clearInterval(phoneMessageSyncTimer); phoneMessageSyncTimer = null; } },
+          restore: async () => { startPhoneMessageSyncLoop(); },
+        },
+        {
+          id: 'canal_mina_app',
+          disable: async () => { await chatChannel?.stop?.(); },
+          restore: async () => { await chatChannel?.start?.(); },
+        },
+      ],
+      stopCamera: stopLiveCamera,
+      stopMicrophone: null,
+      // Corpus urgence : clé HKDF dédiée dérivée du coffre (jamais la clé maître) — donc
+      // disponible seulement coffre déverrouillé ; sinon le domaine le dit (degraded).
+      emergencyKeyring: chatMasterKey ? {
+        open: async () => Buffer.from(hkdfSync('sha256', chatMasterKey, Buffer.from('Mina Vision local memory v1', 'utf8'), Buffer.from('emergency-corpus', 'utf8'), 32)),
+      } : null,
+      emergencyExporters: [{
+        sourceId: 'journal',
+        export: async (itemIds = []) => {
+          const entries = await (activityJournal?.read({ limit: 200 }) ?? Promise.resolve([]));
+          const items = entries.map((entry, index) => ({
+            itemId: `journal-${index}`,
+            classification: 'normal',
+            payload: { kind: entry.kind ?? entry.event ?? 'entree', at: entry.at ?? null },
+          }));
+          return itemIds.length ? items.filter((item) => itemIds.includes(item.itemId)) : items;
+        },
+      }],
+      emergencyFilesystem: {
+        readFile: (relative) => readFile(path.join(emergencyDir, path.basename(String(relative)))),
+        writeFile: (relative, bytes) => writeFile(path.join(emergencyDir, path.basename(String(relative))), bytes),
+      },
+      connectorFilesystem: {
+        readFile: (relative) => readFile(path.join(connectorsDir, String(relative).replace(/^connectors\//u, ''))),
+        writeFile: async (relative, bytes) => {
+          const target = path.join(connectorsDir, String(relative).replace(/^connectors\//u, ''));
+          await mkdir(path.dirname(target), { recursive: true });
+          return writeFile(target, bytes);
+        },
+      },
+      connectorRepository: createJsonRepository({ filename: path.join(app.getPath('userData'), 'mina-connector-publishers.sqlite'), table: 'publishers', nativeBinding }),
+      ownerIdentity: { isOwner: isTelegramOwner },
+      logger: governanceLogger,
+    });
+    for (const entry of governanceDomains.capabilities) {
+      reportCapability(entry.domain, entry.state, entry.reason);
+    }
+  } catch (error) {
+    const reason = `gouvernance_composition_echec:${String(error?.message ?? error).slice(0, 160)}`;
+    for (const domain of ['automation', 'recovery', 'evaluation', 'emergency', 'approvals', 'connectors']) {
+      reportCapability(domain, 'unavailable', reason);
+    }
+    technicalLog.record({ severity: 'warning', scope: 'governance', code: 'governance_composition_failed', message: reason });
+  }
   reportCapability('mail', mailOperational ? 'available' : (mailController ? 'degraded' : 'unavailable'), mailOperational ? null : 'aucun_compte_operationnel');
   reportCapability('home', homeCapabilityLevel, homeCapabilityReason);
   reportCapability('camera', cameraController ? 'degraded' : 'unavailable', 'flux_reel_disponible_biometrie_non_implementee');
@@ -2858,6 +2970,7 @@ app.on('before-quit', (event) => {
     await minaCore?.shutdown({ timeoutMs: 2_000 });
     if (runtime) await runtime.close();
     await chatChannel?.stop();
+    governanceDomains?.close?.();
     memoryController?.lock();
     if (usageDatabase?.open) usageDatabase.close();
     if (mailDatabase?.open) mailDatabase.close();
