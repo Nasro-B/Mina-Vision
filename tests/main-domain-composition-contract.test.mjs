@@ -25,7 +25,9 @@ describe('contrat de composition des domaines (main.mjs)', () => {
     expect(main).toContain("ipcMain.handle('mina:capabilities:list'");
     for (const needle of [
       "reportCapability('automation', 'unavailable'",
-      "reportCapability('biometrics.face', 'unavailable', 'face_embedding_pipeline_not_implemented')",
+      // Biométrie faciale : état DYNAMIQUE depuis 2026-07-24 (embedder ONNX réel branché) —
+      // available si un modèle est provisionné, sinon unavailable avec raison. Plus un stub figé.
+      "reportCapability('biometrics.face', faceEmbedderState, faceEmbedderReason)",
       "reportCapability('personal'",
       "reportCapability('documents'",
       "reportCapability('personality'",
