@@ -19,6 +19,8 @@ import { createSessionStore } from '../sessions/session-store.mjs';
 import { createKeyring } from '../crypto/keyring.mjs';
 import { createKeyringFileStorage } from '../crypto/keyring-file-storage.mjs';
 import { createMemoryServices } from '../memory/composition.mjs';
+import { composeBackupDomain } from '../backup/compose-backup-domain.mjs';
+import { createFirebaseSdkClient } from '../backup/firebase-backup.mjs';
 import { createMemoryRuntimeController } from '../memory/runtime-controller.mjs';
 import { openMemoryDatabase } from '../memory/database.mjs';
 import BetterSqlite3 from 'better-sqlite3';
@@ -357,6 +359,8 @@ const errorAggregator = createErrorAggregator();
 // déverrouillage du coffre. Ne crée jamais de privilège — il ne fait qu'avertir en pré-vol.
 const lessonsRegistry = createLessonsRegistry();
 let lessonsStore = null;
+// Domaine de sauvegarde chiffrée de la mémoire (Firebase) — composé au déverrouillage du coffre.
+let backupDomain = null;
 const persistLessons = () => { void lessonsStore?.save(lessonsRegistry.serialize()); };
 const technicalLog = createTechnicalLog({
   onEntry: (entry) => {
@@ -2229,12 +2233,38 @@ app.whenReady().then(async () => {
           timeoutMs: config.providers.lmStudio.timeoutMs,
         })
         : null;
+      const firebaseConfigured = Boolean(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_STORAGE_BUCKET);
+      // Sauvegarde chiffrée de la mémoire vers Firebase (réconciliation T16 — enfin COMPOSÉE, pas
+      // seulement présente en module). Best-effort, jamais bloquant, jamais d'egress automatique :
+      // la sauvegarde est un service DISPONIBLE (état réel journalisé), déclenché sur demande.
+      // Le client Firebase Storage exige un jeton PERSONNALISÉ (signInWithCustomToken) : sans backend
+      // qui le fabrique (MINA_BACKUP_TOKEN_ENDPOINT), le domaine reste honnêtement « disabled ».
+      const tokenEndpoint = process.env.MINA_BACKUP_TOKEN_ENDPOINT?.trim() || null;
+      void composeBackupDomain({
+        masterKey,
+        configured: firebaseConfigured,
+        createClient: firebaseConfigured && tokenEndpoint
+          ? async () => {
+            const googleServices = JSON.parse(await readFile(process.env.MINA_GOOGLE_SERVICES
+              ?? path.join(ROOT_DIR, 'env', 'google-services.json'), 'utf8'));
+            return createFirebaseSdkClient({ config: firebaseConfigFromGoogleServices(googleServices) });
+          }
+          : null,
+        authTokenProvider: tokenEndpoint ? async () => (await (await fetch(tokenEndpoint)).json()).token : null,
+        expectedOwnerId: process.env.FIREBASE_PROJECT_ID ?? null,
+        deviceId: 'pc-primary',
+      }).then((domain) => {
+        backupDomain = domain;
+        void activityJournal?.append('memory_backup_domain', { state: domain.state, reason: domain.reason });
+      }).catch((error) => {
+        void activityJournal?.append('memory_backup_domain', { state: 'error', reason: String(error?.message ?? error).slice(0, 200) });
+      });
       return createMemoryServices({
         masterKey,
         databasePath: path.join(app.getPath('userData'), 'mina-memory.sqlite'),
         approvedRoots,
         getWebPage: async () => (await getBrowserExecutor()).getPage(),
-        backupConfigured: Boolean(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_STORAGE_BUCKET),
+        backupConfigured: firebaseConfigured,
         nativeBinding,
         embedder,
       });
