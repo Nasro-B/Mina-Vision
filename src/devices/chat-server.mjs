@@ -11,6 +11,7 @@ import { createServer } from 'node:http';
 import { createHash, createPublicKey, createVerify, randomBytes } from 'node:crypto';
 import { WebSocketServer } from 'ws';
 import { parseChatEvent } from '../contracts/chat.mjs';
+import { decodeChatPayload } from '../contracts/chat-payload.mjs';
 import { encodeChatSignatureInput } from '../contracts/chat-binary-codec.mjs';
 import { createChatCrypto, deriveDeviceWrapKey, wrapEpochKey } from './chat-crypto.mjs';
 import { createMonotonicUlid } from '../contracts/event-id.mjs';
@@ -57,6 +58,8 @@ export function createChatServer({
   logger = null,
   ulid = createMonotonicUlid(),
   ledger = createChatLedger({ clock }),
+  /** Handler des payloads média (pièces jointes/chunks). Absent → média acquitté mais ignoré (honnête). */
+  handleMedia = null,
 } = {}) {
   if (!identity?.privateKey || !identity?.publicKeySpki) throw new TypeError('chat_server_identite_requise');
   if (!registry || typeof registry.isApproved !== 'function') throw new TypeError('chat_server_registre_requis');
@@ -152,9 +155,10 @@ export function createChatServer({
       epochKey: Buffer.from(epochKeyFor(event.keyEpoch)),
     });
 
-    let text;
+    let payload;
     try {
-      text = crypto.verifyAndDecrypt(event);
+      // Déchiffrement en OCTETS puis décodage du payload : texte v1 (inchangé) OU média v2.
+      payload = decodeChatPayload(crypto.verifyAndDecryptBytes(event));
     } catch (error) {
       socket.send(JSON.stringify({ type: 'rejected', reason: error.message }));
       note('chat_app_evenement_refuse', { deviceId: session.deviceId, reason: error.message });
@@ -164,6 +168,23 @@ export function createChatServer({
     // Accusé AVANT de réfléchir : le téléphone peut vider sa file et cesser de réémettre.
     socket.send(JSON.stringify({ type: 'ack', eventId: event.eventId }));
     registry.touch(session.deviceId);
+
+    // PAYLOAD MÉDIA (pièce jointe / chunk) : assemblé/stocké par l'appelant, jamais de réponse texte
+    // par chunk. Le texte v1 continue exactement comme avant, juste en dessous.
+    if (payload.version === 2) {
+      note('chat_app_media_recu', { deviceId: session.deviceId, eventId: event.eventId, type: payload.type });
+      try {
+        await handleMedia?.({
+          deviceId: session.deviceId, threadId: event.threadId, eventId: event.eventId,
+          type: payload.type, meta: payload.meta, binary: payload.binary,
+        });
+      } catch (error) {
+        note('chat_app_media_refuse', { deviceId: session.deviceId, eventId: event.eventId, reason: String(error?.message ?? error).slice(0, 120) });
+      }
+      return;
+    }
+
+    const text = payload.text;
     note('chat_app_message_recu', {
       deviceId: session.deviceId,
       eventId: event.eventId,

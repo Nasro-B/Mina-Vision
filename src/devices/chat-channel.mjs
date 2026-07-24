@@ -30,6 +30,8 @@ export function createChatChannel({
   firestore = null,
   publicKeyFromSpki = null,
   respond,
+  /** Handler des payloads média (pièces jointes/notes vocales). Optionnel : absent, ils sont ignorés. */
+  handleMedia = null,
   port,
   host,
   clock = Date.now,
@@ -81,7 +83,7 @@ export function createChatChannel({
         return null;
       }
       server = createChatServer({
-        identity, registry, respond, epochKeyFor, port, host, clock, logger, ledger,
+        identity, registry, respond, epochKeyFor, port, host, clock, logger, ledger, handleMedia,
       });
       // Le relais Firebase est INDÉPENDANT du direct : il démarre même si le port local est
       // pris, sinon un PC mal configuré perdrait aussi le chemin de secours.
