@@ -4,7 +4,7 @@
 
 const EMPTY = 'Rien à afficher.';
 
-function listItem(text, { badge = null, badgeClass = 'badge', muted = null, action = null } = {}) {
+function listItem(text, { badge = null, badgeClass = 'badge', muted = null, action = null, actions = null } = {}) {
   const item = document.createElement('li');
   const label = document.createElement('strong');
   label.textContent = text;
@@ -21,15 +21,16 @@ function listItem(text, { badge = null, badgeClass = 'badge', muted = null, acti
     detail.textContent = ` — ${muted}`;
     item.append(detail);
   }
-  if (action?.label && action?.name) {
-    // Bouton construit en DOM pur (jamais innerHTML) ; la valeur voyage par dataset, pas par
-    // une chaîne interpolée dans du HTML.
+  // `action` (héritage, un seul bouton) ou `actions` (plusieurs) — boutons construits en DOM pur
+  // (jamais innerHTML) ; la valeur voyage par dataset, pas par une chaîne interpolée dans du HTML.
+  for (const entry of [...(actions ?? []), ...(action ? [action] : [])]) {
+    if (!entry?.label || !entry?.name) continue;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'ghost-button';
-    button.textContent = action.label;
-    button.dataset.action = action.name;
-    button.dataset.value = String(action.value ?? '');
+    button.textContent = entry.label;
+    button.dataset.action = entry.name;
+    button.dataset.value = String(entry.value ?? '');
     item.append(' ', button);
   }
   return item;
@@ -104,7 +105,12 @@ export const chatDeviceRow = (device) => ({
   muted: device?.lastSeenAtMs
     ? `vu ${new Date(device.lastSeenAtMs).toLocaleString('fr-FR')}`
     : 'jamais connecté depuis l’appairage',
-  action: { label: 'Révoquer', name: 'chat-revoke', value: device?.deviceId ?? '' },
+  actions: [
+    // W6 : envoi d'un fichier PC → téléphone, seulement si l'appareil est CONNECTÉ maintenant
+    // (l'envoi direct exige une session active — pas de file fantôme).
+    ...(device?.connected ? [{ label: 'Envoyer un fichier', name: 'chat-send-file', value: device?.deviceId ?? '' }] : []),
+    { label: 'Révoquer', name: 'chat-revoke', value: device?.deviceId ?? '' },
+  ],
 });
 
 export const printerRow = (printer) => ({

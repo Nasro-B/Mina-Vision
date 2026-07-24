@@ -345,4 +345,45 @@ describe('serveur du canal mina_app', () => {
     })));
     expect(await nextMessage(session.socket)).toMatchObject({ type: 'rejected', reason: 'evenement_expire' });
   });
+
+  it('W6 — envoie un média PC → appareil : méta + chunks déchiffrés et réassemblés à l\'identique', async () => {
+    const registry = createChatDeviceRegistry();
+    const { port, pc, server } = await startServer({ registry });
+    const { code } = registry.openPairing();
+    const session = await handshake({ port, pc, registry, pairingCode: code });
+    const deviceCrypto = createChatCrypto({
+      signingPrivateKey: session.device.privateKey,
+      verifyPublicKey: pc.publicKey, // le téléphone vérifie la signature DU PC
+      epochKey: session.epochKey,
+    });
+
+    const bytes = randomBytes(200_000); // 2 chunks de 128 Kio
+    const sent = await server.sendMediaToDevice(session.deviceId, { bytes, mime: 'image/jpeg' });
+    expect(sent.chunkCount).toBe(2);
+
+    const { decodeChatPayload } = await import('../src/contracts/chat-payload.mjs');
+    const { createMediaAssembler } = await import('../src/chat/media-assembler.mjs');
+    const assembler = createMediaAssembler();
+
+    const metaEvent = await nextMessage(session.socket);
+    const metaPayload = decodeChatPayload(deviceCrypto.verifyAndDecryptBytes(metaEvent));
+    expect(metaPayload.version).toBe(2);
+    expect(metaPayload.type).toBe('message.attachment.created');
+    assembler.begin({ ...metaPayload.meta });
+
+    for (let i = 0; i < sent.chunkCount; i += 1) {
+      const chunkEvent = await nextMessage(session.socket);
+      const chunkPayload = decodeChatPayload(deviceCrypto.verifyAndDecryptBytes(chunkEvent));
+      expect(chunkPayload.type).toBe('media.chunk');
+      assembler.addChunk({ mediaId: chunkPayload.meta.mediaId, index: chunkPayload.meta.index, binary: chunkPayload.binary });
+    }
+    const media = assembler.finalize(metaPayload.meta.mediaId);
+    expect(Buffer.compare(media.bytes, bytes)).toBe(0); // octets identiques, sha256 vérifié par finalize
+  });
+
+  it('W6 — refuse l\'envoi vers un appareil non connecté (fail-loud, pas de file fantôme)', async () => {
+    const { server } = await startServer();
+    await expect(server.sendMediaToDevice('device-absent', { bytes: Buffer.from([1]), mime: 'image/jpeg' }))
+      .rejects.toThrow('chat_appareil_non_connecte');
+  });
 });

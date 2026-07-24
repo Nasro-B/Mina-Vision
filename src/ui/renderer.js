@@ -1957,6 +1957,17 @@ document.querySelector('#chat-pairing-close')?.addEventListener('click', () => {
 });
 
 document.querySelector('#chat-devices')?.addEventListener('click', (event) => {
+  const sendButton = event.target.closest('button[data-action="chat-send-file"]');
+  if (sendButton) {
+    // W6 : la boîte système choisit le fichier (jamais un chemin arbitraire du renderer) ;
+    // l'envoi part chiffré en chunks sur la session active de l'appareil.
+    api.chatSendFile?.(sendButton.dataset.value)
+      .then((result) => log(result?.ok
+        ? `Fichier envoye au telephone (${result.chunkCount} morceau(x), ${Math.round((result.sizeBytes ?? 0) / 1024)} Ko).`
+        : `Envoi refuse : ${result?.reason ?? 'raison inconnue'}.`))
+      .catch((error) => log(`Envoi fichier : ${error.message}`));
+    return;
+  }
   const button = event.target.closest('button[data-action="chat-revoke"]');
   if (!button) return;
   api.chatRevokeDevice(button.dataset.value)
