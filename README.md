@@ -189,7 +189,7 @@ npm run test:unit
 | Ressource | Contenu |
 |---|---|
 | Guide intégré (bouton ⚙️ dans l'app) | Capacités, commandes vocales, limites |
-| [CHANGELOG.md](CHANGELOG.md) | Ce qui est livré et prouvé, ce qui est planifié |
+| [Releases GitHub](https://github.com/Nassreallah-B/Mina-Vision/releases) | Versions publiées et téléchargement de l'APK |
 | [MINA.md](MINA.md) | Constitution : règles de sécurité et canaux autorisés |
 | [docs/operations/INSTALLATION.md](docs/operations/INSTALLATION.md) | Installation pas à pas |
 | [docs/guides/httpsms.md](docs/guides/httpsms.md) | Passerelle SMS httpSMS (cloud ou auto-hébergé) |
