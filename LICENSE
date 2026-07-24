@@ -1,9 +1,9 @@
 Mina Vision — Licence source disponible avec protection du nom et de l'attribution
 Version 1.0 — 23 juillet 2026
 
-Copyright (c) 2026 Nasserallah Berkoun. Tous droits réservés.
+Copyright (c) 2026 Nasro Berkoun. Tous droits réservés.
 
-« Mina », « Mina Vision » et le nom de l'auteur, Nasserallah Berkoun, sont l'identité de
+« Mina », « Mina Vision » et le nom de l'auteur, Nasro Berkoun, sont l'identité de
 ce projet. Cette licence autorise largement l'usage, l'étude et la modification du code,
 mais protège cette identité de manière stricte.
 
@@ -11,9 +11,9 @@ mais protège cette identité de manière stricte.
 1. DÉFINITIONS
 
 « Le Logiciel » désigne Mina Vision, son code source, ses ressources et sa documentation.
-« L'Auteur » désigne Nasserallah Berkoun, créateur et titulaire des droits.
+« L'Auteur » désigne Nasro Berkoun, créateur et titulaire des droits.
 « Œuvre Dérivée » désigne toute copie modifiée, adaptation, portage ou traduction du Logiciel.
-« Noms Protégés » désigne « Mina », « Mina Vision », « MinaVision » et « Nasserallah Berkoun ».
+« Noms Protégés » désigne « Mina », « Mina Vision », « MinaVision » et « Nasro Berkoun ».
 
 
 2. DROITS ACCORDÉS
@@ -32,18 +32,18 @@ copie du Logiciel le droit de :
 Ces obligations sont la contrepartie des droits de la section 2. Toute violation met fin
 automatiquement et immédiatement à ces droits.
 
-  3.1  Le nom de l'Auteur, Nasserallah Berkoun, doit être conservé intégralement et
+  3.1  Le nom de l'Auteur, Nasro Berkoun, doit être conservé intégralement et
        lisiblement dans le Logiciel, dans toute Œuvre Dérivée, dans les fichiers de licence
        et dans toute mention « À propos », page d'aide ou écran de démarrage. Il ne peut être
        ni retiré, ni remplacé, ni abrégé, ni relégué à un endroit non visible.
 
   3.2  Les Noms Protégés ne peuvent être ni supprimés, ni modifiés, ni détournés dans le
        Logiciel lui-même. Le produit d'origine reste identifié comme « Mina Vision, créé par
-       Nasserallah Berkoun ».
+       Nasro Berkoun ».
 
   3.3  Une Œuvre Dérivée distribuée publiquement DOIT porter un nom distinct qui ne prête pas
        à confusion avec les Noms Protégés, et indiquer clairement : « Basé sur Mina Vision,
-       créé par Nasserallah Berkoun ». Il est interdit de présenter une Œuvre Dérivée comme
+       créé par Nasro Berkoun ». Il est interdit de présenter une Œuvre Dérivée comme
        étant Mina Vision, ni de laisser croire qu'elle est approuvée par l'Auteur.
 
   3.4  Les Noms Protégés ne confèrent aucune licence de marque : ils ne peuvent être utilisés
@@ -60,7 +60,7 @@ automatiquement et immédiatement à ces droits.
        du Logiciel.
   4.2  Les modifications apportées à une Œuvre Dérivée sont signalées de manière identifiable.
   4.3  Les composants tiers conservent leurs propres licences ; l'inventaire figure dans
-       docs/LICENCES.md. En cas de conflit, la licence du composant tiers prévaut pour ce
+       LICENCES.md. En cas de conflit, la licence du composant tiers prévaut pour ce
        composant uniquement.
 
 
@@ -100,4 +100,5 @@ notamment le droit à la paternité, sont incessibles et perpétuels conforméme
 
 
 Pour toute demande dépassant le cadre de cette licence — usage des Noms Protégés, partenariat,
-licence commerciale spécifique — contacter l'Auteur.
+licence commerciale spécifique — ainsi que pour toute réclamation ou question de service client,
+contacter l'Auteur : mina.vision.ai@gmail.com

@@ -10,9 +10,9 @@ const read = (relative) => readFile(new URL(`../${relative}`, import.meta.url), 
 describe('protection du nom et de l\'attribution', () => {
   it('la licence existe et nomme l\'auteur et le produit', async () => {
     const license = await read('LICENSE');
-    expect(license).toContain('Nasserallah Berkoun');
+    expect(license).toContain('Nasro Berkoun');
     expect(license).toContain('Mina Vision');
-    expect(license).toMatch(/Copyright \(c\) 2026 Nasserallah Berkoun/u);
+    expect(license).toMatch(/Copyright \(c\) 2026 Nasro Berkoun/u);
   });
 
   it('la clause de protection des noms est intacte et non optionnelle', async () => {
@@ -24,19 +24,19 @@ describe('protection du nom et de l\'attribution', () => {
     expect(license).toMatch(/ne peut être ni retiré, ni remplacé/u);
     // Une œuvre dérivée doit porter un nom distinct et créditer l'origine.
     expect(license).toMatch(/nom distinct/u);
-    expect(license).toContain('Basé sur Mina Vision, créé par Nasserallah Berkoun');
+    expect(license).toContain('Basé sur Mina Vision, créé par Nasro Berkoun');
     // La violation met fin aux droits.
     expect(license).toContain('RÉSILIATION');
   });
 
   it('le produit lui-même affiche l\'attribution à l\'utilisateur', async () => {
     const help = await read('src/ui/help.html');
-    expect(help).toContain('Nasserallah Berkoun');
+    expect(help).toContain('Nasro Berkoun');
   });
 
   it('le manifeste npm déclare l\'auteur et la licence', async () => {
     const pkg = JSON.parse(await read('package.json'));
-    expect(String(pkg.author ?? '')).toContain('Nasserallah Berkoun');
+    expect(String(pkg.author ?? '')).toContain('Nasro Berkoun');
     expect(pkg.license).toBe('SEE LICENSE IN LICENSE');
   });
 });
