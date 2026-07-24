@@ -178,9 +178,9 @@ export function createMemoryRuntimeController({
 
   // Reprise de contexte au démarrage d'une session vocale : les derniers échanges, chronologiques.
   // Coffre verrouillé → liste vide silencieuse (la reprise est un bonus, jamais un prérequis).
-  async function recentConversation({ limit = 12 } = {}) {
+  async function recentConversation({ limit = 20 } = {}) {
     if (!services) return Object.freeze([]);
-    const boundedLimit = Math.max(1, Math.min(Number(limit) || 12, MAX_RECALL_ITEMS));
+    const boundedLimit = Math.max(1, Math.min(Number(limit) || 20, MAX_RECALL_ITEMS));
     const items = await services.memoryService.recall({ kind: 'local_owner', value: 'owner', query: '' });
     return Object.freeze(items
             // Voix ET application Mina : Mina est UNE assistante, pas une par canal — le contexte

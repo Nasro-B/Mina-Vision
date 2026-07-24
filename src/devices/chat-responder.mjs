@@ -34,7 +34,7 @@ export function createChatResponder({ generate, memory = null, logger = null } =
     // plutôt que de refuser, mais ne prétend jamais se souvenir.
     let recalled = '';
     try {
-      const recent = await memory?.recentConversation?.({ limit: 8 });
+      const recent = await memory?.recentConversation?.({ limit: 20 });
       if (Array.isArray(recent) && recent.length > 0) {
         recalled = recent.map((entry) => `${entry.role ?? 'note'} : ${entry.content ?? ''}`).join('\n').slice(0, 2_000);
       }
