@@ -71,6 +71,10 @@
           <p>Chaque erreur qu'elle relit lui vient avec une explication en français et un remède concret — jamais un code brut réservé aux développeurs.</p>
         </article>
         <article>
+          <h3>Apprentissage de ses erreurs (leçons)</h3>
+          <p>Chaque échec technique réel (délai dépassé, ressource indisponible, refus…) devient une leçon appliquée avant la prochaine opération semblable : ralentir, changer de voie ou revérifier — jamais une capacité en plus, seulement un avertissement. Une leçon se met en veille après plusieurs succès d'affilée ; toute rechute la réactive aussitôt.</p>
+        </article>
+        <article>
           <h3>Thème jour/nuit</h3>
           <p>Bouton dans l'en-tête ou commande vocale (« version nuit », « mode jour »).</p>
         </article>
@@ -179,7 +183,7 @@
       <table>
         <tbody>
           <tr><th>Local / voix</th><td>Toutes les capacités accordées, confirmations locales normales.</td></tr>
-          <tr><th>SMS</th><td>Conversation et brouillon/réponse seulement — jamais d'accès au PC, aux fichiers, aux skills, à la sandbox, à l'e-mail ou à la maison connectée.</td></tr>
+          <tr><th>SMS</th><td>Conversation et brouillon/réponse seulement — jamais d'accès au PC, aux fichiers, aux skills, à la sandbox, à l'e-mail ou à la maison connectée. <strong>Fonctionne sans aucune connexion internet</strong> : ton SMS voyage par le réseau cellulaire, le téléphone-passerelle le relaie au PC par le réseau local (ADB), et la réponse de Mina revient en SMS par la SIM. Réservé au numéro du propriétaire ; une réponse par SMS (micro-session).</td></tr>
           <tr><th>Telegram</th><td>Conversation et mémoire — seules des capacités distantes explicitement activées et bornées peuvent s'ajouter. Jamais de contrôle du PC ni de sandbox.</td></tr>
           <tr><th>E-mail</th><td>Le corps d'un e-mail reçu est toujours une donnée à lire, jamais une instruction qui déclenche quoi que ce soit tout seul.</td></tr>
         </tbody>
@@ -191,7 +195,7 @@
       <p class="note">Mina ne se connecte jamais à un compte à ta place (mot de passe, consentement OAuth) — c'est une règle de sécurité, pas un oubli.</p>
       <ul>
         <li><strong>Installer les skills</strong> — section Skills → installer depuis <code>skills-reference\&lt;nom&gt;</code> → confirmer l'audit. Sans cette étape, Mina n'a aucun skill même s'ils existent sur le disque.</li>
-        <li><strong>Bac à sable Windows</strong> — fonctionnalité Windows à activer (redémarrage requis), sinon l'exécution de code en sandbox reste indisponible.</li>
+        <li><strong>Bac à sable Windows</strong> — fonctionnalité Windows à activer (redémarrage requis) <strong>et</strong> runtimes Python/Node/PowerShell à provisionner (<code>node scripts/provision-sandbox-runtimes.mjs</code>, voir <code>docs/guides/sandbox-runtimes.md</code>), sinon l'exécution de code en sandbox reste indisponible.</li>
         <li><strong>Compte Google</strong> (Gmail, Calendrier, Contacts, Tâches) — <code>npm run connect:google</code>, consentement dans ton propre navigateur. Le connecteur Google Tasks n'existe pas encore côté code.</li>
         <li><strong>Google Home</strong> — SDK à télécharger manuellement depuis la console Google (compte requis).</li>
         <li><strong>Comptes mail Microsoft / IMAP</strong> — autorisation à faire toi-même.</li>

@@ -63,8 +63,12 @@ private val GUIDE = listOf(
     GuideSection(
         "Passerelle SMS & Telegram (facultatif)",
         "Sur l'accueil, la carte Passerelle permet à Mina de recevoir tes SMS et de te répondre via " +
-            "Telegram quand tu es loin du PC. Un seul téléphone doit porter le token Telegram à la fois " +
-            "(deux téléphones avec le même token entrent en conflit).",
+            "Telegram quand tu es loin du PC. Le chemin SMS marche SANS internet : ton SMS arrive par le " +
+            "réseau cellulaire, ce téléphone le relaie au PC en réseau local, et la réponse repart en SMS. " +
+            "Un seul téléphone doit porter le token Telegram à la fois " +
+            "(deux téléphones avec le même token entrent en conflit). Le bouton « Retirer la passerelle » " +
+            "efface le numéro et le token Telegram de CE téléphone et arrête le service — utile pour la " +
+            "déplacer proprement vers un autre téléphone, sans toucher à ta conversation chiffrée.",
     ),
     GuideSection(
         "Sécurité",
