@@ -152,6 +152,17 @@ class ChatEngine private constructor(context: Context) {
     }
 
     /**
+     * Réveil ponctuel en arrière-plan (FCM / WorkManager) : vide l'outbox une fois et s'assure que
+     * le relais écoute, SANS démarrer les boucles longues. Sûr à appeler hors de tout écran ouvert.
+     * Retourne le nombre de messages drainés. Ne fait rien si aucun PC n'est appairé.
+     */
+    suspend fun syncOnce(): Int {
+        if (!settings.isPaired()) return 0
+        relay?.ensureSession { ready -> if (ready) relay.watch() }
+        return runCatching { syncLoop.drainOnce() }.getOrDefault(0)
+    }
+
+    /**
      * Un événement venu du PC n'est accepté que s'il est SIGNÉ par la clé enregistrée à
      * l'appairage. Sans clé connue, on refuse : accepter un message non vérifié reviendrait à
      * afficher comme « Mina » ce que n'importe quel appareil du réseau aurait pu écrire.
