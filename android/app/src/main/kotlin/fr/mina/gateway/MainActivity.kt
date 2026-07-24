@@ -1,21 +1,56 @@
 package fr.mina.gateway
 
 import android.Manifest
-import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Bundle
 import android.os.Build
-import android.text.InputType
-import android.text.method.DigitsKeyListener
-import android.view.Gravity
-import android.view.ViewGroup
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import fr.mina.gateway.camera.CameraStreamService
+import fr.mina.gateway.feature.chat.MinaChatTheme
 import fr.mina.gateway.messaging.MessagingExecutors
 import fr.mina.gateway.messaging.MinaGatewayService
 import fr.mina.gateway.messaging.TelegramGateway
@@ -26,16 +61,36 @@ import fr.mina.gateway.messaging.storage.RoomMessagingSecretStore
 import fr.mina.gateway.transport.DeviceIdentityStore
 import org.json.JSONObject
 
-class MainActivity : Activity() {
-    private lateinit var status: TextView
+/**
+ * Écran d'accueil de l'application téléphone. Ce n'est PAS une page de saisie de jetons : c'est
+ * l'entrée vers la conversation (le geste quotidien), avec la configuration de la passerelle
+ * SMS/Telegram reléguée en carte secondaire, clairement optionnelle. Compose + le thème partagé
+ * MinaChatTheme (noir nuit + ambre, jour/nuit) pour une identité visuelle cohérente avec le chat.
+ */
+class MainActivity : ComponentActivity() {
+    private val homeState = mutableStateOf(HomeUiState())
     private var pendingCameraLens = "front"
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val identity = DeviceIdentityStore(this).createProof("local-pairing-v1")
         writeIdentityProof(identity.deviceId, identity.publicKeySpkiBase64, identity.challenge, identity.signatureBase64)
-        setContentView(buildProvisioningScreen(identity.deviceId))
+        homeState.value = homeState.value.copy(deviceId = identity.deviceId)
+        setContent {
+            val state by homeState
+            MinaChatTheme {
+                ProvisioningHome(
+                    state = state,
+                    onPhoneChange = { homeState.value = homeState.value.copy(phone = it) },
+                    onTelegramChange = { homeState.value = homeState.value.copy(telegramIds = it) },
+                    onOpenChat = { startActivity(Intent(this@MainActivity, ChatActivity::class.java)) },
+                    onSave = { token -> provision(state.phone, state.telegramIds, token) },
+                )
+            }
+        }
         if (!handleCameraIntent(intent)) requestMessagingPermissions()
+        loadSavedProvisioningState()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -44,62 +99,9 @@ class MainActivity : Activity() {
         handleCameraIntent(intent)
     }
 
-    private fun buildProvisioningScreen(deviceId: String): ScrollView {
-        val padding = (20 * resources.displayMetrics.density).toInt()
-        val phone = input("Numéro propriétaire E.164, ex. +336…")
-        val telegramIds = input("IDs Telegram numériques, séparés par des virgules").apply {
-            keyListener = DigitsKeyListener.getInstance("0123456789,")
-        }
-        val token = input("Token BotFather").apply {
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-        }
-        status = TextView(this).apply {
-            text = "Chargement de la configuration enregistrée…"
-            textSize = 16f
-            setPadding(0, padding, 0, padding)
-        }
-        val save = Button(this).apply {
-            text = "Enregistrer localement et chiffrer"
-            contentDescription = "Enregistrer la configuration propriétaire Mina Vision"
-            setOnClickListener { provision(phone, telegramIds, token) }
-        }
-        // Entrée principale : la conversation. La configuration passerelle reste en dessous,
-        // c'est un réglage — pas ce qu'on vient faire tous les jours.
-        val openChat = Button(this).apply {
-            text = "Ouvrir la conversation avec Mina"
-            contentDescription = "Ouvrir la conversation chiffrée avec Mina"
-            setOnClickListener { startActivity(Intent(this@MainActivity, ChatActivity::class.java)) }
-        }
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(padding, padding, padding, padding)
-            addView(TextView(context).apply {
-                text = "Mina Vision"
-                textSize = 24f
-                gravity = Gravity.CENTER
-            })
-            addView(openChat)
-            addView(TextView(context).apply {
-                text = "Appareil appairé : $deviceId\nLes secrets restent chiffrés dans Android Keystore + Room."
-                textSize = 15f
-                gravity = Gravity.CENTER
-                setPadding(0, padding, 0, padding)
-            })
-            addView(phone)
-            addView(telegramIds)
-            addView(token)
-            addView(save)
-            addView(status)
-        }
-        loadSavedProvisioningState(phone, telegramIds)
-        return ScrollView(this).apply { addView(content) }
-    }
-
-    // Token never re-read/pre-filled (write-only, same principle as the recovery phrase) — only
-    // phone/Telegram IDs are safe to show back, and the status line confirms token presence without
-    // exposing it. Without this, closing and reopening the app always looked like nothing was saved.
-    private fun loadSavedProvisioningState(phone: EditText, telegramIds: EditText) {
+    // Token jamais relu/pré-rempli (écriture seule, comme la phrase de récupération) — seuls
+    // numéro/IDs Telegram sont réaffichés, et le statut confirme la présence du token sans l'exposer.
+    private fun loadSavedProvisioningState() {
         MessagingExecutors.io.execute {
             val loaded = runCatching {
                 val database = MessagingDatabase.open(this)
@@ -109,41 +111,32 @@ class MainActivity : Activity() {
             }.getOrNull()
             runOnUiThread {
                 val (identity, hasToken, smsGranted) = loaded ?: Triple(null, false, smsPermissionStatus() == "autorisé")
-                if (identity != null) {
-                    phone.setText(identity.phoneE164)
-                    telegramIds.setText(identity.telegramUserIds.sorted().joinToString(","))
-                }
-                status.text = provisioningStatusText(
-                    ProvisioningState(
-                        smsPermissionGranted = smsGranted,
-                        hasOwnerIdentity = identity != null,
-                        hasTelegramToken = hasToken,
+                homeState.value = homeState.value.copy(
+                    phone = identity?.phoneE164 ?: homeState.value.phone,
+                    telegramIds = identity?.telegramUserIds?.sorted()?.joinToString(",") ?: homeState.value.telegramIds,
+                    hasToken = hasToken,
+                    status = provisioningStatusText(
+                        ProvisioningState(
+                            smsPermissionGranted = smsGranted,
+                            hasOwnerIdentity = identity != null,
+                            hasTelegramToken = hasToken,
+                        ),
                     ),
+                    loaded = true,
                 )
             }
         }
     }
 
-    private fun input(hintText: String) = EditText(this).apply {
-        hint = hintText
-        layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        )
-    }
-
-    private fun provision(phone: EditText, telegramIds: EditText, tokenInput: EditText) {
-        val phoneValue = phone.text.toString().trim()
-        val idValues = telegramIds.text.toString().split(',').mapNotNull { it.trim().toLongOrNull() }.toSet()
-        val token = tokenInput.text.toString().toCharArray()
-        tokenInput.text.clear()
-        status.text = "Validation et chiffrement…"
+    private fun provision(phoneValue: String, idsCsv: String, token: CharArray) {
+        val idValues = idsCsv.split(',').mapNotNull { it.trim().toLongOrNull() }.toSet()
+        homeState.value = homeState.value.copy(status = "Validation et chiffrement…")
         MessagingExecutors.io.execute {
             val result = runCatching {
                 val database = MessagingDatabase.open(this)
                 val secrets = RoomMessagingSecretStore(database.secretDao(), AndroidKeystoreFieldCipher())
                 val identities = EncryptedOwnerIdentityStore(secrets)
-                identities.save(phoneValue, idValues, locallyConfirmed = true)
+                identities.save(phoneValue.trim(), idValues, locallyConfirmed = true)
                 if (shouldReplaceTelegramToken(token.size, secrets.has(TelegramGateway.BOT_TOKEN_SECRET_NAME))) {
                     TelegramGateway(requireNotNull(identities.load()), secrets)
                         .provisionToken(token, locallyConfirmed = true)
@@ -151,18 +144,21 @@ class MainActivity : Activity() {
             }
             token.fill('\u0000')
             runOnUiThread {
-                status.text = result.fold(
-                    onSuccess = {
-                        restartGatewayService()
-                        provisioningStatusText(
-                            ProvisioningState(
-                                smsPermissionGranted = smsPermissionStatus() == "autorisé",
-                                hasOwnerIdentity = true,
-                                hasTelegramToken = true,
-                            ),
-                        )
-                    },
-                    onFailure = { "Configuration refusée : ${it.message ?: "valeur_invalide"}" },
+                homeState.value = homeState.value.copy(
+                    status = result.fold(
+                        onSuccess = {
+                            restartGatewayService()
+                            provisioningStatusText(
+                                ProvisioningState(
+                                    smsPermissionGranted = smsPermissionStatus() == "autorisé",
+                                    hasOwnerIdentity = true,
+                                    hasTelegramToken = true,
+                                ),
+                            )
+                        },
+                        onFailure = { "Configuration refusée : ${it.message ?: "valeur_invalide"}" },
+                    ),
+                    hasToken = result.isSuccess || homeState.value.hasToken,
                 )
             }
         }
@@ -180,7 +176,7 @@ class MainActivity : Activity() {
         else startGatewayService()
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == SMS_PERMISSION_REQUEST && grantResults.isNotEmpty() &&
             grantResults.all { it == PackageManager.PERMISSION_GRANTED }
@@ -243,4 +239,155 @@ class MainActivity : Activity() {
         const val SMS_PERMISSION_REQUEST = 201
         const val CAMERA_PERMISSION_REQUEST = 202
     }
+}
+
+private data class HomeUiState(
+    val deviceId: String = "",
+    val phone: String = "",
+    val telegramIds: String = "",
+    val hasToken: Boolean = false,
+    val status: String = "Chargement de la configuration…",
+    val loaded: Boolean = false,
+)
+
+@Composable
+private fun ProvisioningHome(
+    state: HomeUiState,
+    onPhoneChange: (String) -> Unit,
+    onTelegramChange: (String) -> Unit,
+    onOpenChat: () -> Unit,
+    onSave: (CharArray) -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 20.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            Header()
+            ConversationCard(onOpenChat)
+            GatewayCard(state, onPhoneChange, onTelegramChange, onSave)
+            FooterNote(state.deviceId)
+        }
+    }
+}
+
+@Composable
+private fun Header() {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Image(
+            painter = painterResource(R.mipmap.ic_launcher_round),
+            contentDescription = "Logo Mina Vision",
+            modifier = Modifier.size(80.dp).clip(CircleShape),
+        )
+        Text("Mina Vision", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        Text(
+            "Ton assistante, sur ce téléphone.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun ConversationCard(onOpenChat: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Conversation", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Parle ou écris à Mina. Tes messages sont chiffrés de bout en bout ; si le PC est éteint, ils partent dès son retour — rien n'est perdu.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = onOpenChat,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)
+                    .semantics { contentDescription = "Ouvrir la conversation chiffrée avec Mina" },
+            ) { Text("Ouvrir la conversation") }
+        }
+    }
+}
+
+@Composable
+private fun GatewayCard(
+    state: HomeUiState,
+    onPhoneChange: (String) -> Unit,
+    onTelegramChange: (String) -> Unit,
+    onSave: (CharArray) -> Unit,
+) {
+    var token by remember { mutableStateOf("") }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Passerelle SMS & Telegram", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Optionnel. Permet à Mina de recevoir tes SMS et de répondre via Telegram quand tu es loin du PC. Les secrets restent chiffrés sur ce téléphone.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = state.phone,
+                onValueChange = onPhoneChange,
+                label = { Text("Numéro propriétaire E.164") },
+                placeholder = { Text("+336…") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = state.telegramIds,
+                onValueChange = { onTelegramChange(it.filter { c -> c.isDigit() || c == ',' }) },
+                label = { Text("IDs Telegram (numériques, virgules)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = token,
+                onValueChange = { token = it },
+                label = { Text(if (state.hasToken) "Token BotFather (déjà enregistré)" else "Token BotFather") },
+                visualTransformation = PasswordVisualTransformation(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = {
+                    val chars = token.toCharArray()
+                    token = ""
+                    onSave(chars)
+                },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                    .semantics { contentDescription = "Enregistrer la configuration propriétaire Mina Vision, chiffrée localement" },
+            ) { Text("Enregistrer et chiffrer") }
+            Text(state.status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun FooterNote(deviceId: String) {
+    Text(
+        "Appareil appairé : $deviceId\nSecrets chiffrés (Android Keystore + Room). Rien ne quitte ce téléphone en clair.",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
 }
