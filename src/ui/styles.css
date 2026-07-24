@@ -514,6 +514,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .shortcut { margin: 15px 0 0; color: var(--muted); font-size: 0.75rem; }
 kbd { padding: 2px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--panel); font-family: Consolas, monospace; }
 
+.tools-oral {
+  margin: 0 0 16px; padding: 11px 13px; border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--muted); font-size: 0.74rem; line-height: 1.5;
+}
+.tools-oral strong { color: var(--ink); }
 .tool-card {
   width: 100%;
   display: grid;
