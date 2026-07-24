@@ -85,6 +85,8 @@ import { createGroqWebAnswer, createWebAnswerChain, createWebAnswerService } fro
 import { createLocalVoiceClient } from '../voice/local-voice-client.mjs';
 import { createDeepgramStt } from '../voice/deepgram-stt.mjs';
 import { composeSelfBrief, createSelfModel } from '../core/self-model.mjs';
+import { composeLessonsBrief, createLessonsRegistry } from '../core/lessons-registry.mjs';
+import { createLessonsStore } from '../core/lessons-store.mjs';
 import { createActivityJournal } from '../diagnostics/activity-journal.mjs';
 import { createSensitiveJournalStore } from '../diagnostics/sensitive-journal-store.mjs';
 import { composeInstructionState } from '../core/capability-brief.mjs';
@@ -349,11 +351,25 @@ const sendRaw = (channel, payload) => {
 // wired everywhere; errorAggregator collapses the SAME stream by signature so a flaky dependency
 // retrying every few seconds shows up as one growing counter instead of drowning the log.
 const errorAggregator = createErrorAggregator();
+// Registre de LEÇONS (« apprendre de ses erreurs ») : dérivé d'échecs RÉELS du journal technique.
+// Créé tôt pour capter chaque erreur dès le boot ; persistance chiffrée (L4) branchée au
+// déverrouillage du coffre. Ne crée jamais de privilège — il ne fait qu'avertir en pré-vol.
+const lessonsRegistry = createLessonsRegistry();
+let lessonsStore = null;
+const persistLessons = () => { void lessonsStore?.save(lessonsRegistry.serialize()); };
 const technicalLog = createTechnicalLog({
   onEntry: (entry) => {
     sendRaw('mina:technical-log', entry);
     if (entry.severity === 'error' || entry.severity === 'warning') {
       sendRaw('mina:technical-log-aggregate', errorAggregator.record(entry));
+    }
+    // Extracteur : un échec RÉEL (scope+code stables) devient une leçon technique active d'office.
+    // try/catch total : apprendre ne doit JAMAIS casser le journal (fail-soft absolu).
+    if (entry.severity === 'error') {
+      try {
+        lessonsRegistry.learnFromFailure({ scope: entry.scope, code: entry.code });
+        persistLessons();
+      } catch { /* signature inexploitable : on ignore, jamais bloquant */ }
     }
   },
 });
@@ -1373,6 +1389,9 @@ const startGeminiVoice = async () => {
     composeInstructionState(snapshot),
     // Self-model dérivé : but courant, dernier travail, incertitudes, erreurs récentes du journal.
     composeSelfBrief(selfModel?.snapshot(), { recentErrors: technicalLogReader.read({ limit: 5 }) }),
+    // Leçons actives (« déjà échoué ici, fais Y ») : pré-vol injecté au démarrage de session. Ce ne
+    // sont que des avertissements dérivés d'échecs réels — jamais une autorisation.
+    composeLessonsBrief(lessonsRegistry.list()),
     conversationBrief,
     'Quand le créateur demande une action réelle — quelle que soit sa formulation, même inédite —',
     "appelle l'outil correspondant (lancer_mission, selectionner_environnement, piloter_page, camera, voir_camera, theme, jouer_musique, recherche_web,",
@@ -2149,6 +2168,16 @@ app.whenReady().then(async () => {
         const journalKey = Buffer.from(hkdfSync('sha256', Buffer.from(masterKey), Buffer.from('Mina Vision local memory v1', 'utf8'), Buffer.from('journal-sensible', 'utf8'), 32));
         sensitiveJournalStore?.enableEncryption(journalKey);
       } catch { /* la couche 2 ne bloque jamais le déverrouillage mémoire */ }
+      // Leçons (L4) : clé HKDF dédiée, jamais la clé maître. Hydrate le registre depuis le coffre au
+      // déverrouillage ; toute leçon apprise pendant le verrouillage a déjà été captée en mémoire.
+      try {
+        const lessonsKey = Buffer.from(hkdfSync('sha256', Buffer.from(masterKey), Buffer.from('Mina Vision local memory v1', 'utf8'), Buffer.from('lecons', 'utf8'), 32));
+        lessonsStore = createLessonsStore({
+          filePath: path.join(app.getPath('userData'), 'mina-lessons.enc'),
+          key: lessonsKey, readFile, writeFile, rename,
+        });
+        void lessonsStore.load().then((blob) => { if (blob) lessonsRegistry.hydrate(blob); }).catch(() => {});
+      } catch { /* les leçons ne bloquent jamais le déverrouillage mémoire */ }
       const config = currentConfig();
       const embedder = config.providers.lmStudio.enabled && config.providers.lmStudio.embeddingModel
         ? createLmStudioEmbeddingProvider({
