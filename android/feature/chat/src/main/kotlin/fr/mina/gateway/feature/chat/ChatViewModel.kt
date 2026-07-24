@@ -83,6 +83,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Envoie une note vocale (m4a déjà capturée) en pièce jointe chiffrée, comme une image. */
+    fun sendVoice(bytes: ByteArray) {
+        viewModelScope.launch {
+            runCatching { engine.repository.sendMedia(MAIN_THREAD_ID, bytes, "audio/mp4", emptyMap()) }
+                .onFailure { sendError.value = humanReason(it) }
+                .onSuccess { sendError.value = null }
+            engine.start()
+            refreshPending()
+        }
+    }
+
     fun dismissSendError() { sendError.value = null }
 
     fun retryLink() {
