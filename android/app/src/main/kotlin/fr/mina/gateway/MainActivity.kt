@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -31,6 +32,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,6 +52,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import fr.mina.gateway.camera.CameraStreamService
+import fr.mina.gateway.chat.ChatSettings
 import fr.mina.gateway.feature.chat.MinaChatTheme
 import fr.mina.gateway.messaging.MessagingExecutors
 import fr.mina.gateway.messaging.MinaGatewayService
@@ -76,7 +79,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val identity = DeviceIdentityStore(this).createProof("local-pairing-v1")
         writeIdentityProof(identity.deviceId, identity.publicKeySpkiBase64, identity.challenge, identity.signatureBase64)
-        homeState.value = homeState.value.copy(deviceId = identity.deviceId)
+        homeState.value = homeState.value.copy(
+            deviceId = identity.deviceId,
+            biometricLock = ChatSettings(this).biometricLockEnabled(),
+            biometricAvailable = canAuthenticateBiometric(this),
+        )
         setContent {
             val state by homeState
             MinaChatTheme {
@@ -86,6 +93,7 @@ class MainActivity : ComponentActivity() {
                     onTelegramChange = { homeState.value = homeState.value.copy(telegramIds = it) },
                     onOpenChat = { startActivity(Intent(this@MainActivity, ChatActivity::class.java)) },
                     onSave = { token -> provision(state.phone, state.telegramIds, token) },
+                    onToggleBiometric = ::setBiometricLock,
                 )
             }
         }
@@ -162,6 +170,11 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    private fun setBiometricLock(enabled: Boolean) {
+        ChatSettings(this).setBiometricLock(enabled)
+        homeState.value = homeState.value.copy(biometricLock = enabled)
     }
 
     private fun requestMessagingPermissions() {
@@ -248,6 +261,8 @@ private data class HomeUiState(
     val hasToken: Boolean = false,
     val status: String = "Chargement de la configuration…",
     val loaded: Boolean = false,
+    val biometricLock: Boolean = false,
+    val biometricAvailable: Boolean = false,
 )
 
 @Composable
@@ -257,6 +272,7 @@ private fun ProvisioningHome(
     onTelegramChange: (String) -> Unit,
     onOpenChat: () -> Unit,
     onSave: (CharArray) -> Unit,
+    onToggleBiometric: (Boolean) -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
         Column(
@@ -272,8 +288,42 @@ private fun ProvisioningHome(
         ) {
             Header()
             ConversationCard(onOpenChat)
+            SecurityCard(state, onToggleBiometric)
             GatewayCard(state, onPhoneChange, onTelegramChange, onSave)
             FooterNote(state.deviceId)
+        }
+    }
+}
+
+@Composable
+private fun SecurityCard(state: HomeUiState, onToggleBiometric: (Boolean) -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Verrou biométrique", style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        if (state.biometricAvailable) {
+                            "Exiger ton empreinte ou ton visage pour ouvrir la conversation."
+                        } else {
+                            "Aucune empreinte enrôlée sur ce téléphone : ajoute-en une dans les réglages Android pour activer le verrou."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.size(12.dp))
+                Switch(
+                    checked = state.biometricLock && state.biometricAvailable,
+                    onCheckedChange = { onToggleBiometric(it) },
+                    enabled = state.biometricAvailable,
+                    modifier = Modifier.semantics { contentDescription = "Activer le verrou biométrique de la conversation" },
+                )
+            }
         }
     }
 }

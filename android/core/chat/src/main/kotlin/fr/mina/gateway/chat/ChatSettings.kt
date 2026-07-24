@@ -15,8 +15,14 @@ class ChatSettings(context: Context) {
         private const val PORT = "pc_port"
         private const val PAIRED_AT = "paired_at_ms"
         private const val PC_PUBLIC_KEY = "pc_public_key_spki"
+        private const val BIOMETRIC_LOCK = "biometric_lock"
         const val DEFAULT_PORT = 8771
     }
+
+    /** Verrou biométrique de la conversation : la liste des messages n'apparaît qu'après l'empreinte. */
+    fun biometricLockEnabled(): Boolean = prefs.getBoolean(BIOMETRIC_LOCK, false)
+
+    fun setBiometricLock(enabled: Boolean) = prefs.edit().putBoolean(BIOMETRIC_LOCK, enabled).apply()
 
     fun endpoint(): String? {
         val host = prefs.getString(HOST, null)?.takeIf { it.isNotBlank() } ?: return null
