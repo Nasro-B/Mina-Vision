@@ -62,6 +62,48 @@ describe('memory and research UI contract', () => {
     expect(memoryService.recall).not.toHaveBeenCalled();
   });
 
+  it('retries a TRANSIENT DPAPI wrap failure at auto-unlock, then succeeds without a phrase', async () => {
+    // Le démarrage au login peut rendre le wrap momentanément indéchiffrable ; l'auto-unlock
+    // réessaie et finit déverrouillé sans jamais demander la phrase.
+    const open = vi.fn()
+      .mockRejectedValueOnce(new Error('keyring_wrapped_key_undecryptable: le chiffrement Windows a changé'))
+      .mockRejectedValueOnce(new Error('keyring_wrapped_key_undecryptable: le chiffrement Windows a changé'))
+      .mockResolvedValue(Buffer.alloc(32, 7));
+    const controller = createMemoryRuntimeController({
+      keyring: { open, openWithRecovery: vi.fn() },
+      buildServices: vi.fn(async () => ({
+        memoryService: { recall: vi.fn(() => []), remember: vi.fn() },
+        forgetService: { proposeForget: vi.fn(), confirmForget: vi.fn() },
+        researchService: { readFile: vi.fn(), readWeb: vi.fn() },
+        semanticMode: 'lexical_degraded', backupState: 'disabled',
+      })),
+      autoUnlockDelayMs: 0,
+      sleep: vi.fn(async () => {}),
+    });
+
+    await expect(controller.unlock()).resolves.toMatchObject({ locked: false });
+    expect(open).toHaveBeenCalledTimes(3);
+  });
+
+  it('does NOT retry a bad recovery phrase and does NOT retry a structural buildServices failure', async () => {
+    // Phrase erronée = définitive : un seul essai.
+    const badPhrase = createMemoryRuntimeController({
+      keyring: { open: vi.fn(), openWithRecovery: vi.fn(async () => { throw new Error('invalid_recovery_phrase'); }) },
+      buildServices: vi.fn(async () => ({})),
+    });
+    await expect(badPhrase.unlock({ recoveryPhrase: 'mauvaise phrase' })).rejects.toThrow('invalid_recovery_phrase');
+
+    // Échec structurel (pas le wrap) = pas de retry, échec immédiat.
+    const structural = vi.fn(async () => Buffer.alloc(32, 7));
+    const brokenServices = createMemoryRuntimeController({
+      keyring: { open: structural, openWithRecovery: vi.fn() },
+      buildServices: vi.fn(async () => ({ memoryService: {} })), // manque recall → memory_services_unavailable
+      sleep: vi.fn(async () => {}),
+    });
+    await expect(brokenServices.unlock()).rejects.toThrow('memory_services_unavailable');
+    expect(structural).toHaveBeenCalledTimes(1);
+  });
+
   it('fails closed while locked, unlocks without exposing the key, and masks sensitive recall', async () => {
     const { controller, memoryService } = harness();
     expect(controller.status()).toEqual({ locked: true, semanticMode: 'unavailable', backupState: 'disabled', researchEvidence: 0 });
