@@ -251,6 +251,7 @@ private fun MessageBubble(message: ChatMessage, loadMedia: suspend (String) -> P
                     // W6 : médias reçus — réassemblés en mémoire depuis les lignes chiffrées.
                     "image" -> MediaImage(message, loadMedia)
                     "voice" -> MediaVoice(message, loadMedia)
+                    "call" -> CallProposal(message)
                     else -> Text(message.text, style = MaterialTheme.typography.bodyLarge)
                 }
                 Spacer(Modifier.size(4.dp))
@@ -335,6 +336,30 @@ private fun MediaVoice(message: ChatMessage, loadMedia: suspend (String) -> Pair
         }) { Text(if (playing) "▶ Lecture…" else "▶ Écouter la note vocale") }
     }
     note?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+}
+
+/**
+ * Appels (Vague 2, D1/D4) : le PC PROPOSE un appel — le bouton ouvre le COMPOSEUR pré-rempli
+ * (ACTION_DIAL, zéro permission). C'est TOI qui appuies sur « appeler », jamais l'application.
+ */
+@Composable
+private fun CallProposal(message: ChatMessage) {
+    val context = LocalContext.current
+    Column {
+        Text(message.text, style = MaterialTheme.typography.bodyLarge)
+        val number = message.mediaId
+        if (number != null) {
+            TextButton(onClick = {
+                runCatching {
+                    context.startActivity(
+                        android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                            data = android.net.Uri.parse("tel:" + android.net.Uri.encode(number))
+                        },
+                    )
+                }
+            }) { Text("📞 Ouvrir le composeur") }
+        }
+    }
 }
 
 /** Libellés d'état honnêtes : « envoyé » ne s'affiche que quand le PC a accusé réception. */

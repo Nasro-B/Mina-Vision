@@ -24,6 +24,10 @@ const PAYLOAD_TYPES = Object.freeze([
   'message.attachment.created',
   'message.voice.created',
   'media.chunk',
+  // Appels (Vague 2 du plan appels) : le PC DEMANDE l'ouverture du composeur pré-rempli
+  // (ACTION_DIAL, zéro permission) — l'humain appuie lui-même sur « appeler ». Jamais
+  // d'appel lancé par programme : c'est le contrat D1/D4 (dial_only + confirmation humaine).
+  'call.dial.requested',
 ]);
 
 function readUint16(buffer, offset) {

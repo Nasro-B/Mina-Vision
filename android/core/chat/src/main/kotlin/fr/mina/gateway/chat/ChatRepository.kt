@@ -208,6 +208,13 @@ class ChatRepository(
                         eventId, threadId, "", fromAssistant, createdAtMs, deliveryState,
                         kind = "chunk", mediaId = mediaId,
                     )
+                    // Appels : le PC demande l'ouverture du composeur — le numéro voyage dans
+                    // `mediaId` (champ porteur), la bulle affiche un bouton ACTION_DIAL.
+                    "call.dial.requested" -> ChatMessage(
+                        eventId, threadId, "📞 Appel proposé : ${meta?.optString("number").orEmpty()}",
+                        fromAssistant, createdAtMs, deliveryState,
+                        kind = "call", mediaId = meta?.optString("number")?.takeIf { it.isNotBlank() },
+                    )
                     else -> ChatMessage(eventId, threadId, "[${decoded.type}]", fromAssistant, createdAtMs, deliveryState)
                 }
             }

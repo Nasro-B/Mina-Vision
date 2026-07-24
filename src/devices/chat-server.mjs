@@ -11,7 +11,7 @@ import { createServer } from 'node:http';
 import { createHash, createPublicKey, createVerify, randomBytes } from 'node:crypto';
 import { WebSocketServer } from 'ws';
 import { parseChatEvent } from '../contracts/chat.mjs';
-import { decodeChatPayload } from '../contracts/chat-payload.mjs';
+import { decodeChatPayload, encodeChatPayloadV2 } from '../contracts/chat-payload.mjs';
 import { chunkMedia, encodeMediaMetaPayload, encodeMediaChunkPayload } from '../chat/media-chunker.mjs';
 import { encodeChatSignatureInput } from '../contracts/chat-binary-codec.mjs';
 import { createChatCrypto, deriveDeviceWrapKey, wrapEpochKey } from './chat-crypto.mjs';
@@ -272,6 +272,42 @@ export function createChatServer({
     return Object.freeze({ mediaId: meta.mediaId, chunkCount: chunks.length, sizeBytes: meta.sizeBytes });
   }
 
+  /**
+   * Appels (Vague 2) — demande d'ouverture du COMPOSEUR pré-rempli sur le téléphone
+   * (ACTION_DIAL : l'humain appuie lui-même sur « appeler », jamais d'appel lancé par programme).
+   * Le numéro a déjà passé la garde locale (call-policy + confirmation) côté appelant.
+   */
+  async function sendDialToDevice(deviceId, { number } = {}) {
+    const socket = sessions.get(deviceId);
+    if (!socket || socket.readyState !== 1) throw new Error('chat_appareil_non_connecte');
+    if (!registry.isApproved(deviceId)) throw new Error('chat_appareil_non_appaire');
+    const cleaned = String(number ?? '').trim();
+    if (!/^\+?[0-9 ().-]{3,24}$/u.test(cleaned)) throw new Error('chat_numero_invalide');
+    const keyEpoch = registry.keyEpoch();
+    const sealCrypto = createChatCrypto({
+      signingPrivateKey: identity.privateKey,
+      epochKey: Buffer.from(epochKeyFor(keyEpoch)),
+    });
+    const createdAtMs = clock();
+    const event = sealCrypto.encryptAndSign({
+      header: {
+        version: 2,
+        eventId: ulid(),
+        threadId: 'thread-main',
+        senderDeviceId: 'pc-mina',
+        deviceSequence: 0,
+        keyEpoch,
+        routingClass: 'message',
+        createdAtMs,
+        expiresAtMs: createdAtMs + TTL_MS,
+      },
+      plaintext: encodeChatPayloadV2({ type: 'call.dial.requested', meta: { number: cleaned } }),
+    });
+    socket.send(JSON.stringify(event));
+    note('chat_app_appel_composeur_demande', { deviceId, digits: cleaned.replace(/\D/gu, '').length });
+    return Object.freeze({ requested: true });
+  }
+
   return Object.freeze({
     async listen() {
       http = createServer((_request, response) => {
@@ -358,6 +394,7 @@ export function createChatServer({
     connectedDevices: () => Object.freeze([...sessions.keys()]),
 
     sendMediaToDevice,
+    sendDialToDevice,
 
     async close() {
       for (const socket of sessions.values()) socket.close(1001, 'arret');

@@ -104,6 +104,7 @@ import { createMediaStore } from '../chat/media-store.mjs';
 import { createMediaPerception } from '../chat/media-perception.mjs';
 import { createMediaPurge } from '../chat/media-purge.mjs';
 import { createVoiceTranscriber } from '../chat/voice-transcriber.mjs';
+import { createCallPolicy } from '../telephony/call-policy.mjs';
 import { createChatResponder } from '../devices/chat-responder.mjs';
 import { loadOrCreatePcChatIdentity } from '../devices/pc-chat-identity.mjs';
 import {
@@ -1888,6 +1889,32 @@ const registerIpc = () => {
     if (!/^[A-Za-z0-9._:-]{1,160}$/u.test(deviceId)) return { ok: false, reason: 'identifiant_invalide' };
     if (!chatChannel) return { ok: false, reason: 'canal_non_demarre' };
     return chatChannel.revoke(deviceId);
+  });
+  // Appels (Vague 2) — la garde locale décide (call-policy : dial/confirm/reject, jamais auto ici),
+  // la confirmation locale s'affiche si exigée, puis le téléphone ouvre son COMPOSEUR pré-rempli
+  // (ACTION_DIAL) : l'humain appuie lui-même sur « appeler ». Jamais d'appel lancé par programme.
+  ipcMain.handle('mina:call:dial', async (_event, request) => {
+    const deviceId = String(request?.deviceId ?? '');
+    if (!/^[A-Za-z0-9._:-]{1,160}$/u.test(deviceId)) return { ok: false, reason: 'identifiant_invalide' };
+    if (!chatChannel) return { ok: false, reason: 'canal_non_demarre' };
+    const config = currentConfig();
+    const policy = createCallPolicy({ ...(config.telephony?.policy ?? {}) });
+    const decision = policy.decide({ number: request?.number });
+    if (decision.decision === 'reject') return { ok: false, reason: decision.reason };
+    if (decision.decision === 'confirm') {
+      const approved = await confirmSensitiveAction({
+        reason: `Appeler ${decision.number} ? Le composeur du téléphone s'ouvrira pré-rempli.`,
+        action: { name: 'appeler', number: decision.number },
+      });
+      if (!approved) return { ok: false, reason: 'refuse_localement' };
+    }
+    try {
+      await chatChannel.sendDial(deviceId, { number: decision.number });
+      void activityJournal?.append('appel_composeur_demande', { deviceId, digest: createHash('sha256').update(decision.number).digest('hex').slice(0, 16) });
+      return { ok: true, number: decision.number };
+    } catch (error) {
+      return { ok: false, reason: String(error?.message ?? error).slice(0, 160) };
+    }
   });
   // W6 — envoi d'un fichier PC → téléphone : Nasro choisit le fichier via la boîte système
   // (jamais un chemin arbitraire du renderer), borne 5 Mo, mimes image/audio seulement. Le média
