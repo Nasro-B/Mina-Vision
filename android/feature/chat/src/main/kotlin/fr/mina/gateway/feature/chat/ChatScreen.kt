@@ -84,6 +84,7 @@ fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
                 state = state,
                 onSend = viewModel::send,
                 onSendImage = viewModel::sendImage,
+                onSendVoice = viewModel::sendVoice,
                 onRetry = viewModel::retryLink,
                 onDismissError = viewModel::dismissSendError,
                 onUnpair = viewModel::unpair,
@@ -99,6 +100,7 @@ fun ChatScreen(
     state: ChatUiState,
     onSend: (String) -> Unit,
     onSendImage: (android.net.Uri) -> Unit,
+    onSendVoice: (ByteArray) -> Unit,
     onRetry: () -> Unit,
     onDismissError: () -> Unit,
     onUnpair: () -> Unit,
@@ -143,7 +145,7 @@ fun ChatScreen(
                 ErrorStrip(text = error, onDismiss = onDismissError)
             }
 
-            Composer(onSend = onSend, onSendImage = onSendImage)
+            Composer(onSend = onSend, onSendImage = onSendImage, onSendVoice = onSendVoice)
         }
     }
 }
@@ -295,13 +297,19 @@ private fun ErrorStrip(text: String, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun Composer(onSend: (String) -> Unit, onSendImage: (android.net.Uri) -> Unit) {
+private fun Composer(
+    onSend: (String) -> Unit,
+    onSendImage: (android.net.Uri) -> Unit,
+    onSendVoice: (ByteArray) -> Unit,
+) {
     var draft by remember { mutableStateOf("") }
     var dictationNote by remember { mutableStateOf<String?>(null) }
     var listening by remember { mutableStateOf(false) }
+    var recording by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val dictation = remember { VoiceDictation(context) }
-    DisposableEffect(Unit) { onDispose { dictation.stop() } }
+    val recorder = remember { VoiceNoteRecorder(context) }
+    DisposableEffect(Unit) { onDispose { dictation.stop(); recorder.cancel() } }
 
     // Sélecteur de photo « moderne » (PickVisualMedia) : aucune permission de stockage requise,
     // l'utilisateur choisit une image, elle est préparée (redimensionnée, EXIF retiré) puis envoyée.
@@ -319,6 +327,14 @@ private fun Composer(onSend: (String) -> Unit, onSendImage: (android.net.Uri) ->
         }
     }
 
+    // Permission distincte pour la NOTE VOCALE (envoi de l'audio lui-même, pas de la dictée texte).
+    val recordPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) { dictationNote = "Permission micro refusée : note vocale impossible."; return@rememberLauncherForActivityResult }
+        dictationNote = null
+        runCatching { recorder.start(); recording = true }
+            .onFailure { dictationNote = "Micro indisponible : ${it.message ?: "échec"}." }
+    }
+
     Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
         Column(
             Modifier
@@ -333,8 +349,30 @@ private fun Composer(onSend: (String) -> Unit, onSendImage: (android.net.Uri) ->
             Row(verticalAlignment = Alignment.Bottom) {
                 TextButton(
                     onClick = { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    enabled = !recording,
                     modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = "Envoyer une photo" },
                 ) { Text("Photo") }
+                Spacer(Modifier.size(4.dp))
+                TextButton(
+                    onClick = {
+                        if (recording) {
+                            recording = false
+                            val bytes = recorder.stop()
+                            if (bytes == null) {
+                                dictationNote = "Note vocale trop courte ou vide — rien envoyé."
+                            } else {
+                                dictationNote = null
+                                onSendVoice(bytes)
+                            }
+                            return@TextButton
+                        }
+                        if (listening) return@TextButton // dictée en cours : pas de double usage du micro
+                        recordPermission.launch(Manifest.permission.RECORD_AUDIO)
+                    },
+                    modifier = Modifier.heightIn(min = 56.dp).semantics {
+                        contentDescription = if (recording) "Terminer et envoyer la note vocale" else "Enregistrer une note vocale"
+                    },
+                ) { Text(if (recording) "● Fin" else "Vocale") }
                 Spacer(Modifier.size(4.dp))
                 OutlinedTextField(
                     value = draft,
