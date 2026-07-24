@@ -102,6 +102,9 @@ class MainActivity : ComponentActivity() {
         }
         if (!handleCameraIntent(intent)) requestMessagingPermissions()
         loadSavedProvisioningState()
+        // Filet de synchro périodique du chat en arrière-plan (idempotent) : même sans push ni écran
+        // ouvert, l'app récupère régulièrement les réponses de Mina.
+        fr.mina.gateway.chat.ChatSyncWorker.ensureScheduled(this)
     }
 
     override fun onNewIntent(intent: Intent) {
