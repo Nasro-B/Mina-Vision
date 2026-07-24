@@ -5,7 +5,7 @@ contrôle le navigateur, n'importe quelle application Windows, et un téléphone
 en ADB. Tout tourne sur votre machine — mémoire chiffrée locale, modèles au choix, aucune
 dépendance à un service central.
 
-> Créé par **Nasserallah Berkoun**. Voir [LICENSE](LICENSE) : usage, étude et modification
+> Créé par **Nasro Berkoun**. Voir [LICENSE](LICENSE) : usage, étude et modification
 > libres ; le nom du produit et celui de son créateur sont protégés.
 
 ---
@@ -192,7 +192,7 @@ npm run test:unit
 | [docs/operations/ANDROID-HUAWEI.md](docs/operations/ANDROID-HUAWEI.md) | Téléphone Android : appairage, caméra, SMS |
 | [docs/operations/RECOVERY.md](docs/operations/RECOVERY.md) | Récupération du coffre mémoire |
 | [docs/operations/SECURITY.md](docs/operations/SECURITY.md) | Modèle de sécurité et invariants |
-| [docs/LICENCES.md](docs/LICENCES.md) | Licences des dépendances et décisions |
+| [LICENCES.md](LICENCES.md) | Licences des dépendances et décisions |
 | [docs/operations/AUDIT-PRE-PUBLICATION.md](docs/operations/AUDIT-PRE-PUBLICATION.md) | Audit de confidentialité du dépôt |
 
 ## État du projet
@@ -214,6 +214,8 @@ garde-fous de sécurité décrits plus haut.
 ## Licence
 
 Licence source disponible — voir [LICENSE](LICENSE). Usage, étude, modification et
-redistribution autorisés ; **les noms « Mina », « Mina Vision » et « Nasserallah Berkoun » sont
+redistribution autorisés ; **les noms « Mina », « Mina Vision » et « Nasro Berkoun » sont
 protégés** et ne peuvent être retirés, remplacés ni détournés. Une œuvre dérivée publiée doit
-porter un nom distinct et créditer « Basé sur Mina Vision, créé par Nasserallah Berkoun ».
+porter un nom distinct et créditer « Basé sur Mina Vision, créé par Nasro Berkoun ».
+
+Réclamations et service client : mina.vision.ai@gmail.com

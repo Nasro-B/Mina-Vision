@@ -18,7 +18,7 @@ Exécution du plan de réconciliation exhaustive (document interne) dans sa vers
 - **Améliorations A/C/D/E** : catalogue readiness/health/capabilities (`mina:capability-catalog`) ; stores JSON versionnés fail-closed (quarantaine `.perdu-` sur version inconnue, appliqué à l'endpoint ADB) ; budgets opérationnels centralisés ; arrêt d'urgence réellement transversal (voix Gemini + repli Deepgram + audio renderer + portes vocales remises à zéro + mission/code/desktop/runtime).
 - **Task 18** : contrat d'intégration desktop réaligné (JPEG `ffd8ff`) ; **`npm test` = gate complet** (unitaire + intégration) — `npm run test:unit` reste la boucle rapide.
 - **R-16** : dépendances mortes retirées (`@google/generative-ai`, `mqtt`, `ws`).
-- **R-17 + SBOM** : [docs/LICENCES.md](docs/LICENCES.md) — inventaire des licences (une seule GPL : `espeak-ng`, conservé, app privée non distribuée, gate de release repose la question) + les 12 avis `npm audit` qualifiés par chemin d'atteignabilité avec décision.
+- **R-17 + SBOM** : [LICENCES.md](LICENCES.md) — inventaire des licences (une seule GPL : `espeak-ng`, conservé, app privée non distribuée, gate de release repose la question) + les 12 avis `npm audit` qualifiés par chemin d'atteignabilité avec décision.
 - **Amélioration B** : 10 invariants sécurité exécutables (`tests/security-invariants.test.mjs`) — débrancher une défense fait échouer la suite.
 
 ## Livré (2026-07-22 soir — fin du plan : Tasks 8-16, 19, 21, 22, 23-24)
@@ -191,7 +191,7 @@ tuait le processus), et Room nomme ses colonnes d'après le champ Kotlin si on n
 - **Démarrage automatique avec Windows** (manque signalé par Nasro) : case dans **Config → Système Windows**. API Electron officielle (clé de démarrage de la session courante — aucune tâche système, aucune élévation), lancement discret, réversible en un clic. Fail-loud : si Windows n'applique pas le réglage, Mina le dit au lieu de faire semblant.
 - **Catalogue de capacités visible** : les 20 domaines publiés par le runtime (créés la veille) n'étaient exposés dans aucune interface. Ils s'affichent désormais avec leur état réel — disponible / dégradé / indisponible — et la dépendance manquante nommée.
 - **Domaines livrés mais invisibles, rendus accessibles** : un audit outillé des 124 méthodes du preload a montré que 50 n'étaient jamais appelées par l'interface. Ajoutés : **e-mail** (comptes, recherche), **organisation personnelle** (briefing du jour, tâches, routines, contacts), **impression** (détection, autorisation, envoi d'un fichier), **maison connectée** (appareils, santé des connecteurs, exécution d'une commande), **personnalité**, et le **droit à l'oubli** de la mémoire — suppression définitive propagée aux sauvegardes, sous confirmation locale. Chaque panneau affiche « Indisponible — raison » plutôt qu'une liste vide trompeuse.
-- **Licence de protection du nom** : [LICENSE](LICENSE) — usage, étude, modification et redistribution libres, mais les noms « Mina », « Mina Vision » et « Nasserallah Berkoun » ne peuvent être ni retirés, ni remplacés, ni détournés ; une œuvre dérivée publiée doit porter un nom distinct et créditer l'origine ; toute violation résilie les droits. Quatre tests verrouillent la clause.
+- **Licence de protection du nom** : [LICENSE](LICENSE) — usage, étude, modification et redistribution libres, mais les noms « Mina », « Mina Vision » et « Nasro Berkoun » ne peuvent être ni retirés, ni remplacés, ni détournés ; une œuvre dérivée publiée doit porter un nom distinct et créditer l'origine ; toute violation résilie les droits. Quatre tests verrouillent la clause.
 - **Portabilité (bloquant pour une publication mondiale)** : des chemins d'un disque secondaire étaient en dur dans le code — l'application n'aurait pas démarré sur une autre machine. Tout vit désormais sous le dossier utilisateur par défaut, avec des variables pour déporter les caches lourds.
 - **Audit de confidentialité** : [docs/operations/AUDIT-PRE-PUBLICATION.md](docs/operations/AUDIT-PRE-PUBLICATION.md) — 945 fichiers suivis analysés, aucun secret réel, données personnelles anonymisées, prototypes morts dépubliés.
 - **Chat natif Android** : constitution amendée (canal `mina_app` autorisé par Nasro) et modules Android `core:chat` / `feature:chat` / `feature:voice` déclarés. Le reste du chantier (protocole, crypto, transport, Firebase) reste à construire — le canal est inactif tant que le code runtime ne le branche pas.
@@ -256,7 +256,7 @@ tuait le processus), et Room nomme ses colonnes d'après le champ Kotlin si on n
 ### Vigilance permanente
 
 - **espeak-ng est GPL-3.0** : zéro obligation tant que Mina Vision reste privée ; AVANT toute
-  distribution, relire [docs/LICENCES.md](docs/LICENCES.md) §1.
+  distribution, relire [LICENCES.md](LICENCES.md) §1.
 - **Dépôt git local** depuis le 2026-07-22 (1 tâche = 1 commit, aucun remote — `git push`
   impossible par construction). Revenir en arrière = demander le revert.
 
