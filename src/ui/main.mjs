@@ -1755,6 +1755,33 @@ const registerIpc = () => {
     return startLiveCamera();
   });
   ipcMain.handle('mina:phone-camera-stop', () => stopLiveCamera());
+  // G3 — vision d'UNE image quelconque (webcam PC, capture d'écran, image reçue) : la caméra n'est
+  // plus le seul œil de Mina. La frame est capturée côté renderer (getUserMedia pour la webcam PC),
+  // envoyée ici en base64, analysée par le MÊME fournisseur de vision. Sans identifiants IA tournés,
+  // échoue honnêtement. Bornes strictes (mime image, taille) — la garde de payload IPC limite déjà 1 Mo.
+  ipcMain.handle('mina:vision:analyze-frame', async (_event, request) => {
+    const mimeType = String(request?.mimeType ?? 'image/jpeg');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) return { ok: false, reason: 'mime_non_supporte' };
+    let image;
+    try { image = Buffer.from(String(request?.imageBase64 ?? ''), 'base64'); } catch { return { ok: false, reason: 'image_invalide' }; }
+    if (image.length < 64 || image.length > 8 * 1024 * 1024) return { ok: false, reason: 'image_taille_invalide' };
+    try {
+      if (!cameraVision) {
+        cameraVision = createCameraVisionRuntime({ config: requireRotatedCredentials() }).cameraVision;
+      }
+      const result = await cameraVision.analyze({
+        image, mimeType,
+        prompt: String(request?.prompt ?? 'Décris précisément ce que tu vois.').trim().slice(0, 2_000),
+      });
+      const text = typeof result === 'string' ? result : String(result?.text ?? result?.description ?? '');
+      void activityJournal?.append('vision_frame_analysee', { source: String(request?.source ?? 'inconnu'), chars: text.length });
+      return { ok: true, text };
+    } catch (error) {
+      return { ok: false, reason: String(error?.message ?? error).slice(0, 200) };
+    } finally {
+      if (Buffer.isBuffer(image)) image.fill(0);
+    }
+  });
   ipcMain.handle('mina:sms-send-confirmed', async (_event, request) => {
     if (!request || Object.keys(request).sort().join(',') !== 'recipientE164,sourceMessageId,text'
       || !/^[A-Za-z0-9._:-]{1,160}$/u.test(request.sourceMessageId ?? '')
