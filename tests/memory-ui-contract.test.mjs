@@ -217,7 +217,7 @@ describe('conversation memory wiring contract — sessions survive restarts', ()
     expect(main).toMatch(/rememberUtterance\(\{ role, text, engine \}\)\.catch\(\(\) => \{\}\)/u);
 
     // Context resumption injected into the live instruction, empty when locked.
-    expect(main).toContain('recentConversation({ limit: 12 })');
+    expect(main).toContain('recentConversation({ limit: 20 })');
     expect(main).toMatch(/conversationBrief,/u);
     expect(main).toMatch(/\.filter\(Boolean\)\.join\(' '\)/u);
 

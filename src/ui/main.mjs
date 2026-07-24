@@ -1320,7 +1320,7 @@ const startGeminiVoice = async () => {
   const snapshot = await capabilitySnapshot().catch(() => ({}));
   // Reprise de contexte : les derniers échanges réels, réinjectés pour que « comme hier » ait un
   // sens d'une session à l'autre. Coffre verrouillé → bloc vide, la session démarre pareil.
-  const conversationBrief = await memoryController?.recentConversation({ limit: 12 })
+  const conversationBrief = await memoryController?.recentConversation({ limit: 20 })
     .then((recent) => (recent.length === 0 ? '' : [
       'Mémoire réelle de nos échanges précédents (appuie-toi dessus, n’invente rien au-delà) :',
       recent.map((item) => item.content).join(' | '),
