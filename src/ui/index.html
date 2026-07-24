@@ -269,6 +269,55 @@
 
       <div class="dashboard-zone view" data-view="config">
         <h2 class="dashboard-zone-title">Configuration &amp; mémoire</h2>
+        <section class="memory-panel" aria-labelledby="profile-title">
+          <div class="activity-head">
+            <div><p class="eyebrow">Personnalisation</p><h2 id="profile-title">Profil &amp; préférences</h2></div>
+            <div class="heading-actions">
+              <button class="ghost-button" id="profile-toggle" type="button" aria-expanded="true" aria-controls="profile-collapsible">
+                <span id="profile-toggle-label">Masquer</span>
+              </button>
+              <button id="profile-save" type="button">Enregistrer</button>
+            </div>
+          </div>
+          <div class="collapsible" id="profile-collapsible">
+            <div class="collapsible-inner">
+              <div class="settings-mode-row">
+                <label class="welcome-field"><span>Profil actif</span>
+                  <select id="profile-select"></select></label>
+                <button class="ghost-button" id="profile-new" type="button">Nouveau profil</button>
+              </div>
+              <div class="settings-grid">
+                <label class="welcome-field"><span>Prénom / nom d’usage</span>
+                  <input id="profile-name" type="text" maxlength="60" placeholder="Nasro" autocomplete="off"></label>
+                <label class="welcome-field"><span>Pronoms (facultatif)</span>
+                  <input id="profile-pronouns" type="text" maxlength="40" placeholder="il / elle / iel" autocomplete="off"></label>
+                <label class="welcome-field"><span>Langue</span>
+                  <select id="profile-language">
+                    <option value="fr">Français</option>
+                    <option value="en">English</option>
+                    <option value="ar">العربية</option>
+                    <option value="es">Español</option>
+                  </select></label>
+                <label class="welcome-field"><span>Ton de Mina</span>
+                  <select id="profile-tone">
+                    <option value="chaleureux">Chaleureux</option>
+                    <option value="neutre">Neutre</option>
+                    <option value="direct">Direct</option>
+                    <option value="concis">Concis</option>
+                  </select></label>
+                <label class="welcome-field"><span>Thème</span>
+                  <select id="profile-theme">
+                    <option value="system">Selon le système</option>
+                    <option value="light">Jour</option>
+                    <option value="dark">Nuit</option>
+                  </select></label>
+              </div>
+              <label class="welcome-field"><span>Ce que Mina doit savoir de toi (facultatif, jamais un secret)</span>
+                <textarea id="profile-preferences" maxlength="400" rows="3" placeholder="Ex. je préfère des réponses courtes, je travaille le soir…"></textarea></label>
+              <p class="sandbox-remediation" id="profile-status" aria-live="polite">Ces réglages personnalisent Mina (salutation, ton, thème) et peuvent être modifiés à tout moment. Ils ne changent aucune permission ni la constitution MINA.md.</p>
+            </div>
+          </div>
+        </section>
         <section class="memory-panel" aria-labelledby="system-title">
           <div class="activity-head">
             <div><p class="eyebrow">Système Windows</p><h2 id="system-title">Démarrage et état réel</h2></div>

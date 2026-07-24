@@ -1277,6 +1277,85 @@ const welcome = (() => {
   };
 })();
 
+// Réglages de profil dans l'onglet Config — MÊMES champs que la bienvenue, éditables à tout moment
+// (demande Nasro : « les mêmes réglages dans les paramètres »). Multi-utilisateurs : bascule le
+// profil actif, en crée de nouveaux. upsert({id}) MET À JOUR (l'id vient du profil actif) ; sans id
+// il CRÉE. Ne touche jamais MINA.md (constitution immuable) : uniquement salutation, ton, thème.
+const profileSettings = (() => {
+  const sel = (id) => document.querySelector(id);
+  const selectEl = sel('#profile-select');
+  if (!selectEl) return { refresh: async () => {} };
+  const fields = {
+    name: sel('#profile-name'), pronouns: sel('#profile-pronouns'), language: sel('#profile-language'),
+    tone: sel('#profile-tone'), theme: sel('#profile-theme'), preferences: sel('#profile-preferences'),
+  };
+  const status = sel('#profile-status');
+  const NEW = '__new__';
+  let editingId = null; // id du profil édité ; null = création d'un nouveau
+
+  const say = (msg) => { if (status) status.textContent = msg; };
+  const fill = (p) => {
+    // « Utilisateur » est le nom par défaut du store quand aucun n'est saisi : on n'affiche pas ce
+    // libellé technique dans le champ (l'utilisateur croirait que c'est SON nom).
+    fields.name.value = p && p.name && p.name !== 'Utilisateur' ? p.name : '';
+    fields.pronouns.value = p?.pronouns ?? '';
+    fields.language.value = p?.language ?? 'fr';
+    fields.tone.value = p?.tone ?? 'chaleureux';
+    fields.theme.value = p?.theme ?? 'system';
+    fields.preferences.value = p?.preferences ?? '';
+  };
+  const startNew = () => {
+    editingId = null; selectEl.value = NEW; fill(null); fields.name.focus();
+    say('Nouveau profil : remplis les champs puis « Enregistrer ».');
+  };
+
+  const refresh = async () => {
+    let state = { profiles: [], activeProfileId: null };
+    try { state = await api.readProfiles?.() ?? state; } catch { /* pas de profils encore */ }
+    selectEl.textContent = '';
+    for (const p of state.profiles) {
+      const opt = document.createElement('option');
+      opt.value = p.id; opt.textContent = p.name;
+      selectEl.append(opt);
+    }
+    const newOpt = document.createElement('option');
+    newOpt.value = NEW; newOpt.textContent = '＋ Nouveau profil…';
+    selectEl.append(newOpt);
+    const active = state.profiles.find((p) => p.id === state.activeProfileId) ?? state.profiles[0] ?? null;
+    if (active) { editingId = active.id; selectEl.value = active.id; fill(active); }
+    else { startNew(); }
+  };
+
+  selectEl.addEventListener('change', async () => {
+    if (selectEl.value === NEW) { startNew(); return; }
+    try {
+      const profile = await api.setActiveProfile(selectEl.value); // renvoie le profil devenu actif
+      editingId = profile.id;
+      fill(profile);
+      applyTheme(resolveTheme(profile.theme));
+      say(`Profil actif : ${profile.name}.`);
+    } catch (error) { say(`Profil : ${error.message}`); }
+  });
+
+  sel('#profile-new').addEventListener('click', startNew);
+
+  sel('#profile-save').addEventListener('click', async () => {
+    const input = {
+      name: fields.name.value, pronouns: fields.pronouns.value, language: fields.language.value,
+      tone: fields.tone.value, theme: fields.theme.value, preferences: fields.preferences.value,
+    };
+    if (editingId) input.id = editingId; // met à jour le profil existant ; sinon en crée un
+    try {
+      const profile = await api.upsertProfile(input);
+      applyTheme(resolveTheme(profile.theme));
+      await refresh();
+      say(`Enregistré. Mina s'adresse à ${profile.name} (ton ${profile.tone}).`);
+    } catch (error) { say(`Enregistrement : ${error.message}`); }
+  });
+
+  return { refresh };
+})();
+
 // Rail navigation: Mission stays reachable from anywhere; the four secondary zones are views you
 // switch to (aria-current + a shown/hidden .view), not a scroll you fall through. Pure CSS-class
 // toggling — every IPC-driven update inside a hidden view keeps happening in the background and
@@ -1430,6 +1509,7 @@ const wireCollapsibleSection = (toggleId, labelId, collapsibleId, storageKey) =>
   });
 };
 [
+  ['profile-toggle', 'profile-toggle-label', 'profile-collapsible', 'mina.profileCollapsed'],
   ['system-toggle', 'system-toggle-label', 'system-collapsible', 'mina.systemCollapsed'],
   ['mail-toggle', 'mail-toggle-label', 'mail-collapsible', 'mina.mailCollapsed'],
   ['personal-toggle', 'personal-toggle-label', 'personal-collapsible', 'mina.personalCollapsed'],
@@ -2405,9 +2485,13 @@ refreshHome().catch(failed('#home-devices'));
 refreshPersonality().catch(failed('#personality-profile'));
 refreshMemoryStatus().catch((error) => log(`Mémoire : ${error.message}`));
 refreshSettings().catch((error) => log(`Paramètres : ${error.message}`));
+profileSettings.refresh().catch((error) => log(`Profil : ${error.message}`));
 // G7 — accueil au premier lancement (ou nouveau profil) : applique le thème du profil et
-// personnalise Mina. Ne bloque jamais le reste du chargement.
-welcome.boot().catch((error) => log(`Bienvenue : ${error.message}`));
+// personnalise Mina. Ne bloque jamais le reste du chargement. Rafraîchit ensuite le panneau
+// Paramètres pour refléter le profil qui vient d'être créé/choisi dans la bienvenue.
+welcome.boot()
+  .then(() => profileSettings.refresh())
+  .catch((error) => log(`Bienvenue : ${error.message}`));
 elements.analyticsFrom.value = localDateTimeValue(new Date(Date.now() - 30 * 24 * 60 * 60 * 1_000));
 elements.analyticsTo.value = localDateTimeValue(new Date());
 refreshAnalytics().catch((error) => log(`Analyses : ${error.message}`));
