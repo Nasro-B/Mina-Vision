@@ -241,9 +241,15 @@ export function createChatServer({
     if (!registry.isApproved(deviceId)) throw new Error('chat_appareil_non_appaire');
     const { eventType, meta, chunks } = chunkMedia(Buffer.from(bytes), { mime, extraMeta });
     const keyEpoch = registry.keyEpoch();
+    // Crypto dédié à cet envoi : clé de l'époque COURANTE + signature du PC (le téléphone
+    // vérifie avec la clé publique du PC reçue à l'appairage).
+    const sealCrypto = createChatCrypto({
+      signingPrivateKey: identity.privateKey,
+      epochKey: Buffer.from(epochKeyFor(keyEpoch)),
+    });
     const seal = (routingClass, payload) => {
       const createdAtMs = clock();
-      return crypto.encryptAndSign({
+      return sealCrypto.encryptAndSign({
         header: {
           version: 2,
           eventId: ulid(),

@@ -1887,6 +1887,34 @@ const registerIpc = () => {
     if (!chatChannel) return { ok: false, reason: 'canal_non_demarre' };
     return chatChannel.revoke(deviceId);
   });
+  // W6 — envoi d'un fichier PC → téléphone : Nasro choisit le fichier via la boîte système
+  // (jamais un chemin arbitraire du renderer), borne 5 Mo, mimes image/audio seulement. Le média
+  // part chiffré+signé en chunks payload v2 sur la session active de l'appareil.
+  ipcMain.handle('mina:chat:sendFile', async (_event, request) => {
+    const deviceId = String(request?.deviceId ?? '');
+    if (!/^[A-Za-z0-9._:-]{1,160}$/u.test(deviceId)) return { ok: false, reason: 'identifiant_invalide' };
+    if (!chatChannel) return { ok: false, reason: 'canal_non_demarre' };
+    const picked = await dialog.showOpenDialog(mainWindow, {
+      title: 'Envoyer une image ou un audio au téléphone',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp'] },
+        { name: 'Audio', extensions: ['m4a', 'mp4'] },
+      ],
+    });
+    if (picked.canceled || !picked.filePaths[0]) return { ok: false, reason: 'annule' };
+    const filename = picked.filePaths[0];
+    const mime = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', m4a: 'audio/mp4', mp4: 'audio/mp4' }[
+      path.extname(filename).slice(1).toLowerCase()];
+    if (!mime) return { ok: false, reason: 'type_non_supporte' };
+    try {
+      const bytes = await readFile(filename);
+      const sent = await chatChannel.sendMedia(deviceId, { bytes, mime });
+      return { ok: true, ...sent };
+    } catch (error) {
+      return { ok: false, reason: String(error?.message ?? error).slice(0, 160) };
+    }
+  });
   ipcMain.handle('memory.search', (_event, request) => memoryController.search(request));
   ipcMain.handle('memory.proposeForget', (_event, request) => memoryController.proposeForget(request));
   ipcMain.handle('research.readFile', async (_event, request) => {

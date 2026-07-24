@@ -131,6 +131,7 @@ function createPreloadApi(ipcRenderer) {
     chatOpenPairing: () => ipcRenderer.invoke('mina:chat:openPairing'),
     chatClosePairing: () => ipcRenderer.invoke('mina:chat:closePairing'),
     chatRevokeDevice: (deviceId) => ipcRenderer.invoke('mina:chat:revoke', { deviceId }),
+    chatSendFile: (deviceId) => ipcRenderer.invoke('mina:chat:sendFile', { deviceId }),
     // Domaines composés par la réconciliation (T11-T13).
     personalBriefing: (payload) => ipcRenderer.invoke('mina:personal:briefing', payload),
     personalTasks: () => ipcRenderer.invoke('mina:personal:tasks'),

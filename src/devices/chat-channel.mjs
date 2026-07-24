@@ -139,6 +139,12 @@ export function createChatChannel({
       return opened;
     },
 
+    /** W6 — envoi d'un média PC → téléphone connecté. Fail-loud si le canal n'écoute pas. */
+    async sendMedia(deviceId, media) {
+      if (!server) throw new Error('chat_canal_inactif');
+      return server.sendMediaToDevice(deviceId, media);
+    },
+
     closePairing() {
       registry.closePairing();
     },
