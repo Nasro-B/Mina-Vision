@@ -113,6 +113,10 @@ function createPreloadApi(ipcRenderer) {
     },
     onEvent: (callback) => subscribe('mina:event', callback),
     onVoiceWake: (callback) => subscribe('mina:voice-wake', callback),
+    // C3 — décodage audio pour la transcription locale : le main envoie du m4a (base64), le
+    // renderer répond du PCM 16 kHz mono (l'AudioContext de Chromium sait décoder l'AAC, Node non).
+    onDecodeAudioRequest: (callback) => subscribe('mina:decode-audio:request', callback),
+    replyDecodedAudio: (payload) => ipcRenderer.send('mina:decode-audio:reply', payload),
     onVoiceCommand: (callback) => subscribe('mina:voice-command', callback),
     onVoiceDialogue: (callback) => subscribe('mina:voice-dialogue', callback),
     sayVoice: (text) => ipcRenderer.invoke('mina:voice-say', String(text ?? '').slice(0, 1_200)),

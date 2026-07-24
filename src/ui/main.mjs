@@ -103,6 +103,7 @@ import { createMediaAssembler } from '../chat/media-assembler.mjs';
 import { createMediaStore } from '../chat/media-store.mjs';
 import { createMediaPerception } from '../chat/media-perception.mjs';
 import { createMediaPurge } from '../chat/media-purge.mjs';
+import { createVoiceTranscriber } from '../chat/voice-transcriber.mjs';
 import { createChatResponder } from '../devices/chat-responder.mjs';
 import { loadOrCreatePcChatIdentity } from '../devices/pc-chat-identity.mjs';
 import {
@@ -2376,10 +2377,41 @@ app.whenReady().then(async () => {
         key: Buffer.from(hkdfSync('sha256', chatMasterKey, Buffer.from('Mina Vision local memory v1', 'utf8'), Buffer.from('chat-media', 'utf8'), 32)),
         writeFile, readFile, rename, mkdir,
       });
+      // C3 — transcription LOCALE des notes vocales : m4a décodé par l'AudioContext du renderer
+      // (pont IPC ci-dessous), Whisper local via transformers.js. Opt-in par MINA_STT_ENABLED=true
+      // (premier usage : téléchargement unique du modèle, refusé si MINA_OFFLINE). Désactivé =>
+      // null => la perception garde sa note honnête « transcription hors-ligne non activée ».
+      const decodeAudioViaRenderer = ({ bytesBase64, mimeType }) => new Promise((resolve, reject) => {
+        const requestId = randomUUID();
+        const timer = setTimeout(() => { ipcMain.removeListener('mina:decode-audio:reply', onReply); reject(new Error('stt_decodage_timeout')); }, 30_000);
+        const onReply = (_event, payload) => {
+          if (payload?.requestId !== requestId) return;
+          clearTimeout(timer);
+          ipcMain.removeListener('mina:decode-audio:reply', onReply);
+          if (payload.error || !Array.isArray(payload.pcm)) reject(new Error(payload.error ?? 'stt_decodage_vide'));
+          else resolve({ pcm: Float32Array.from(payload.pcm), sampleRate: Number(payload.sampleRate) || 16_000 });
+        };
+        ipcMain.on('mina:decode-audio:reply', onReply);
+        const target = mainWindow?.webContents;
+        if (!target || target.isDestroyed()) { clearTimeout(timer); ipcMain.removeListener('mina:decode-audio:reply', onReply); reject(new Error('stt_fenetre_indisponible')); return; }
+        target.send('mina:decode-audio:request', { requestId, bytesBase64, mimeType });
+      });
+      const voiceTranscriber = createVoiceTranscriber({
+        enabled: process.env.MINA_STT_ENABLED === 'true',
+        offline: process.env.MINA_OFFLINE === 'true',
+        model: process.env.MINA_STT_MODEL?.trim() || undefined,
+        decodeAudio: decodeAudioViaRenderer,
+        loadPipeline: async (model) => {
+          const { pipeline } = await import('@huggingface/transformers');
+          const asr = await pipeline('automatic-speech-recognition', model);
+          return async (pcm) => asr(pcm);
+        },
+        logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'stt_local', entry) },
+      });
+
       // W7 — perception des médias : à la complétion, Mina « voit » l'image (fournisseur de vision
       // réutilisé de la caméra) et retient l'échange en mémoire. Honnête : si la vision/STT n'est
-      // pas configurée ou échoue, la note le dit, jamais une légende inventée. La transcription
-      // locale n'est pas provisionnée par défaut → transcribe null → note « non activée ».
+      // pas configurée ou échoue, la note le dit, jamais une légende inventée.
       const chatMediaPerception = createMediaPerception({
         loadMedia: (mediaId) => chatMediaStore.load(mediaId),
         rememberExchange: (entry) => memoryController.rememberChatExchange(entry),
@@ -2390,7 +2422,7 @@ app.whenReady().then(async () => {
           }
           return cameraVision.analyze({ image, mimeType, prompt });
         },
-        transcribe: null,
+        transcribe: voiceTranscriber,
         notify: (event) => send('mina:event', event),
         logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_media', entry) },
       });

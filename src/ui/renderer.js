@@ -1354,6 +1354,31 @@ const announceRetryOnce = () => {
   lastRetryAnnouncement = now;
   void say('Petit souci technique, je réessaie.');
 };
+// C3 — service de décodage audio pour la transcription locale : le main envoie une note vocale
+// m4a (base64), Chromium la décode (AAC), on ré-échantillonne en 16 kHz mono (format Whisper) et
+// on renvoie le PCM. Tout reste dans le processus — aucun octet ne quitte la machine.
+api.onDecodeAudioRequest?.(async (request) => {
+  const reply = { requestId: request?.requestId ?? null, pcm: null, sampleRate: 16_000, error: null };
+  try {
+    const binary = atob(String(request?.bytesBase64 ?? ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    const probe = new AudioContext();
+    const decoded = await probe.decodeAudioData(bytes.buffer);
+    await probe.close();
+    const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16_000), 16_000);
+    const source = offline.createBufferSource();
+    source.buffer = decoded;
+    source.connect(offline.destination);
+    source.start(0);
+    const resampled = await offline.startRendering();
+    reply.pcm = Array.from(resampled.getChannelData(0));
+  } catch (error) {
+    reply.error = String(error?.message ?? error).slice(0, 200);
+  }
+  api.replyDecodedAudio?.(reply);
+});
+
 api.onVoiceWake((phrase) => {
   voicePresence.dispatch({ type: 'capture_started' });
   setStatus('Mina activée', 'ready', true);
