@@ -185,6 +185,21 @@ class ChatRepositoryTest {
     }
 
     @Test
+    fun `C2 - la purge 14j supprime les chunks expires, garde les recents et les bulles meta`() = runTest {
+        repository.sendMedia("thread-main", ByteArray(200_000) { 1 }, "image/jpeg") // méta + 2 chunks « maintenant »
+        // Vieillit artificiellement UN chunk au-delà de 14 jours.
+        val rows = db.chatDao().readThread("thread-main")
+        val oldChunk = rows.first { it.routingClass == "stream" }
+        db.chatDao().insertEvent(oldChunk.copy(eventId = "01OLDCHUNKAAAAAAAAAAAAAAAA", createdAtMs = clock - 15L * 24 * 60 * 60 * 1_000))
+
+        val purged = db.chatDao().purgeExpiredChunks(clock - 14L * 24 * 60 * 60 * 1_000)
+        assertEquals(1, purged)
+        val remaining = db.chatDao().readThread("thread-main")
+        assertEquals(3, remaining.size) // méta + 2 chunks récents — le vieux clone a disparu
+        assertTrue(remaining.any { it.routingClass == "message" })
+    }
+
+    @Test
     fun `l outbox ne rend que les envois dus — la temporisation est respectee`() = runTest {
         val eventId = repository.sendText("thread-main", "bonjour")
         db.chatDao().rescheduleOutbox(eventId, attempts = 1, nextAtMs = clock + 60_000, error = "hors_ligne")
