@@ -27,6 +27,7 @@ import { resolveStorageRoots } from '../src/system/storage-roots.mjs';
 import { createRuntimeManifest } from '../src/sandbox/runtime-manifest.mjs';
 import {
   buildRuntimeManifest,
+  decodeChecksumBytes,
   expectedChecksumFor,
   parseChecksumsFile,
   selectLatestNodeLts,
@@ -78,8 +79,8 @@ async function provisionNode(stageDir) {
   const base = `https://nodejs.org/dist/v${picked.semver}`;
   const sourceUrl = `${base}/${zipName}`;
   log('Node : téléchargement', sourceUrl);
-  const [zipBuf, shasums] = await Promise.all([fetchBuffer(sourceUrl), fetchText(`${base}/SHASUMS256.txt`)]);
-  const expected = expectedChecksumFor(parseChecksumsFile(shasums), zipName);
+  const [zipBuf, shaBytes] = await Promise.all([fetchBuffer(sourceUrl), fetchBuffer(`${base}/SHASUMS256.txt`)]);
+  const expected = expectedChecksumFor(parseChecksumsFile(decodeChecksumBytes(shaBytes)), zipName);
   if (!expected) die(`Node : ${zipName} absent de SHASUMS256.txt`);
   if (sha256(zipBuf) !== expected) die('Node : sha256 du zip ≠ checksum officiel — téléchargement rejeté');
   log('Node : zip vérifié contre SHASUMS256.txt ✔');
@@ -102,12 +103,13 @@ async function provisionPowerShell(stageDir) {
   log('PowerShell : téléchargement', sourceUrl);
   const zipBuf = await fetchBuffer(sourceUrl);
   if (hashAsset) {
-    const expected = expectedChecksumFor(parseChecksumsFile(await fetchText(hashAsset.browser_download_url)), zipName);
-    if (expected && sha256(zipBuf) !== expected) die('PowerShell : sha256 du zip ≠ hashes.sha256 officiel — rejeté');
-    if (expected) log('PowerShell : zip vérifié contre hashes.sha256 ✔');
-    else log('PowerShell : hashes.sha256 présent mais sans entrée pour ce zip — hash affiché:', sha256(zipBuf));
+    // hashes.sha256 de PowerShell est en UTF-16 : décodage explicite, sinon aucune entrée ne matche.
+    const expected = expectedChecksumFor(parseChecksumsFile(decodeChecksumBytes(await fetchBuffer(hashAsset.browser_download_url))), zipName);
+    if (!expected) die(`PowerShell : aucune entrée pour ${zipName} dans hashes.sha256 — vérification impossible, rejeté`);
+    if (sha256(zipBuf) !== expected) die('PowerShell : sha256 du zip ≠ hashes.sha256 officiel — rejeté');
+    log('PowerShell : zip vérifié contre hashes.sha256 ✔');
   } else {
-    log('PowerShell : pas de hashes.sha256 dans la release — hash calculé:', sha256(zipBuf));
+    die('PowerShell : pas de hashes.sha256 dans la release — vérification impossible, rejeté');
   }
   const relInZip = await unzipAndLocate(zipBuf, join(stageDir, 'powershell'), 'pwsh.exe');
   const exeBuf = await readFile(join(stageDir, 'powershell', ...relInZip.split('/')));
