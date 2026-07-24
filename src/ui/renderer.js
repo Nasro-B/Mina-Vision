@@ -2006,7 +2006,17 @@ document.querySelector('#home-execute')?.addEventListener('click', async () => {
 });
 document.querySelector('#home-discover')?.addEventListener('click', async () => {
   try {
-    await api.discoverHomeDevices();
+    // « Détecter » lance la découverte sur CHAQUE connecteur configuré : le handler IPC exige un
+    // connectorId précis (contrat exact), il n'existe pas de découverte « tous connecteurs » côté
+    // controller. On lit donc les connecteurs connus via connectorHealth, puis on découvre chacun.
+    // Aucun connecteur = état HONNÊTE affiché tel quel, jamais un TypeError (home_ui_request_invalid).
+    const health = await api.homeConnectorHealth();
+    const connectorIds = Object.keys(health ?? {});
+    if (connectorIds.length === 0) {
+      renderUnavailable('#home-devices', 'Aucun connecteur maison configuré — rien à détecter.');
+      return;
+    }
+    await Promise.all(connectorIds.map((connectorId) => api.discoverHomeDevices({ connectorId })));
     await refreshHome();
   } catch (error) {
     renderUnavailable('#home-devices', String(error?.message ?? error).slice(0, 160));
