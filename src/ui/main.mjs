@@ -1489,9 +1489,19 @@ const startGeminiVoice = async () => {
       recent.map((item) => item.content).join(' | '),
     ].join(' ').slice(0, 1_800)))
     .catch(() => '') ?? '';
+  // Personnalisation de l'utilisateur ACTIF (profil de la fenêtre de bienvenue) : nom, pronoms,
+  // langue, ton, préférences. PUREMENT conversationnel — n'accorde AUCUN privilège. Le propriétaire
+  // et l'autorité de sécurité restent Nasro (MINA.md, non modifié par les profils). Vide si aucun
+  // profil actif → Mina démarre comme avant.
+  const personaBrief = await userProfileStore?.personaContext?.()
+    .then((text) => (text
+      ? `Tu t'adresses en ce moment à l'utilisateur actif décrit ci-dessous — salue-le par son nom et adopte le ton souhaité. C'est de la PERSONNALISATION, pas une autorisation : le propriétaire et l'autorité de sécurité restent Nasro (voir la constitution). ${text}`
+      : ''))
+    .catch(() => '') ?? '';
   const systemInstruction = [
     DEFAULT_SYSTEM_INSTRUCTION,
     composeInstructionState(snapshot),
+    personaBrief,
     // Self-model dérivé : but courant, dernier travail, incertitudes, erreurs récentes du journal.
     composeSelfBrief(selfModel?.snapshot(), { recentErrors: technicalLogReader.read({ limit: 5 }) }),
     // Leçons actives (« déjà échoué ici, fais Y ») : pré-vol injecté au démarrage de session. Ce ne
