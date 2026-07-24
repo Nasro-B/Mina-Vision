@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildRuntimeManifest,
   compareSemverDesc,
+  decodeChecksumBytes,
   expectedChecksumFor,
   parseChecksumsFile,
   selectLatestNodeLts,
@@ -25,6 +26,16 @@ describe('runtime provisioning — pure logic', () => {
     expect(map.get('node-v22.14.0-win-x64.zip')).toBe('a'.repeat(64));
     expect(map.get('PowerShell-7.4.6-win-x64.zip')).toBe('b'.repeat(64));
     expect(map.size).toBe(2);
+  });
+
+  it('decodes UTF-16LE/BE and UTF-8(+BOM) checksum files (PowerShell ships UTF-16LE)', () => {
+    const line = `${'a'.repeat(64)} *PowerShell-7.4.18-win-x64.zip`;
+    const utf16le = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(line, 'utf16le')]);
+    const utf8bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(line, 'utf8')]);
+    // Le bug réel : lire l'UTF-16 en UTF-8 rendait la ligne non-parsable → zip NON vérifié.
+    expect(expectedChecksumFor(parseChecksumsFile(decodeChecksumBytes(utf16le)), 'PowerShell-7.4.18-win-x64.zip')).toBe('a'.repeat(64));
+    expect(expectedChecksumFor(parseChecksumsFile(decodeChecksumBytes(utf8bom)), 'PowerShell-7.4.18-win-x64.zip')).toBe('a'.repeat(64));
+    expect(decodeChecksumBytes(Buffer.from(line, 'utf8'))).toContain('PowerShell');
   });
 
   it('matches a checksum by basename even when the manifest lists a path', () => {

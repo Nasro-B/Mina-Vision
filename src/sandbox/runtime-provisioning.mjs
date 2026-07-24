@@ -7,6 +7,20 @@ const SHA256 = /^[a-f0-9]{64}$/u;
 const REQUIRED_LANGUAGES = Object.freeze(['python', 'javascript', 'powershell']);
 
 /**
+ * Décode un fichier de checksums en détectant sa nomenclature d'octets (BOM). PowerShell publie
+ * son `hashes.sha256` en UTF-16LE : le lire en UTF-8 donne du charabia et AUCUNE entrée ne matche
+ * (le zip passait alors NON vérifié). Node/Python sont en UTF-8. Détection explicite pour ne jamais
+ * « rater » une vérification par simple erreur d'encodage.
+ */
+export function decodeChecksumBytes(buffer) {
+  const b = Buffer.from(buffer);
+  if (b.length >= 2 && b[0] === 0xff && b[1] === 0xfe) return b.subarray(2).toString('utf16le');
+  if (b.length >= 2 && b[0] === 0xfe && b[1] === 0xff) return Buffer.from(b.subarray(2)).swap16().toString('utf16le');
+  if (b.length >= 3 && b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) return b.subarray(3).toString('utf8');
+  return b.toString('utf8');
+}
+
+/**
  * Parse un fichier de checksums au format « <sha256>  <nom de fichier> » (Node SHASUMS256.txt,
  * PowerShell hashes.sha256). Retourne une Map nom→sha256 minuscule. Lignes malformées ignorées.
  */
