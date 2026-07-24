@@ -186,6 +186,7 @@ npm run test:unit
 | [MINA.md](MINA.md) | Constitution : règles de sécurité et canaux autorisés |
 | [docs/operations/INSTALLATION.md](docs/operations/INSTALLATION.md) | Installation pas à pas |
 | [docs/guides/httpsms.md](docs/guides/httpsms.md) | Passerelle SMS httpSMS (cloud ou auto-hébergé) |
+| [docs/guides/lm-studio.md](docs/guides/lm-studio.md) | Modèles locaux (texte, vision, embeddings) via LM Studio |
 | [docs/operations/TELEGRAM.md](docs/operations/TELEGRAM.md) | Canal Telegram (conversation et commandes) |
 | [docs/operations/FIREBASE.md](docs/operations/FIREBASE.md) | Sauvegarde chiffrée et relais Firebase |
 | [docs/operations/ANDROID-HUAWEI.md](docs/operations/ANDROID-HUAWEI.md) | Téléphone Android : appairage, caméra, SMS |
