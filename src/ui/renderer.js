@@ -37,6 +37,8 @@ const elements = {
   phoneStatus: document.querySelector('#phone-status'),
   camera: document.querySelector('#camera-button'),
   cameraStatus: document.querySelector('#camera-status'),
+  webcamVision: document.querySelector('#webcam-vision-button'),
+  webcamVisionStatus: document.querySelector('#webcam-vision-status'),
   cameraPreview: document.querySelector('#camera-preview'),
   cameraSwitch: document.querySelector('#camera-switch-button'),
   workspace: document.querySelector('#workspace'),
@@ -1019,6 +1021,51 @@ elements.camera.addEventListener('click', async () => {
     log(`Caméra : ${error.message}`);
   }
 });
+
+// G3 — Vision par la WEBCAM DU PC (sans téléphone). Ouvre la webcam via getUserMedia, capture UNE
+// image, la fait analyser par le même fournisseur de vision que la caméra du téléphone, puis relâche
+// la webcam tout de suite (le voyant s'éteint). Rien n'est enregistré : l'image ne vit qu'en mémoire
+// le temps de l'analyse. Honnête : sans identifiants IA, l'analyse échoue et on le dit.
+let webcamBusy = false;
+const analyzeWebcamPc = async (question) => {
+  if (webcamBusy) return;
+  webcamBusy = true;
+  const target = elements.webcamVisionStatus;
+  if (target) target.textContent = 'Ouverture de la webcam…';
+  let stream = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.muted = true;
+    await video.play();
+    // Laisse le capteur s'exposer un court instant avant la capture (sinon image noire au démarrage).
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    const imageBase64 = dataUrl.split(',')[1] ?? '';
+    if (target) target.textContent = 'Mina regarde…';
+    const result = await api.analyzeVisionFrame({ imageBase64, mimeType: 'image/jpeg', prompt: question, source: 'webcam_pc' });
+    if (result?.ok) {
+      if (target) target.textContent = 'Vue analysée par la webcam PC';
+      log(`Webcam PC : ${result.text}`);
+      void say(result.text);
+    } else {
+      if (target) target.textContent = 'Analyse indisponible';
+      log(`Webcam PC : analyse indisponible (${result?.reason ?? 'inconnu'}).`);
+    }
+  } catch (error) {
+    if (target) target.textContent = 'Webcam indisponible';
+    log(`Webcam PC : ${error.message}`);
+  } finally {
+    if (stream) for (const track of stream.getTracks()) track.stop(); // relâche la webcam (voyant off)
+    webcamBusy = false;
+  }
+};
+if (elements.webcamVision) elements.webcamVision.addEventListener('click', () => { void analyzeWebcamPc(); });
 
 const flipCameraLens = async () => {
   if (!cameraStreaming) { log('Caméra : démarre le flux avant d’inverser l’objectif.'); return; }
