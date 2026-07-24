@@ -54,6 +54,17 @@ Set-Location 'C:\Serveurs\Mina Vision\android'
 
 Attendu : `BUILD SUCCESSFUL`. L'APK debug produit sous `android/app/build/outputs/apk/debug` s'installe sur le Huawei via `adb install` — voir `docs/runbooks/huawei-pairing.md`.
 
+### Emballer l'APK pour distribution (nom lisible)
+
+Pour distribuer l'app aux utilisateurs (GitHub Release / sideload) avec un nom propre plutôt que `app-debug.apk` :
+
+```powershell
+Set-Location 'C:\Serveurs\Mina Vision\android'
+.\gradlew.bat packageMinaApk
+```
+
+Produit `android/app/build/dist/Mina Vision.apk` (copie du build debug, signé clé debug → installable en sideload ; **pas** une signature Play Store — il faudrait un `signingConfig` + keystore dédié, non configuré à ce jour). Le binaire reste **hors dépôt** (`*.apk` gitignoré) ; il se distribue via une **release GitHub** (`gh release create …`, action manuelle). Guide utilisateur d'installation : [`INSTALLER-MINA-TELEPHONE.md`](INSTALLER-MINA-TELEPHONE.md).
+
 ## Désinstallation
 
 1. Fermer Mina Vision (`Ctrl+Alt+Échap` puis quitter, ou fermer la fenêtre).

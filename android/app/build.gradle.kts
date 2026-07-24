@@ -40,6 +40,27 @@ android {
 
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 
+// Emballe l'APK sous un nom lisible pour la distribution (GitHub Release / sideload) :
+// « Mina Vision.apk » au lieu de « app-debug.apk ». Tâche Copy AUTONOME — elle ne touche ni au bloc
+// android{} ni à l'API de variantes, donc elle ne peut pas altérer le build lui-même.
+//
+// ⚠️ Source = build DEBUG (le seul installable tant qu'aucun keystore de release n'est configuré) :
+//    signé avec la clé debug d'Android → parfait pour le sideload (« sources inconnues »), mais PAS
+//    une signature Play Store. La release signée reste une décision Nasro (ajout d'un signingConfig).
+tasks.register<Copy>("packageMinaApk") {
+    group = "distribution"
+    description = "Copie l'APK debug sous le nom « Mina Vision.apk » dans build/dist/ pour la GitHub Release."
+    dependsOn("assembleDebug")
+    from(layout.buildDirectory.dir("outputs/apk/debug"))
+    include("app-debug.apk")
+    into(layout.buildDirectory.dir("dist"))
+    rename { "Mina Vision.apk" }
+    doLast {
+        val out = layout.buildDirectory.dir("dist").get().file("Mina Vision.apk").asFile
+        println("APK prêt pour distribution : ${out.absolutePath}")
+    }
+}
+
 dependencies {
     implementation(project(":core:protocol"))
     implementation(project(":core:transport"))
