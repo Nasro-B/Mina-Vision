@@ -127,13 +127,15 @@ avant reconnexion.
 Une application Android (`android/`) permet de converser avec Mina depuis un téléphone appairé,
 en chiffrement de bout en bout.
 
+**📥 Télécharger l'application** : [**Mina Vision.apk** (dernière version)](https://github.com/Nassreallah-B/Mina-Vision/releases/latest) — ou directement [`Mina.Vision.apk` v0.1.0](https://github.com/Nassreallah-B/Mina-Vision/releases/download/v0.1.0/Mina.Vision.apk). Android 10+, signé clé debug (sideload : autoriser les sources inconnues). Guide pas à pas : [docs/operations/INSTALLER-MINA-TELEPHONE.md](docs/operations/INSTALLER-MINA-TELEPHONE.md).
+
+Reconstruire depuis les sources :
+
 ```bash
-cd android && ./gradlew assembleDebug
+cd android && ./gradlew assembleDebug        # ou ./gradlew packageMinaApk → build/dist/Mina Vision.apk
 ```
 
-**Distribuer aux utilisateurs.** `./gradlew packageMinaApk` produit `Mina Vision.apk` (build debug,
-signé clé debug → installable en sideload). Le binaire reste hors dépôt (`*.apk` gitignoré) ; on le
-publie en **release GitHub**. Guide d'installation côté utilisateur : [docs/operations/INSTALLER-MINA-TELEPHONE.md](docs/operations/INSTALLER-MINA-TELEPHONE.md).
+Le binaire reste hors dépôt (`*.apk` gitignoré) ; il est distribué via les [releases GitHub](https://github.com/Nassreallah-B/Mina-Vision/releases).
 
 **Appairage.** Sur le PC : onglet *Configuration & mémoire* › *Système Windows* › **Ouvrir
 l'appairage** — un code à 6 chiffres s'affiche, valable 5 minutes et une seule fois. Sur le
