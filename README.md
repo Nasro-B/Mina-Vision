@@ -189,6 +189,7 @@ npm run test:unit
 | [docs/guides/httpsms.md](docs/guides/httpsms.md) | Passerelle SMS httpSMS (cloud ou auto-hébergé) |
 | [docs/guides/lm-studio.md](docs/guides/lm-studio.md) | Modèles locaux (texte, vision, embeddings) via LM Studio |
 | [docs/guides/sandbox-runtimes.md](docs/guides/sandbox-runtimes.md) | Débloquer le bac à sable Windows (runtimes Python/Node/PowerShell) |
+| [docs/guides/face-model.md](docs/guides/face-model.md) | Reconnaissance faciale locale : provisionner un modèle ONNX |
 | [docs/operations/TELEGRAM.md](docs/operations/TELEGRAM.md) | Canal Telegram (conversation et commandes) |
 | [docs/operations/FIREBASE.md](docs/operations/FIREBASE.md) | Sauvegarde chiffrée et relais Firebase |
 | [docs/operations/ANDROID-HUAWEI.md](docs/operations/ANDROID-HUAWEI.md) | Téléphone Android : appairage, caméra, SMS |

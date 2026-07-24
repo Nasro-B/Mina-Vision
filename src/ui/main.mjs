@@ -151,6 +151,8 @@ import { createHomeController } from './pages/home-controller.mjs';
 import { registerHomeIpc } from './ipc/home-ipc.mjs';
 import { createFaceProfileStore } from '../biometrics/face-profile-store.mjs';
 import { createFaceRecognizer } from '../biometrics/face-recognizer.mjs';
+import { createFaceModelLoader } from '../biometrics/face-model-loader.mjs';
+import { createFaceEmbedder } from '../biometrics/face-embedder.mjs';
 import { createCameraController } from './pages/camera-controller.mjs';
 import { registerCameraIpc } from './ipc/camera-ipc.mjs';
 import { createTechnicalLog, createTechnicalLogReader } from '../diagnostics/technical-log.mjs';
@@ -2555,10 +2557,39 @@ app.whenReady().then(async () => {
     send('mina:event', { type: 'domain_degraded', domain: 'home', reason: String(error?.message ?? error).slice(0, 200) });
   }
 
+  // Embedder facial RÉEL si un modèle est provisionné, sinon fail-loud honnête (jamais un faux
+  // résultat de reconnaissance). Le modèle + ses paramètres de préprocessing viennent d'un manifeste
+  // provisionné (scripts/provision-face-model.mjs) : voir docs/guides/face-model.md.
+  let faceEmbedder = { embed: async () => { throw new Error('face_model_non_provisionne (voir docs/guides/face-model.md)'); } };
+  let faceEmbedderState = 'unavailable';
+  let faceEmbedderReason = 'modele_non_provisionne';
+  try {
+    const faceManifestPath = path.join(process.env.MINA_MODELS_ROOT ?? storageRoots.modelsRoot, 'face', 'manifest.json');
+    if (existsSync(faceManifestPath)) {
+      const manifest = JSON.parse(readFileSync(faceManifestPath, 'utf8'));
+      const faceLoader = createFaceModelLoader();
+      await faceLoader.load(manifest);
+      const [sharpMod, ortMod] = await Promise.all([import('sharp'), import('onnxruntime-node')]);
+      const sharpImpl = sharpMod.default ?? sharpMod;
+      const ort = ortMod.default ?? ortMod;
+      faceEmbedder = createFaceEmbedder({
+        loader: faceLoader,
+        manifest,
+        sharpImpl,
+        createTensor: (type, data, dims) => new ort.Tensor(type, data, dims),
+      });
+      faceEmbedderState = 'available';
+      faceEmbedderReason = null;
+    }
+  } catch (error) {
+    faceEmbedderReason = `modele_facial_invalide:${String(error?.message ?? error).slice(0, 100)}`;
+    technicalLog.record({ severity: 'warning', scope: 'biometrics', code: 'face_model_load_failed', message: faceEmbedderReason });
+  }
+
   try {
     const faceProfileStore = createFaceProfileStore({ keyring });
     const faceRecognizer = createFaceRecognizer({
-      embedder: { embed: async () => { throw new Error('face_embedding_pipeline_not_implemented'); } },
+      embedder: faceEmbedder,
       profileStore: faceProfileStore,
       confirmLocal: confirmDigestAction,
     });
@@ -2687,7 +2718,7 @@ app.whenReady().then(async () => {
   reportCapability('mail', mailOperational ? 'available' : (mailController ? 'degraded' : 'unavailable'), mailOperational ? null : 'aucun_compte_operationnel');
   reportCapability('home', homeCapabilityLevel, homeCapabilityReason);
   reportCapability('camera', cameraController ? 'degraded' : 'unavailable', 'flux_reel_disponible_biometrie_non_implementee');
-  reportCapability('biometrics.face', 'unavailable', 'face_embedding_pipeline_not_implemented');
+  reportCapability('biometrics.face', faceEmbedderState, faceEmbedderReason);
   reportCapability('backup', process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_STORAGE_BUCKET ? 'degraded' : 'unavailable', process.env.FIREBASE_PROJECT_ID ? 'configure_non_verifie' : 'firebase_non_configure');
   reportCapability('computer_use.browser', 'available');
   reportCapability('computer_use.desktop', 'available');
