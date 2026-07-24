@@ -362,6 +362,9 @@ const lessonsRegistry = createLessonsRegistry();
 let lessonsStore = null;
 // Domaine de sauvegarde chiffrée de la mémoire (Firebase) — composé au déverrouillage du coffre.
 let backupDomain = null;
+// État RÉEL du domaine maison connectée, résolu à la composition, rapporté honnêtement au catalogue.
+let homeCapabilityLevel = 'degraded';
+let homeCapabilityReason = 'aucun_connecteur_configure';
 const persistLessons = () => { void lessonsStore?.save(lessonsRegistry.serialize()); };
 const technicalLog = createTechnicalLog({
   onEntry: (entry) => {
@@ -2546,7 +2549,8 @@ app.whenReady().then(async () => {
     });
     homeRegistryRef = homeRegistry;
     homeServiceRef = homeService;
-    reportCapability('home', homeDomain.state === 'configured' ? 'available' : 'degraded', homeDomain.reason);
+    homeCapabilityLevel = homeDomain.state === 'configured' ? 'available' : 'degraded';
+    homeCapabilityReason = homeDomain.reason;
   } catch (error) {
     send('mina:event', { type: 'domain_degraded', domain: 'home', reason: String(error?.message ?? error).slice(0, 200) });
   }
@@ -2675,8 +2679,13 @@ app.whenReady().then(async () => {
   reportCapability('emergency', 'unavailable', 'dependances_absentes:network_policy,device_guard');
   reportCapability('approvals', 'unavailable', 'dependance_absente:state_observer (les approbations distantes Telegram restent servies par la passerelle Android)');
   reportCapability('connectors', 'unavailable', 'dependances_absentes:zip_inspector,dependency_scanner');
+  // Automation : les modules (stores, ledger, policy, runner) existent et sont testés, mais la
+  // SIMULATION exige un registre de domaines exposant simulate() qui n'est pas encore construit —
+  // composer à moitié donnerait une automatisation qui « fait semblant » de simuler. Rapporté
+  // honnêtement indisponible plutôt que branché en trompe-l'œil (principe fail-loud).
+  reportCapability('automation', 'unavailable', 'composant_absent:domain_registry.simulate (definitions/grants/ledger prets, simulation a construire)');
   reportCapability('mail', mailOperational ? 'available' : (mailController ? 'degraded' : 'unavailable'), mailOperational ? null : 'aucun_compte_operationnel');
-  reportCapability('home', 'degraded', 'aucun_connecteur_configure');
+  reportCapability('home', homeCapabilityLevel, homeCapabilityReason);
   reportCapability('camera', cameraController ? 'degraded' : 'unavailable', 'flux_reel_disponible_biometrie_non_implementee');
   reportCapability('biometrics.face', 'unavailable', 'face_embedding_pipeline_not_implemented');
   reportCapability('backup', process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_STORAGE_BUCKET ? 'degraded' : 'unavailable', process.env.FIREBASE_PROJECT_ID ? 'configure_non_verifie' : 'firebase_non_configure');
