@@ -184,6 +184,13 @@ npm run test:unit
 | Guide intégré (bouton ⚙️ dans l'app) | Capacités, commandes vocales, limites |
 | [CHANGELOG.md](CHANGELOG.md) | Ce qui est livré et prouvé, ce qui est planifié |
 | [MINA.md](MINA.md) | Constitution : règles de sécurité et canaux autorisés |
+| [docs/operations/INSTALLATION.md](docs/operations/INSTALLATION.md) | Installation pas à pas |
+| [docs/guides/httpsms.md](docs/guides/httpsms.md) | Passerelle SMS httpSMS (cloud ou auto-hébergé) |
+| [docs/operations/TELEGRAM.md](docs/operations/TELEGRAM.md) | Canal Telegram (conversation et commandes) |
+| [docs/operations/FIREBASE.md](docs/operations/FIREBASE.md) | Sauvegarde chiffrée et relais Firebase |
+| [docs/operations/ANDROID-HUAWEI.md](docs/operations/ANDROID-HUAWEI.md) | Téléphone Android : appairage, caméra, SMS |
+| [docs/operations/RECOVERY.md](docs/operations/RECOVERY.md) | Récupération du coffre mémoire |
+| [docs/operations/SECURITY.md](docs/operations/SECURITY.md) | Modèle de sécurité et invariants |
 | [docs/LICENCES.md](docs/LICENCES.md) | Licences des dépendances et décisions |
 | [docs/operations/AUDIT-PRE-PUBLICATION.md](docs/operations/AUDIT-PRE-PUBLICATION.md) | Audit de confidentialité du dépôt |
 
