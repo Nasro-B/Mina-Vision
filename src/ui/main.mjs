@@ -20,6 +20,7 @@ import { createKeyring } from '../crypto/keyring.mjs';
 import { createKeyringFileStorage } from '../crypto/keyring-file-storage.mjs';
 import { createMemoryServices } from '../memory/composition.mjs';
 import { composeBackupDomain } from '../backup/compose-backup-domain.mjs';
+import { createCustomTokenMinter } from '../backup/custom-token-minter.mjs';
 import { createFirebaseSdkClient } from '../backup/firebase-backup.mjs';
 import { createMemoryRuntimeController } from '../memory/runtime-controller.mjs';
 import { openMemoryDatabase } from '../memory/database.mjs';
@@ -2251,18 +2252,36 @@ app.whenReady().then(async () => {
       // Le client Firebase Storage exige un jeton PERSONNALISÉ (signInWithCustomToken) : sans backend
       // qui le fabrique (MINA_BACKUP_TOKEN_ENDPOINT), le domaine reste honnêtement « disabled ».
       const tokenEndpoint = process.env.MINA_BACKUP_TOKEN_ENDPOINT?.trim() || null;
+      // Jeton propriétaire : le COMPTE DE SERVICE local (env/*.json, jamais commité) frappe le
+      // custom token lui-même — plus besoin d'un backend externe. L'endpoint HTTP reste un
+      // secours si Nasro préfère externaliser la frappe. uid frappé == expectedOwnerId : c'est
+      // la garde anti-usurpation de firebase-backup.
+      const backupOwnerUid = process.env.MINA_BACKUP_OWNER_UID?.trim() || 'mina-owner-pc';
+      const serviceAccountPath = process.env.MINA_FIREBASE_SERVICE_ACCOUNT?.trim()
+        || path.join(ROOT_DIR, 'env', 'mina-vission-5355334a72f5.json');
+      let mintCustomToken = null; // frappe locale, initialisée paresseusement au premier besoin
+      const localAuthTokenProvider = async () => {
+        mintCustomToken ??= createCustomTokenMinter({
+          serviceAccount: JSON.parse(await readFile(serviceAccountPath, 'utf8')),
+          uid: backupOwnerUid,
+        });
+        return mintCustomToken();
+      };
+      const authTokenProvider = existsSync(serviceAccountPath)
+        ? localAuthTokenProvider
+        : (tokenEndpoint ? async () => (await (await fetch(tokenEndpoint)).json()).token : null);
       void composeBackupDomain({
         masterKey,
         configured: firebaseConfigured,
-        createClient: firebaseConfigured && tokenEndpoint
+        createClient: firebaseConfigured && authTokenProvider
           ? async () => {
             const googleServices = JSON.parse(await readFile(process.env.MINA_GOOGLE_SERVICES
               ?? path.join(ROOT_DIR, 'env', 'google-services.json'), 'utf8'));
             return createFirebaseSdkClient({ config: firebaseConfigFromGoogleServices(googleServices) });
           }
           : null,
-        authTokenProvider: tokenEndpoint ? async () => (await (await fetch(tokenEndpoint)).json()).token : null,
-        expectedOwnerId: process.env.FIREBASE_PROJECT_ID ?? null,
+        authTokenProvider,
+        expectedOwnerId: backupOwnerUid,
         deviceId: 'pc-primary',
       }).then((domain) => {
         backupDomain = domain;
