@@ -45,12 +45,12 @@
           <p>Tu peux couper Mina en pleine phrase : elle se tait immédiatement et écoute, sans jamais perdre le fil de la conversation en cours.</p>
         </article>
         <article>
-          <h3>Vision caméra (Huawei appairé)</h3>
-          <p>Flux vidéo signé depuis le téléphone, objectif avant ou arrière (bouton icône dans la vidéo, ou inversion automatique si l'image est noire/floue), rotation d'image correcte, arrêt sécurisé à tout moment. L'IP du téléphone n'est jamais affichée.</p>
+          <h3>Vision : caméra du mobile OU webcam du PC</h3>
+          <p><strong>Caméra du mobile</strong> (outil 03) : flux vidéo signé depuis le téléphone appairé, objectif avant ou arrière, arrêt sécurisé à tout moment ; l'IP du téléphone n'est jamais affichée. <strong>Webcam du PC</strong> (outil 03·b) : Mina regarde par la webcam de l'ordinateur, <em>sans aucun téléphone</em> — elle capture une image, la décrit, puis relâche la webcam aussitôt (voyant éteint) ; rien n'est enregistré. <strong>Décrire une image</strong> (outil 06) : choisis un fichier image et Mina te dit ce qu'elle voit. La caméra n'est plus son seul œil.</p>
         </article>
         <article>
           <h3>Téléphone : détection, SMS, synchronisation</h3>
-          <p>Détecte le téléphone par USB <strong>ou par Wi-Fi</strong> : « Détecter le téléphone » découvre en mDNS les appareils dont le débogage sans fil est actif (Android 11+) et s'y connecte sans câble, puis vérifie l'identité signée avant de faire confiance. Reconnexion automatique et vérification d'identité, prépare une réponse SMS (confirmation locale obligatoire avant envoi), synchronise SMS et Telegram vers la mémoire chiffrée.</p>
+          <p>Détecte le téléphone par USB <strong>ou par Wi-Fi</strong> : « Détecter le téléphone » découvre en mDNS les appareils dont le débogage sans fil est actif (Android 11+) <strong>et tente aussi les adresses Wi-Fi fixes déclarées</strong> dans <code>MINA_ADB_WIFI_HOSTS</code> (utile pour un téléphone qui ne s'annonce pas en mDNS, comme le Samsung en mode tcpip). L'identité signée est vérifiée avant toute confiance ; les appareils exclus (télé, etc.) ne sont jamais touchés. La <strong>synchronisation des messages écrit dans la mémoire chiffrée</strong> : si la mémoire est verrouillée, l'outil te demande de la déverrouiller d'abord (au lieu d'un échec obscur). La réponse SMS exige toujours une confirmation locale avant l'envoi.</p>
         </article>
         <article>
           <h3>Application Mina sur téléphone (conversation chiffrée)</h3>
@@ -75,8 +75,12 @@
           <p>Chaque échec technique réel (délai dépassé, ressource indisponible, refus…) devient une leçon appliquée avant la prochaine opération semblable : ralentir, changer de voie ou revérifier — jamais une capacité en plus, seulement un avertissement. Une leçon se met en veille après plusieurs succès d'affilée ; toute rechute la réactive aussitôt.</p>
         </article>
         <article>
+          <h3>Bienvenue &amp; profils personnalisables</h3>
+          <p>Au premier lancement (ou pour un nouveau profil), un écran d'accueil te présente Mina et te demande ton prénom, tes pronoms, ta langue, le ton souhaité, ton thème, et « ce que Mina doit savoir de toi ». Ces préférences sont enregistrées <strong>en clair et hors du coffre</strong> (elles ne sont pas secrètes et doivent être lisibles avant le déverrouillage, pour t'accueillir et appliquer ton thème dès l'ouverture). Plusieurs personnes peuvent avoir leur profil ; chacun garde son thème. Ces préférences ne modifient jamais les règles de sécurité de Mina (le fichier <code>MINA.md</code> reste immuable).</p>
+        </article>
+        <article>
           <h3>Thème jour/nuit</h3>
-          <p>Bouton dans l'en-tête ou commande vocale (« version nuit », « mode jour »).</p>
+          <p>Bouton dans l'en-tête, choix dans l'écran d'accueil (jour / nuit / selon le système), ou commande vocale (« version nuit », « mode jour »).</p>
         </article>
         <article>
           <h3>Musique</h3>
@@ -85,6 +89,7 @@
         <article>
           <h3>Mémoire locale chiffrée + recherche</h3>
           <p>Tout ce qu'on te dit est mémorisé avec sa source, son canal et sa date. Compaction automatique de contexte sur une tâche longue — rien n'est perdu, juste résumé. Recherche dans cette mémoire, lecture de fichiers ou de pages web comme preuves citées — jamais une affirmation sans source. Se déverrouille automatiquement à chaque démarrage.</p>
+          <p><strong>La phrase de récupération est vitale.</strong> À l'initialisation du coffre, une phrase de 12 mots s'affiche <em>une seule fois</em> — note-la hors du PC. Le coffre est protégé par le chiffrement de Windows ; si ce chiffrement change (réinstallation, changement de compte, réparation du profil), <strong>seule cette phrase</strong> peut rouvrir la mémoire. Sans elle et sans le chiffrement d'origine, l'ancienne mémoire devient illisible : Mina te propose alors de « repartir sur une mémoire neuve », qui <strong>archive l'ancienne sans jamais la supprimer</strong> et t'affiche une nouvelle phrase à noter.</p>
         </article>
         <article>
           <h3>Automatisations gouvernées</h3>
