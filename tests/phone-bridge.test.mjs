@@ -17,6 +17,63 @@ function pngFixture(width = 1080, height = 2340) {
 
 const resolveIdentity = vi.fn(async () => ({ deviceId: 'huawei-primary', verified: true }));
 
+const MDNS = [
+  'List of discovered mdns services',
+  'adb-SAMSUNGTESTSERIAL-a80QcZ\t_adb-tls-connect._tcp\t192.168.1.10:38361',
+  'adb-PIXELTESTSERIAL\t_adb._tcp\t192.168.1.12:5555',
+].join('\n');
+
+describe('découverte Wi-Fi du téléphone (mDNS + connect, sans USB)', () => {
+  it('connecte chaque téléphone annoncé en mDNS', async () => {
+    const run = vi.fn()
+      .mockResolvedValueOnce({ stdout: MDNS, stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'connected', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'connected', stderr: '' });
+    const bridge = createPhoneBridge({ run, adbPath: 'adb.exe', resolveDeviceIdentity: resolveIdentity });
+
+    await expect(bridge.discoverWifiPhones()).resolves.toEqual({
+      discovered: 2, connected: 2, endpoints: ['192.168.1.10:38361', '192.168.1.12:5555'],
+    });
+    expect(run).toHaveBeenNthCalledWith(1, 'adb.exe', ['mdns', 'services'], { binary: false });
+    expect(run).toHaveBeenNthCalledWith(2, 'adb.exe', ['connect', '192.168.1.10:38361'], { binary: false });
+    expect(run).toHaveBeenNthCalledWith(3, 'adb.exe', ['connect', '192.168.1.12:5555'], { binary: false });
+  });
+
+  it('ne se connecte JAMAIS à une adresse publique annoncée', async () => {
+    const poisoned = [
+      'List of discovered mdns services',
+      'adb-EVIL\t_adb._tcp\t8.8.8.8:5555',
+      'adb-OK\t_adb._tcp\t192.168.1.5:5555',
+    ].join('\n');
+    const run = vi.fn()
+      .mockResolvedValueOnce({ stdout: poisoned, stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'connected', stderr: '' });
+    const bridge = createPhoneBridge({ run, adbPath: 'adb.exe', resolveDeviceIdentity: resolveIdentity });
+
+    const result = await bridge.discoverWifiPhones();
+    expect(result.endpoints).toEqual(['192.168.1.5:5555']);
+    expect(run.mock.calls.flatMap((call) => call[1])).not.toContain('8.8.8.8:5555');
+  });
+
+  it('un endpoint injoignable ne bloque pas les autres', async () => {
+    const run = vi.fn()
+      .mockResolvedValueOnce({ stdout: MDNS, stderr: '' })
+      .mockRejectedValueOnce(new Error('cannot connect'))
+      .mockResolvedValueOnce({ stdout: 'connected', stderr: '' });
+    const bridge = createPhoneBridge({ run, adbPath: 'adb.exe', resolveDeviceIdentity: resolveIdentity });
+
+    await expect(bridge.discoverWifiPhones()).resolves.toMatchObject({
+      discovered: 2, connected: 1, endpoints: ['192.168.1.12:5555'],
+    });
+  });
+
+  it('mDNS indisponible ne fait pas échouer la découverte', async () => {
+    const run = vi.fn().mockRejectedValueOnce(new Error('adb: unknown command mdns'));
+    const bridge = createPhoneBridge({ run, adbPath: 'adb.exe', resolveDeviceIdentity: resolveIdentity });
+    await expect(bridge.discoverWifiPhones()).resolves.toEqual({ discovered: 0, connected: 0, endpoints: [] });
+  });
+});
+
 describe('phone bridge', () => {
   it('accepts exactly one authorized device', async () => {
     const run = fakeRun([{ stdout: 'List of devices attached\nSERIAL device product:MAR-LX1AEEA model:MAR_LX1A device:HWMAR\n' }]);

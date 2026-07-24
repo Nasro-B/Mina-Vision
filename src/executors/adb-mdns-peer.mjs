@@ -20,6 +20,24 @@ export function findAdbMdnsEndpoint(output, serial) {
   return null;
 }
 
+/**
+ * Tous les endpoints ADB annoncés en mDNS, sans connaître le serial d'avance.
+ *
+ * C'est ce qui permet de DÉTECTER un téléphone par Wi-Fi sans USB : un appareil avec le
+ * débogage sans fil actif (Android 11+) s'annonce ici. On ne fait confiance à aucun de ces
+ * endpoints par leur seule présence — l'appelant se connecte puis vérifie l'identité signée
+ * Mina avant de les traiter. On se limite aux adresses PRIVÉES (jamais une IP publique).
+ */
+export function parseAdbMdnsEndpoints(output) {
+  const endpoints = new Set();
+  for (const line of String(output ?? '').split(/\r?\n/u)) {
+    const [service = '', type = '', endpoint = ''] = line.trim().split(/\s+/u);
+    if (!service.startsWith('adb-') || !['_adb-tls-connect._tcp', '_adb._tcp'].includes(type)) continue;
+    if (PRIVATE_ENDPOINT.test(endpoint)) endpoints.add(endpoint);
+  }
+  return [...endpoints];
+}
+
 export function createAdbMdnsPeerKeeper({
   serial, role, adbPath = 'adb', run = defaultRun, onStatus = () => {},
   setIntervalFn = setInterval, clearIntervalFn = clearInterval, intervalMs = 5_000,

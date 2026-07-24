@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { createPhysicalDeviceRegistry } from '../devices/physical-device-registry.mjs';
 import { classifyAdbEndpoint, createAndroidTransport } from '../devices/android-transport.mjs';
 import { verifyDeviceProof } from '../devices/device-identity-proof.mjs';
+import { parseAdbMdnsEndpoints } from './adb-mdns-peer.mjs';
 
 const SERIAL_PATTERN = /^[A-Za-z0-9._:-]+$/;
 const DEVICE_ID_PATTERN = /^[A-Za-z0-9._:-]{1,160}$/u;
@@ -244,6 +245,38 @@ export function createPhoneBridge({
     throw new Error(`adb_wifi_connect_failed:${String(lastError?.message ?? 'unknown').slice(0, 160)}`);
   };
 
+  /**
+   * Découverte Wi-Fi : connecte les téléphones qui s'annoncent en mDNS (débogage sans fil), sans
+   * exiger l'USB. Best-effort — mDNS absent (ADB ancien, pare-feu) ou endpoint injoignable ne
+   * fait JAMAIS échouer la détection, qui retombe alors sur ce qui est déjà branché.
+   *
+   * Aucune confiance accordée par la simple annonce : on se connecte, puis `detect()` vérifie
+   * l'identité signée Mina. Un endpoint qui n'est pas un téléphone Mina est ensuite ignoré.
+   */
+  const discoverWifiPhones = async () => {
+    let announced = [];
+    try {
+      const { stdout } = await run(adbPath, ['mdns', 'services'], { binary: false });
+      announced = parseAdbMdnsEndpoints(stdout);
+    } catch {
+      return Object.freeze({ discovered: 0, connected: 0, endpoints: Object.freeze([]) });
+    }
+    const connected = [];
+    for (const endpoint of announced) {
+      try {
+        await run(adbPath, ['connect', endpoint], { binary: false });
+        connected.push(endpoint);
+      } catch {
+        // Annoncé mais injoignable (déjà déconnecté, non appairé) : on n'entrave pas les autres.
+      }
+    }
+    return Object.freeze({
+      discovered: announced.length,
+      connected: connected.length,
+      endpoints: Object.freeze(connected),
+    });
+  };
+
   const getDevice = async () => device || detect();
 
   const submitMessageCommand = async (command, expectedState = 'ok') => {
@@ -297,6 +330,7 @@ export function createPhoneBridge({
 
   return Object.freeze({
     detect,
+    discoverWifiPhones,
     ensureWifiConnection,
     ensureGatewayService: async () => {
       const current = await getDevice();
