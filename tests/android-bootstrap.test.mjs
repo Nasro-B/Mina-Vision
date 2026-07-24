@@ -31,10 +31,13 @@ describe('Android Kotlin gateway bootstrap', () => {
     ]);
     expect(manifest).toContain('android.intent.category.LAUNCHER');
     expect(manifest).toContain('android:launchMode="singleTop"');
-    expect(activity).toContain('class MainActivity : Activity()');
+    // Accueil réécrit en Compose le 2026-07-24 (fin de la « page tokens ») : MainActivity est
+    // désormais une ComponentActivity, le libellé du bouton a été raccourci, et le filtre numérique
+    // des IDs Telegram passe par Compose (KeyboardType.Number + filter) au lieu de DigitsKeyListener.
+    expect(activity).toContain('class MainActivity : ComponentActivity()');
     expect(activity).toContain('Mina Vision');
-    expect(activity).toContain('Enregistrer localement et chiffrer');
-    expect(activity).toContain('DigitsKeyListener.getInstance("0123456789,")');
+    expect(activity).toContain('Enregistrer et chiffrer');
+    expect(activity).toContain("c.isDigit() || c == ','");
     expect(activity).toContain('restartGatewayService()');
     expect(activity).toContain('stopService(Intent(this, MinaGatewayService::class.java))');
     expect(activity).toContain('AndroidKeystoreFieldCipher');
