@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:f
 import { access, appendFile, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage, screen, session } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, safeStorage, screen, session, Tray } from 'electron';
 import { loadConfig, redactConfig } from '../config.mjs';
 import { createMinaOrchestrator } from '../core/orchestrator.mjs';
 import { createMinaRuntime } from '../core/mina-runtime.mjs';
@@ -165,6 +165,40 @@ import { createYouTubeDataClient } from '../media/youtube-data-client.mjs';
 
 const UI_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(UI_DIR, '../..');
+// Icône Mina Vision : .ico multi-tailles sous Windows (barre des tâches nette), PNG ailleurs.
+// Générée depuis assets/Logo/Mina Vision-logo.png par scripts/generate-icons.mjs.
+const APP_ICON = path.join(
+  ROOT_DIR, 'assets', 'Logo',
+  process.platform === 'win32' ? 'mina-vision.ico' : 'mina-vision-256.png',
+);
+
+// Ramène la fenêtre au premier plan (la recrée si elle a été détruite) — utilisée par le tray et
+// le clic sur l'icône du bureau (second-instance).
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    if (app.isReady()) void createWindow().catch(() => {});
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+// Icône de zone de notification, créée une seule fois. Clic = rouvrir ; clic droit = menu.
+function ensureTray() {
+  if (tray) return;
+  const image = nativeImage.createFromPath(APP_ICON);
+  tray = new Tray(image.isEmpty() ? APP_ICON : image);
+  tray.setToolTip('Mina Vision — agent local actif');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Ouvrir Mina Vision', click: showMainWindow },
+    { type: 'separator' },
+    // Le SEUL vrai arrêt : passe par before-quit (arrêt propre voix/chat/coffre).
+    { label: 'Quitter Mina Vision', click: () => { isQuitting = true; app.quit(); } },
+  ]));
+  tray.on('click', showMainWindow);
+  tray.on('double-click', showMainWindow);
+}
 const GOOGLE_PHOTOS_DENTAL_SEARCH = 'https://photos.google.com/u/0/search/CgxkZW50ICsgZGVudHMiDgoMZGVudCArIGRlbnRzKLK4mPC1MzgD';
 const SMOKE_MODE = process.argv.includes('--mina-smoke');
 
@@ -175,6 +209,9 @@ dotenv.config({ path: path.join(ROOT_DIR, '.env'), quiet: true });
 // coffre mémoire n'existe pas encore (vérifié : seuls des caches Chromium + les préférences UI
 // y vivaient) — après création du coffre, cette migration aurait été périlleuse.
 app.setName('Mina Vision');
+// Sous Windows, sans AppUserModelId explicite la barre des tâches regroupe Mina sous l'icône
+// générique d'Electron ; ce modelId lui donne sa propre entrée avec son logo.
+if (process.platform === 'win32') app.setAppUserModelId('fr.sourireconcept.minavision');
 {
   const legacyUserData = path.join(app.getPath('appData'), 'Electron');
   const namedUserData = path.join(app.getPath('appData'), 'Mina Vision');
@@ -190,6 +227,11 @@ app.setName('Mina Vision');
 
 let mainWindow = null;
 let helpWindow = null;
+// Icône de zone de notification : fermer la fenêtre réduit Mina ici au lieu de quitter, pour que
+// voix, chat téléphone et passerelles continuent en arrière-plan. `isQuitting` distingue « fermer
+// vers le tray » (défaut) d'un VRAI arrêt (menu du tray « Quitter »).
+let tray = null;
+let isQuitting = false;
 let runtime = null;
 let phoneBridge = null;
 let adbWifiKeeper = null;
@@ -1558,6 +1600,7 @@ const openHelpWindow = async () => {
     minHeight: 480,
     title: 'Mina Vision — Guide',
     backgroundColor: '#eaf1ef',
+    icon: APP_ICON,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   helpWindow.removeMenu();
@@ -1868,6 +1911,7 @@ const createWindow = async () => {
     minHeight: 640,
     backgroundColor: '#eaf1ef',
     title: 'Mina Vision — Agent local',
+    icon: APP_ICON,
     show: false,
     webPreferences: {
       preload: path.join(UI_DIR, 'preload.cjs'),
@@ -1877,6 +1921,24 @@ const createWindow = async () => {
     },
   });
   mainWindow.removeMenu();
+
+  // Fermer la fenêtre = réduire dans la zone de notification, PAS quitter. Mina reste vivante en
+  // arrière-plan (voix, serveur de chat, passerelles). Seul le menu du tray « Quitter » arrête
+  // vraiment. La première fois, on prévient pour que l'utilisateur ne croie pas l'app fermée.
+  let hideNoticeShown = false;
+  mainWindow.on('close', (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    mainWindow.hide();
+    if (!hideNoticeShown && tray) {
+      hideNoticeShown = true;
+      tray.displayBalloon?.({
+        title: 'Mina Vision continue en arrière-plan',
+        content: 'Voix et téléphone restent actifs. Clic sur l’icône pour rouvrir, clic droit → Quitter pour arrêter.',
+      });
+    }
+  });
+  ensureTray();
   // No allowlist: Mina's renderer never legitimately opens a new window or navigates away from its
   // own index.html — browsing goes through the browser executor (Playwright), never the app shell.
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -1884,7 +1946,7 @@ const createWindow = async () => {
     if (url !== mainWindow.webContents.getURL()) event.preventDefault();
   });
   await loadAndShowWindow(mainWindow, path.join(UI_DIR, 'index.html'));
-  if (SMOKE_MODE) setTimeout(() => app.quit(), 1_200);
+  if (SMOKE_MODE) setTimeout(() => { isQuitting = true; app.quit(); }, 1_200);
 };
 
 app.whenReady().then(async () => {
@@ -2603,9 +2665,13 @@ app.whenReady().then(async () => {
   await createWindow();
 });
 
-app.on('window-all-closed', () => app.quit());
+// En mode zone de notification, fermer la fenêtre ne quitte PAS : on ne quitte que sur un arrêt
+// explicite (menu du tray « Quitter » → isQuitting). Sinon Mina reste vivante en arrière-plan.
+app.on('window-all-closed', () => { if (isQuitting) app.quit(); });
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  tray?.destroy(); // retire l'icône de la zone de notification à l'arrêt réel
+  tray = null;
   localVoiceInstance?.close(); // le worker Kokoro ne doit jamais survivre à l'app (leçon des zombies)
   deepgramFallback?.close();
   void selfModel?.flush();
