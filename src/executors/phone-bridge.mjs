@@ -135,8 +135,13 @@ export function createPhoneBridge({
     ...DEFAULT_EXCLUDED_OUI,
     ...String(process.env.MINA_ADB_EXCLUDE_OUI ?? '').split(/[;,]/u).map((value) => value.trim().toLowerCase()).filter(Boolean),
   ],
+  // Hôtes ADB Wi-Fi STATIQUES (host:port) à tenter en plus du mDNS : le Samsung en mode tcpip et le
+  // Huawei ne s'annoncent PAS en mDNS (prouvé 2026-07-22), donc « Détecter » ne les voyait jamais par
+  // Wi-Fi. Renseigner MINA_ADB_WIFI_HOSTS=192.168.1.10:5555,192.168.1.11:5555 les rend détectables.
+  wifiHosts = String(process.env.MINA_ADB_WIFI_HOSTS ?? '').split(/[;,]/u).map((value) => value.trim()).filter(Boolean),
 } = {}) {
   const excludedOuiSet = new Set(excludedOui);
+  const staticWifiHosts = wifiHosts.filter((host) => /^\d{1,3}(?:\.\d{1,3}){3}:\d{1,5}$/u.test(host));
   let device = null;
   let preview = null;
   const activeIdentityResolver = resolveDeviceIdentity ?? (async ({ serial }) => {
@@ -277,6 +282,12 @@ export function createPhoneBridge({
       const { stdout } = await run(adbPath, ['mdns', 'services'], { binary: false });
       announced = parseAdbMdnsEndpoints(stdout);
     } catch {
+      // mDNS indisponible n'empêche plus la découverte : les hôtes statiques restent tentés.
+      announced = [];
+    }
+    // Hôtes statiques d'abord (les téléphones hors mDNS), puis les annoncés — dédupliqués.
+    announced = [...new Set([...staticWifiHosts, ...announced])];
+    if (announced.length === 0) {
       return Object.freeze({ discovered: 0, connected: 0, excluded: 0, endpoints: Object.freeze([]) });
     }
     // Table ARP pour écarter les appareils interdits (télé Condor 09:8d:05, etc.) AVANT tout

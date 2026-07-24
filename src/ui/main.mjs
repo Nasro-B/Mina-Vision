@@ -665,7 +665,7 @@ const confirmSensitiveAction = async ({ reason, action }) => {
 const getPhoneBridge = () => {
   if (!phoneBridge) {
     const config = currentConfig();
-    phoneBridge = createPhoneBridge({ adbPath: config.adbPath, scrcpyPath: config.scrcpyPath });
+    phoneBridge = createPhoneBridge({ adbPath: config.adbPath, scrcpyPath: config.scrcpyPath, wifiHosts: config.adbWifiHosts });
   }
   return phoneBridge;
 };
