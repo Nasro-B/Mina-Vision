@@ -37,6 +37,11 @@
             android:launchMode="singleTop"
             android:theme="@style/Theme.MinaChat"
             android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".AideActivity"
+            android:exported="false"
+            android:label="Guide"
+            android:theme="@style/Theme.MinaChat" />
         <receiver
             android:name=".messaging.SmsBroadcastReceiver"
             android:directBootAware="false"
