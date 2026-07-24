@@ -772,3 +772,10 @@ kbd { padding: 2px 5px; border: 1px solid var(--line); border-bottom-width: 2px;
 .primary-button:hover { background: var(--accent-strong); }
 .primary-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .primary-button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* CORRECTIF G7 : l'attribut [hidden] (display:none du navigateur) est écrasé par les règles
+   d'auteur .welcome-overlay{display:grid} et .welcome-actions{display:flex} (même origine, plus
+   forte). Sans ceci, overlay.hidden=true ne cachait rien → « Entrer dans Mina » semblait inerte.
+   On force [hidden] à cacher, scopé à la fenêtre de bienvenue uniquement. */
+.welcome-overlay[hidden],
+.welcome-overlay [hidden] { display: none !important; }
