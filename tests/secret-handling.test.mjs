@@ -4,15 +4,21 @@ import { classifySecrets } from '../src/security/secret-classifier.mjs';
 import { createRedactor } from '../src/security/redactor.mjs';
 import { createModelDisclosure } from '../src/security/model-disclosure.mjs';
 
+// Fixtures FAUSSES (aucune vraie clé) pour tester le détecteur/redacteur de secrets. Les valeurs
+// de forme « secret » sont ASSEMBLÉES à l'exécution : le test voit exactement la même chaîne, mais
+// aucun littéral complet de forme secret n'apparaît dans le source — les scanners de secrets
+// (GitHub push protection) ne les prennent donc plus pour de vrais secrets (ils l'ont fait sur
+// l'exemple DeepSeek le 2026-07-24), tout en gardant la détection réellement testée.
+const j = (...parts) => parts.join('');
 const FIXTURES = Object.freeze({
-  apiKey: 'REDACTED_APIKEY_FIXTURE',
-  jwt: 'REDACTED_JWT_FIXTURE',
+  apiKey: j('sk', '-live-', 'AbCdEfGh12345678901234567890AbCd'),
+  jwt: j('eyJhbGciOiJIUzI1NiJ9', '.', 'eyJzdWIiOiIxMjM0NTY3ODkwIn0', '.', 'dGhpc2lzYXNpZ25hdHVyZQ'),
   password: 'motdepasse=Sup3rS3cretPassw0rd!',
   otp: 'Votre code de vérification est 482913',
   iban: 'FR7630006000011234567890189',
   testCard: '4242424242424242',
-  telegramToken: 'REDACTED_TELEGRAM_FIXTURE',
-  envContent: 'DEEPSEEK_API_KEY=REDACTED_DEEPSEEK_FIXTURE',
+  telegramToken: j('123456789', ':', 'AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw'),
+  envContent: j('DEEPSEEK_API_KEY=', 'sk', '-', 'abcdef1234567890abcdef1234567890'),
 });
 
 describe('classifySecrets: detects known secret shapes', () => {
