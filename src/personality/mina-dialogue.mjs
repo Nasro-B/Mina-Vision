@@ -289,7 +289,7 @@ export function createMinaDialogue({
       const selectedEnvironment = ENVIRONMENT_SELECTION_PATTERNS.find(({ pattern }) => pattern.test(normalized))?.environment;
       if (selectedEnvironment) {
         const surface = selectedEnvironment === 'mobile' ? 'Téléphone'
-          : selectedEnvironment === 'desktop' ? 'Bureau'
+          : selectedEnvironment === 'desktop' ? 'PC'
             : 'Navigateur';
         return result(
           `${surface} sélectionné.`,
