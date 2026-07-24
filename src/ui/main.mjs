@@ -1755,6 +1755,39 @@ const registerIpc = () => {
     return startLiveCamera();
   });
   ipcMain.handle('mina:phone-camera-stop', () => stopLiveCamera());
+  // G5 — « Décrire une image » : Nasro choisit un fichier image via la boîte système (jamais un
+  // chemin arbitraire du renderer), Mina la décrit. Réutilise le fournisseur de vision. Sans
+  // identifiants IA => échec honnête. L'image ne quitte pas la machine (le fournisseur est le même
+  // que la caméra locale).
+  ipcMain.handle('mina:vision:analyze-file', async (_event, request) => {
+    const picked = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choisir une image à décrire',
+      properties: ['openFile'],
+      filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp'] }],
+    });
+    if (picked.canceled || !picked.filePaths[0]) return { ok: false, reason: 'annule' };
+    const filename = picked.filePaths[0];
+    const mimeType = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }[
+      path.extname(filename).slice(1).toLowerCase()];
+    if (!mimeType) return { ok: false, reason: 'type_non_supporte' };
+    let image;
+    try { image = await readFile(filename); } catch (error) { return { ok: false, reason: String(error?.message ?? error).slice(0, 160) }; }
+    if (image.length < 64 || image.length > 12 * 1024 * 1024) return { ok: false, reason: 'image_taille_invalide' };
+    try {
+      if (!cameraVision) cameraVision = createCameraVisionRuntime({ config: requireRotatedCredentials() }).cameraVision;
+      const result = await cameraVision.analyze({
+        image, mimeType,
+        prompt: String(request?.prompt ?? 'Décris précisément cette image, en français.').trim().slice(0, 2_000),
+      });
+      const text = typeof result === 'string' ? result : String(result?.text ?? result?.description ?? '');
+      void activityJournal?.append('vision_fichier_analyse', { chars: text.length });
+      return { ok: true, text, name: path.basename(filename) };
+    } catch (error) {
+      return { ok: false, reason: String(error?.message ?? error).slice(0, 200) };
+    } finally {
+      if (Buffer.isBuffer(image)) image.fill(0);
+    }
+  });
   // G3 — vision d'UNE image quelconque (webcam PC, capture d'écran, image reçue) : la caméra n'est
   // plus le seul œil de Mina. La frame est capturée côté renderer (getUserMedia pour la webcam PC),
   // envoyée ici en base64, analysée par le MÊME fournisseur de vision. Sans identifiants IA tournés,

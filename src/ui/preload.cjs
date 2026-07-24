@@ -86,6 +86,7 @@ function createPreloadApi(ipcRenderer) {
     switchCameraLens: (request) => ipcRenderer.invoke('mina:camera:switch-lens', request),
     nextCameraPreviewFrame: () => ipcRenderer.invoke('mina:camera:preview-frame'),
     analyzeVisionFrame: (request) => ipcRenderer.invoke('mina:vision:analyze-frame', request),
+    analyzeVisionFile: (request) => ipcRenderer.invoke('mina:vision:analyze-file', request),
     enrollFace: (request) => ipcRenderer.invoke('mina:camera:enroll', request),
     deleteFaceProfile: (request) => ipcRenderer.invoke('mina:camera:delete-profile', request),
     listAutomationDefinitions: () => ipcRenderer.invoke('mina:automation:list-definitions'),
