@@ -146,6 +146,7 @@ import { createSmartHomeRegistry } from '../home/registry.mjs';
 import { createSmartHomePolicy } from '../home/policy.mjs';
 import { createSmartHomeRouter } from '../home/router.mjs';
 import { createSmartHomeService } from '../home/service.mjs';
+import { composeHomeDomain } from '../home/compose-home-domain.mjs';
 import { createHomeController } from './pages/home-controller.mjs';
 import { registerHomeIpc } from './ipc/home-ipc.mjs';
 import { createFaceProfileStore } from '../biometrics/face-profile-store.mjs';
@@ -2530,16 +2531,22 @@ app.whenReady().then(async () => {
   }
 
   try {
+    // Connecteurs RÉELS depuis la configuration (Home Assistant si URL locale + jeton ; MQTT
+    // honnêtement indisponible car la dépendance a été retirée). Sans config, listes vides =
+    // « aucun connecteur configuré » affiché honnêtement, ce qui reste la vérité.
+    const homeDomain = composeHomeDomain({ env: process.env });
+    const homeConnectorList = Object.values(homeDomain.connectors);
     const homeRegistry = createSmartHomeRegistry({ devices: [] });
     const homePolicy = createSmartHomePolicy({ telegramLowRiskEnabled: false });
-    const homeRouter = createSmartHomeRouter({ connectors: [] });
+    const homeRouter = createSmartHomeRouter({ connectors: homeConnectorList });
     const homeService = createSmartHomeService({ registry: homeRegistry, policy: homePolicy, router: homeRouter });
     homeController = createHomeController({
-      registry: homeRegistry, service: homeService, connectors: {},
+      registry: homeRegistry, service: homeService, connectors: homeDomain.connectors,
       audit: (event) => send('mina:event', { type: 'home_audit', ...event }),
     });
     homeRegistryRef = homeRegistry;
     homeServiceRef = homeService;
+    reportCapability('home', homeDomain.state === 'configured' ? 'available' : 'degraded', homeDomain.reason);
   } catch (error) {
     send('mina:event', { type: 'domain_degraded', domain: 'home', reason: String(error?.message ?? error).slice(0, 200) });
   }
