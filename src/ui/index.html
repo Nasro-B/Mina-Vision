@@ -8,6 +8,79 @@
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
+    <!-- G7 — Fenêtre de bienvenue (premier lancement / nouveau profil). Masquée par défaut ;
+         le renderer l'affiche si aucun profil actif ou accueil non terminé. Thème-aware. -->
+    <div id="welcome-overlay" class="welcome-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="welcome-title">
+      <div class="welcome-card">
+        <button id="welcome-theme" class="welcome-theme" type="button" title="Basculer jour / nuit">Thème</button>
+
+        <section class="welcome-step" data-step="1">
+          <p class="eyebrow">Bienvenue</p>
+          <h1 id="welcome-title">Faisons connaissance</h1>
+          <p class="welcome-lead">Je suis <strong>Mina</strong>, ton assistante locale. Tout se passe sur ce PC : mémoire chiffrée, aucune donnée ne part sans ton accord. Dis-moi qui tu es pour que je m'adapte à toi.</p>
+          <div class="welcome-profiles" id="welcome-existing" hidden>
+            <p class="muted">Profils déjà connus :</p>
+            <div id="welcome-profile-list" class="welcome-profile-list"></div>
+          </div>
+          <div class="welcome-actions">
+            <button id="welcome-start" class="primary-button" type="button">Créer mon profil</button>
+          </div>
+        </section>
+
+        <section class="welcome-step" data-step="2" hidden>
+          <p class="eyebrow">Ton profil</p>
+          <h1>Comment t'appeler ?</h1>
+          <label class="welcome-field"><span>Prénom / nom d'usage</span>
+            <input id="welcome-name" type="text" maxlength="60" placeholder="Nasro" autocomplete="off"></label>
+          <label class="welcome-field"><span>Pronoms (facultatif)</span>
+            <input id="welcome-pronouns" type="text" maxlength="40" placeholder="il / elle / iel" autocomplete="off"></label>
+          <label class="welcome-field"><span>Langue</span>
+            <select id="welcome-language">
+              <option value="fr" selected>Français</option>
+              <option value="en">English</option>
+              <option value="ar">العربية</option>
+              <option value="es">Español</option>
+            </select></label>
+          <label class="welcome-field"><span>Ton de Mina</span>
+            <select id="welcome-tone">
+              <option value="chaleureux" selected>Chaleureux</option>
+              <option value="neutre">Neutre</option>
+              <option value="direct">Direct</option>
+              <option value="concis">Concis</option>
+            </select></label>
+          <label class="welcome-field"><span>Thème</span>
+            <select id="welcome-theme-choice">
+              <option value="system" selected>Selon le système</option>
+              <option value="light">Jour</option>
+              <option value="dark">Nuit</option>
+            </select></label>
+          <label class="welcome-field"><span>Ce que Mina doit savoir de toi (facultatif, jamais un secret)</span>
+            <textarea id="welcome-preferences" maxlength="400" rows="3" placeholder="Ex. je préfère des réponses courtes, je travaille le soir…"></textarea></label>
+          <div class="welcome-actions">
+            <button id="welcome-back-1" class="ghost-button" type="button">Retour</button>
+            <button id="welcome-save" class="primary-button" type="button">Continuer</button>
+          </div>
+        </section>
+
+        <section class="welcome-step" data-step="3" hidden>
+          <p class="eyebrow">Mémoire</p>
+          <h1 id="welcome-mem-title">Ta mémoire chiffrée</h1>
+          <p class="welcome-lead" id="welcome-mem-lead">Mina garde ce que tu lui confies dans un coffre chiffré, protégé par Windows. Initialise-le : une <strong>phrase de récupération</strong> unique s'affichera — <strong>note-la hors du PC</strong>, c'est la seule façon de rouvrir la mémoire si le chiffrement Windows change.</p>
+          <div class="welcome-actions" id="welcome-mem-actions">
+            <button id="welcome-mem-init" class="primary-button" type="button">Initialiser la mémoire</button>
+          </div>
+          <div id="welcome-mem-repair" class="welcome-repair" hidden>
+            <p class="welcome-warn">⚠️ Une mémoire existe déjà mais elle est <strong>illisible</strong> (le chiffrement Windows a changé et la phrase de récupération n'a pas été notée). Elle sera <strong>archivée, jamais supprimée</strong>, et Mina repartira sur une mémoire neuve.</p>
+            <button id="welcome-mem-reinit" class="danger-button" type="button">Repartir sur une mémoire neuve</button>
+          </div>
+          <pre id="welcome-phrase" class="welcome-phrase" hidden></pre>
+          <div class="welcome-actions" id="welcome-finish-actions" hidden>
+            <button id="welcome-finish" class="primary-button" type="button">J'ai noté ma phrase — Entrer dans Mina</button>
+          </div>
+          <p class="welcome-skip"><button id="welcome-skip-mem" class="linklike" type="button">Plus tard (mémoire verrouillée pour l'instant)</button></p>
+        </section>
+      </div>
+    </div>
     <div class="app-shell">
       <aside class="rail">
         <div class="iris" id="iris" aria-hidden="true"><span></span></div>
