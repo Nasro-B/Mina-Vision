@@ -1,0 +1,25 @@
+{
+  "description": "Vecteurs partagés du codec payload v2 (extras chat). Node encode, Kotlin rejoue. Big-endian, mêmes octets des deux côtés — voir src/contracts/chat-payload.mjs et core/protocol/ChatPayloadCodec.kt.",
+  "vectors": [
+    {
+      "name": "attachment_meta_only",
+      "type": "message.attachment.created",
+      "meta": { "mediaId": "M1", "mime": "image/jpeg", "sizeBytes": 3, "sha256": "abababababababababababababababababababababababababababababababab", "chunkCount": 1, "chunkBytes": 3 },
+      "binaryHex": "",
+      "payloadHex": "0002001a6d6573736167652e6174746163686d656e742e637265617465640000009c7b226d656469614964223a224d31222c226d696d65223a22696d6167652f6a706567222c2273697a654279746573223a332c22736861323536223a2261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162222c226368756e6b436f756e74223a312c226368756e6b4279746573223a337d00000000"
+    },
+    {
+      "name": "media_chunk",
+      "type": "media.chunk",
+      "meta": { "mediaId": "M1", "index": 0 },
+      "binaryHex": "010203",
+      "payloadHex": "0002000b6d656469612e6368756e6b0000001a7b226d656469614964223a224d31222c22696e646578223a307d00000003010203"
+    },
+    {
+      "name": "text_v1_passthrough",
+      "textUtf8": "bonjour",
+      "payloadHex": "626f6e6a6f7572",
+      "note": "Premier octet != 0x00 (0x62='b') → décodé comme texte v1 brut, jamais comme v2."
+    }
+  ]
+}
