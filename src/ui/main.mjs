@@ -23,6 +23,7 @@ import { createMemoryRuntimeController } from '../memory/runtime-controller.mjs'
 import { openMemoryDatabase } from '../memory/database.mjs';
 import BetterSqlite3 from 'better-sqlite3';
 import { createConfigService, NON_SENSITIVE_CONFIG_KEYS } from '../config/config-service.mjs';
+import { parseConfig as parseSafeConfig } from '../config/config-schema.mjs';
 import { createEnvDocumentStore } from '../config/env-document.mjs';
 import { createProviderSecretStore } from '../security/provider-secret-store.mjs';
 import { loadMinaInstructions } from '../instructions/mina-instructions.mjs';
@@ -374,6 +375,29 @@ const technicalLog = createTechnicalLog({
   },
 });
 const technicalLogReader = createTechnicalLogReader({ technicalLog });
+
+// « Absolument chaque erreur au journal » : tout handler IPC qui échoue est CONSIGNÉ au journal
+// technique (donc lisible par Mina via lire_erreurs_techniques) AVANT d'être renvoyé au renderer.
+// Sans ce filet, une erreur comme web_answer_http_413 remontait à l'interface sans jamais entrer
+// dans le journal que Mina relit. On enveloppe ipcMain.handle une seule fois : tous les handlers,
+// présents et à venir, en héritent.
+{
+  const rawIpcHandle = ipcMain.handle.bind(ipcMain);
+  ipcMain.handle = (channel, listener) => rawIpcHandle(channel, async (event, ...args) => {
+    try {
+      return await listener(event, ...args);
+    } catch (error) {
+      technicalLog.record({
+        severity: 'error',
+        scope: 'ipc',
+        code: String(channel).replace(/[^A-Za-z0-9_]/gu, '_').slice(0, 120) || 'ipc_error',
+        message: String(error?.message ?? error).slice(0, 300),
+      });
+      throw error; // le renderer reçoit toujours l'erreur : le journal n'avale rien.
+    }
+  });
+}
+
 let selfModel = null;
 let activityJournal = null;
 // Canal `mina_app` : la clé maîtresse n'est PAS conservée ailleurs — cette référence suit
@@ -1050,7 +1074,26 @@ const capabilitySnapshotFresh = async () => {
     mailController?.listAccounts?.().catch(() => []) ?? [],
   ]);
   const googleConfigured = mailAccounts.some((account) => ['google', 'gmail'].includes(String(account.provider).toLowerCase()));
+  // Conscience COMPLÈTE de Mina : la liste réelle de ses outils vocaux (fonctions appelables) et
+  // ses PARAMÈTRES non sensibles actifs. Les paramètres viennent de la vue SAFE de la config
+  // (parseConfig n'expose jamais une clé, un token ou un secret — seulement enabled/model/mode).
+  const tools = (LIVE_TOOLS?.[0]?.functionDeclarations ?? [])
+    .map((tool) => ({ name: tool.name, description: tool.description ?? '' }));
+  let settings = null;
+  try {
+    const safe = parseSafeConfig(process.env);
+    settings = {
+      inferenceMode: safe.inference?.mode ?? null,
+      offline: safe.inference?.offline === true,
+      providers: Object.fromEntries(Object.entries(safe.providers ?? {})
+        .map(([name, value]) => [name, { enabled: value?.enabled === true, model: value?.model ?? value?.textModel ?? null }])),
+      callMode: safe.telephony?.policy?.callMode ?? null,
+      smsSendMode: safe.sms?.policy?.sendMode ?? null,
+    };
+  } catch { settings = null; }
   return {
+    tools,
+    settings,
     skills,
     bundledSkills,
     sandbox,
