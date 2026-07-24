@@ -1062,6 +1062,139 @@ try { initialTheme = localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark'
 applyTheme(initialTheme);
 elements.themeToggle.addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
 
+// Résout un thème stocké « system » vers clair/sombre selon l'OS (les variables CSS ne gèrent que
+// light/dark ; « system » est un choix, pas un état DOM).
+const resolveTheme = (theme) => {
+  if (theme === 'light' || theme === 'dark') return theme;
+  try { return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch { return 'light'; }
+};
+
+// G7 — Fenêtre de bienvenue : premier lancement (aucun profil / accueil non terminé) OU création
+// d'un nouveau profil. Applique le thème du profil actif au démarrage, personnalise Mina, et gère
+// l'initialisation mémoire (avec affichage de la phrase de récupération — cause racine du blocage
+// mémoire corrigée) y compris le cas « coffre illisible » (repartir à neuf, archive sans supprimer).
+const welcome = (() => {
+  const overlay = document.querySelector('#welcome-overlay');
+  if (!overlay) return { boot: async () => {} };
+  const $ = (sel) => overlay.querySelector(sel);
+  const steps = [...overlay.querySelectorAll('.welcome-step')];
+  const showStep = (n) => steps.forEach((s) => { s.hidden = Number(s.dataset.step) !== n; });
+  const show = () => { overlay.hidden = false; };
+  const hide = () => { overlay.hidden = true; };
+  const draft = { theme: 'system' };
+
+  $('#welcome-theme').addEventListener('click', () => {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+  });
+  $('#welcome-start').addEventListener('click', () => showStep(2));
+  $('#welcome-back-1').addEventListener('click', () => showStep(1));
+  $('#welcome-theme-choice').addEventListener('change', (e) => applyTheme(resolveTheme(e.target.value)));
+
+  $('#welcome-save').addEventListener('click', async () => {
+    const input = {
+      name: $('#welcome-name').value,
+      pronouns: $('#welcome-pronouns').value,
+      language: $('#welcome-language').value,
+      tone: $('#welcome-tone').value,
+      theme: $('#welcome-theme-choice').value,
+      preferences: $('#welcome-preferences').value,
+    };
+    try {
+      const profile = await api.upsertProfile(input);
+      draft.theme = profile.theme;
+      applyTheme(resolveTheme(profile.theme));
+      await prepareMemoryStep();
+      showStep(3);
+    } catch (error) { log(`Profil : ${error.message}`); }
+  });
+
+  // Étape mémoire : sonde l'état réel du coffre pour proposer soit l'initialisation, soit —
+  // uniquement si le coffre est illisible — le « repartir à neuf ».
+  const prepareMemoryStep = async () => {
+    let probe = { state: 'uninitialized' };
+    try { probe = await api.probeMemory?.() ?? probe; } catch { /* sonde best-effort */ }
+    const repair = $('#welcome-mem-repair');
+    const initActions = $('#welcome-mem-actions');
+    if (probe.state === 'dpapi_unrecoverable') {
+      repair.hidden = false; initActions.hidden = true;
+      $('#welcome-mem-lead').textContent = 'Une mémoire existe déjà mais Windows ne peut plus la déchiffrer.';
+    } else if (probe.state === 'healthy') {
+      // Déjà initialisée et saine : rien à faire ici, on file vers l'entrée.
+      initActions.hidden = true; $('#welcome-finish-actions').hidden = false;
+      $('#welcome-mem-lead').textContent = 'Ta mémoire chiffrée est déjà prête.';
+    } else {
+      repair.hidden = true; initActions.hidden = false;
+    }
+  };
+
+  const showPhrase = (phrase) => {
+    $('#welcome-phrase').textContent = `Phrase de récupération (note-la hors du PC, affichée une seule fois) :\n\n${phrase}`;
+    $('#welcome-phrase').hidden = false;
+    $('#welcome-finish-actions').hidden = false;
+  };
+
+  $('#welcome-mem-init').addEventListener('click', async () => {
+    try {
+      const state = await api.initializeMemory();
+      showPhrase(state.recoveryPhrase);
+      $('#welcome-mem-actions').hidden = true;
+    } catch (error) {
+      // Déjà initialisée ailleurs, ou coffre illisible : on re-sonde pour proposer la bonne action.
+      log(`Mémoire : ${error.message}`);
+      await prepareMemoryStep();
+    }
+  });
+
+  $('#welcome-mem-reinit').addEventListener('click', async () => {
+    try {
+      const result = await api.reinitializeMemoryFresh();
+      if (result?.ok) { showPhrase(result.recoveryPhrase); $('#welcome-mem-repair').hidden = true; }
+      else log(`Ré-initialisation refusée : ${result?.reason ?? 'inconnu'}`);
+    } catch (error) { log(`Ré-initialisation : ${error.message}`); }
+  });
+
+  $('#welcome-skip-mem').addEventListener('click', async () => { await finish(); });
+  $('#welcome-finish').addEventListener('click', async () => { await finish(); });
+
+  const finish = async () => {
+    try { await api.completeWelcome(); } catch { /* best-effort */ }
+    hide();
+    try { await refreshMemoryStatus(); } catch { /* la mémoire se rafraîchit d'elle-même */ }
+  };
+
+  const renderExisting = (profiles) => {
+    const box = $('#welcome-existing');
+    const list = $('#welcome-profile-list');
+    list.textContent = '';
+    if (!profiles.length) { box.hidden = true; return; }
+    box.hidden = false;
+    for (const p of profiles) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = p.name;
+      b.addEventListener('click', async () => {
+        try { await api.setActiveProfile(p.id); applyTheme(resolveTheme(p.theme)); await finish(); }
+        catch (error) { log(`Profil : ${error.message}`); }
+      });
+      list.append(b);
+    }
+  };
+
+  return {
+    async boot() {
+      let state = { profiles: [], activeProfileId: null, welcomeCompleted: false };
+      try { state = await api.readProfiles?.() ?? state; } catch { /* pas de profils : accueil */ }
+      const active = state.profiles.find((p) => p.id === state.activeProfileId);
+      if (active) applyTheme(resolveTheme(active.theme)); // thème du profil dès le lancement
+      if (state.welcomeCompleted && active) return; // déjà accueilli
+      renderExisting(state.profiles);
+      showStep(1);
+      show();
+    },
+  };
+})();
+
 // Rail navigation: Mission stays reachable from anywhere; the four secondary zones are views you
 // switch to (aria-current + a shown/hidden .view), not a scroll you fall through. Pure CSS-class
 // toggling — every IPC-driven update inside a hidden view keeps happening in the background and
@@ -2183,6 +2316,9 @@ refreshHome().catch(failed('#home-devices'));
 refreshPersonality().catch(failed('#personality-profile'));
 refreshMemoryStatus().catch((error) => log(`Mémoire : ${error.message}`));
 refreshSettings().catch((error) => log(`Paramètres : ${error.message}`));
+// G7 — accueil au premier lancement (ou nouveau profil) : applique le thème du profil et
+// personnalise Mina. Ne bloque jamais le reste du chargement.
+welcome.boot().catch((error) => log(`Bienvenue : ${error.message}`));
 elements.analyticsFrom.value = localDateTimeValue(new Date(Date.now() - 30 * 24 * 60 * 60 * 1_000));
 elements.analyticsTo.value = localDateTimeValue(new Date());
 refreshAnalytics().catch((error) => log(`Analyses : ${error.message}`));

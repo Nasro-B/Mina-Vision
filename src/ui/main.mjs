@@ -19,6 +19,7 @@ import { createSessionStore } from '../sessions/session-store.mjs';
 import { createKeyring } from '../crypto/keyring.mjs';
 import { createKeyringFileStorage } from '../crypto/keyring-file-storage.mjs';
 import { createVaultRepair } from '../memory/vault-repair.mjs';
+import { createUserProfileStore } from '../personal/user-profile-store.mjs';
 import { createMemoryServices } from '../memory/composition.mjs';
 import { composeBackupDomain } from '../backup/compose-backup-domain.mjs';
 import { createCustomTokenMinter } from '../backup/custom-token-minter.mjs';
@@ -292,6 +293,7 @@ let capabilityProbes = null;
 let settingsController = null;
 let providerSecretStore = null;
 let vaultRepair = null;
+let userProfileStore = null;
 let analyticsController = null;
 let usageDatabase = null;
 let skillsSandboxController = null;
@@ -1973,6 +1975,11 @@ const registerIpc = () => {
       return { ok: false, reason: String(error?.message ?? error).slice(0, 160) };
     }
   });
+  // G7 — profils utilisateur : lecture, création/màj, bascule, fin de l'accueil.
+  ipcMain.handle('profile.read', () => userProfileStore.read());
+  ipcMain.handle('profile.upsert', (_event, input) => userProfileStore.upsert(input ?? {}));
+  ipcMain.handle('profile.setActive', (_event, request) => userProfileStore.setActive(String(request?.profileId ?? '')));
+  ipcMain.handle('profile.completeWelcome', () => userProfileStore.completeWelcome());
   ipcMain.handle('memory.search', (_event, request) => memoryController.search(request));
   ipcMain.handle('memory.proposeForget', (_event, request) => memoryController.proposeForget(request));
   ipcMain.handle('research.readFile', async (_event, request) => {
@@ -2226,6 +2233,12 @@ app.whenReady().then(async () => {
     access,
   });
   providerSecretStore = createProviderSecretStore({ keyring });
+  // G7 — profils utilisateur (nom, préférences, thème…). NON sensibles → JSON clair (lisibles avant
+  // déverrouillage, pour saluer et appliquer le thème dès le lancement). N'altèrent jamais MINA.md.
+  userProfileStore = createUserProfileStore({
+    filename: path.join(app.getPath('userData'), 'mina-profiles.json'),
+    readFile, writeFile, rename, makeId: () => `profile-${randomUUID()}`,
+  });
   const envPath = path.join(ROOT_DIR, '.env');
   const envStore = createEnvDocumentStore({
     path: envPath,
