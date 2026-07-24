@@ -151,8 +151,7 @@ import { createHomeController } from './pages/home-controller.mjs';
 import { registerHomeIpc } from './ipc/home-ipc.mjs';
 import { createFaceProfileStore } from '../biometrics/face-profile-store.mjs';
 import { createFaceRecognizer } from '../biometrics/face-recognizer.mjs';
-import { createFaceModelLoader } from '../biometrics/face-model-loader.mjs';
-import { createFaceEmbedder } from '../biometrics/face-embedder.mjs';
+import { loadFaceEmbedder } from '../biometrics/face-embedder-factory.mjs';
 import { createCameraController } from './pages/camera-controller.mjs';
 import { registerCameraIpc } from './ipc/camera-ipc.mjs';
 import { createTechnicalLog, createTechnicalLogReader } from '../diagnostics/technical-log.mjs';
@@ -2560,29 +2559,9 @@ app.whenReady().then(async () => {
   // Embedder facial RÉEL si un modèle est provisionné, sinon fail-loud honnête (jamais un faux
   // résultat de reconnaissance). Le modèle + ses paramètres de préprocessing viennent d'un manifeste
   // provisionné (scripts/provision-face-model.mjs) : voir docs/guides/face-model.md.
-  let faceEmbedder = { embed: async () => { throw new Error('face_model_non_provisionne (voir docs/guides/face-model.md)'); } };
-  let faceEmbedderState = 'unavailable';
-  let faceEmbedderReason = 'modele_non_provisionne';
-  try {
-    const faceManifestPath = path.join(process.env.MINA_MODELS_ROOT ?? storageRoots.modelsRoot, 'face', 'manifest.json');
-    if (existsSync(faceManifestPath)) {
-      const manifest = JSON.parse(readFileSync(faceManifestPath, 'utf8'));
-      const faceLoader = createFaceModelLoader();
-      await faceLoader.load(manifest);
-      const [sharpMod, ortMod] = await Promise.all([import('sharp'), import('onnxruntime-node')]);
-      const sharpImpl = sharpMod.default ?? sharpMod;
-      const ort = ortMod.default ?? ortMod;
-      faceEmbedder = createFaceEmbedder({
-        loader: faceLoader,
-        manifest,
-        sharpImpl,
-        createTensor: (type, data, dims) => new ort.Tensor(type, data, dims),
-      });
-      faceEmbedderState = 'available';
-      faceEmbedderReason = null;
-    }
-  } catch (error) {
-    faceEmbedderReason = `modele_facial_invalide:${String(error?.message ?? error).slice(0, 100)}`;
+  const faceManifestPath = path.join(process.env.MINA_MODELS_ROOT ?? storageRoots.modelsRoot, 'face', 'manifest.json');
+  const { embedder: faceEmbedder, state: faceEmbedderState, reason: faceEmbedderReason } = await loadFaceEmbedder(faceManifestPath);
+  if (faceEmbedderState !== 'available' && faceEmbedderReason && faceEmbedderReason !== 'modele_non_provisionne') {
     technicalLog.record({ severity: 'warning', scope: 'biometrics', code: 'face_model_load_failed', message: faceEmbedderReason });
   }
 
