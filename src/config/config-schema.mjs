@@ -6,6 +6,8 @@ const SMS_ROUTER_MODES = ['native-first', 'httpsms-first', 'native-only', 'https
 const smsModeSchema = z.enum(SMS_ROUTER_MODES, { error: 'Configuration invalide: HTTPSMS_SMS_MODE' });
 const SMS_SEND_MODES = ['confirm_every_send', 'auto_allowlisted', 'draft_only'];
 const smsSendModeSchema = z.enum(SMS_SEND_MODES, { error: 'Configuration invalide: SMS_SEND_MODE' });
+const CALL_MODES = ['dial_only', 'confirm_every_call', 'auto_allowlisted'];
+const callModeSchema = z.enum(CALL_MODES, { error: 'Configuration invalide: CALL_MODE' });
 
 function optionalHour(value, name) {
   if (value === undefined || value === null || String(value).trim() === '') return null;
@@ -136,6 +138,20 @@ export function parseConfig(env = {}) {
         quietHoursEnd: optionalHour(env.SMS_QUIET_HOURS_END, 'SMS_QUIET_HOURS_END'),
         maxPerMinute: positiveInteger(env.SMS_MAX_PER_MINUTE, 3, 'SMS_MAX_PER_MINUTE'),
         maxPerDay: positiveInteger(env.SMS_MAX_PER_DAY, 20, 'SMS_MAX_PER_DAY'),
+      },
+    },
+    // Passer un appel — voir src/telephony/call-policy.mjs. Un appel est PLUS intrusif qu'un SMS :
+    // le défaut dial_only n'émet jamais d'appel programmatique (Mina ouvre le composeur, l'humain
+    // lance). Décrocher n'existe pas ici (décision D2 = jamais). Budgets plus serrés que le SMS.
+    telephony: {
+      policy: {
+        callMode: callModeSchema.parse(env.CALL_MODE?.trim() || 'dial_only'),
+        allowlist: csvList(env.CALL_ALLOWLIST),
+        quietHoursStart: optionalHour(env.CALL_QUIET_HOURS_START, 'CALL_QUIET_HOURS_START'),
+        quietHoursEnd: optionalHour(env.CALL_QUIET_HOURS_END, 'CALL_QUIET_HOURS_END'),
+        maxPerMinute: positiveInteger(env.CALL_MAX_PER_MINUTE, 2, 'CALL_MAX_PER_MINUTE'),
+        maxPerHour: positiveInteger(env.CALL_MAX_PER_HOUR, 6, 'CALL_MAX_PER_HOUR'),
+        maxPerDay: positiveInteger(env.CALL_MAX_PER_DAY, 20, 'CALL_MAX_PER_DAY'),
       },
     },
   });
