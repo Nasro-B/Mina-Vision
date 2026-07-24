@@ -39,10 +39,15 @@ export function createMemoryRuntimeController({
   buildServices,
   confirmLocal = async () => false,
   researchEvidenceCompactor = createResearchEvidenceCompactor({ maxItems: MAX_RESEARCH_EVIDENCE }),
+  // Résilience à l'indéchiffrabilité TRANSITOIRE du wrap DPAPI (voir unlock). 4 essais × 250 ms.
+  autoUnlockAttempts = 4,
+  autoUnlockDelayMs = 250,
+  sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); }),
 } = {}) {
   if (!keyring?.open || typeof buildServices !== 'function') {
     throw new TypeError('memory_runtime_dependencies_required');
   }
+  const unlockAttempts = Math.max(1, Number.isInteger(autoUnlockAttempts) ? autoUnlockAttempts : 1);
   let services = null;
   let semanticMode = 'unavailable';
   let backupState = 'disabled';
@@ -79,12 +84,30 @@ export function createMemoryRuntimeController({
     }
   }
 
+  // Le wrap DPAPI qui protège la clé maître est parfois TRANSITOIREMENT indéchiffrable au tout
+  // début d'une session Windows (démarrage au login : safeStorage annonce isEncryptionAvailable
+  // avant que la clé de session de l'utilisateur soit montée). Mesuré 2026-07 : le MÊME coffre
+  // s'ouvre de façon fiable un instant plus tard (sonde Electron : 3/3 OK en lancement isolé),
+  // alors que l'auto-unlock de production alternait succès/échec. Sans phrase, on RÉESSAIE donc
+  // quelques fois avant d'abandonner — un seul raté transitoire ne doit pas verrouiller la mémoire
+  // toute la session. AVEC phrase : aucun retry (une phrase erronée est définitive, échec immédiat).
   async function unlock({ recoveryPhrase } = {}) {
     if (services) return status();
-    const masterKey = recoveryPhrase
-      ? await keyring.openWithRecovery(recoveryPhrase)
-      : await keyring.open();
-    return activate(masterKey);
+    if (recoveryPhrase) return activate(await keyring.openWithRecovery(recoveryPhrase));
+
+    let lastError;
+    for (let attempt = 0; attempt < unlockAttempts; attempt += 1) {
+      try {
+        return await activate(await keyring.open());
+      } catch (error) {
+        lastError = error;
+        // On ne réessaie QUE l'indéchiffrabilité transitoire du wrap. Toute autre cause
+        // (services indisponibles, clé de mauvaise taille) est structurelle → échec immédiat.
+        if (!/keyring_wrapped_key_undecryptable/u.test(String(error?.message ?? ''))) throw error;
+        if (attempt + 1 < unlockAttempts) await sleep(autoUnlockDelayMs);
+      }
+    }
+    throw lastError;
   }
 
   async function initialize() {
