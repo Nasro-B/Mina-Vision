@@ -94,6 +94,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * W6 — octets d'un média reçu, réassemblés en mémoire depuis les lignes chiffrées du fil.
+     * Null si incomplet/altéré : la bulle affiche alors un état honnête, jamais un média partiel.
+     */
+    suspend fun loadMedia(mediaId: String): Pair<ByteArray, String>? =
+        runCatching { engine.repository.readMediaBytes(MAIN_THREAD_ID, mediaId) }.getOrNull()
+
     fun dismissSendError() { sendError.value = null }
 
     fun retryLink() {

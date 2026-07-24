@@ -183,9 +183,12 @@ class ChatEngine private constructor(context: Context) {
         val known = database.chatDao().findEvent(event.eventId) != null
         repository.ingest(event, fromAssistant = true)
         // Notifier UNIQUEMENT sur un événement nouveau : une retransmission ne doit pas
-        // rappeler une deuxième fois pour le même message.
-        if (!known) {
-            repository.readMessage(event.eventId)?.let { message -> onAssistantMessage?.invoke(message) }
+        // rappeler une deuxième fois pour le même message. Les chunks binaires (routingClass
+        // stream, W6) ne notifient jamais — la bulle vient de l'événement de métadonnées.
+        if (!known && event.routingClass != "stream") {
+            repository.readMessage(event.eventId)
+                ?.takeIf { it.kind != "chunk" }
+                ?.let { message -> onAssistantMessage?.invoke(message) }
         }
     }
 

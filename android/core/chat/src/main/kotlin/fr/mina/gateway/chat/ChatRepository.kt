@@ -3,8 +3,11 @@ package fr.mina.gateway.chat
 import fr.mina.gateway.protocol.ChatBinaryCodec
 import fr.mina.gateway.protocol.ChatCrypto
 import fr.mina.gateway.protocol.ChatEvent
+import fr.mina.gateway.protocol.ChatPayloadCodec
+import fr.mina.gateway.protocol.MediaAssembler
 import fr.mina.gateway.protocol.MediaChunker
 import fr.mina.gateway.protocol.MonotonicUlid
+import org.json.JSONObject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.security.PublicKey
@@ -21,6 +24,10 @@ data class ChatMessage(
     val fromAssistant: Boolean,
     val createdAtMs: Long,
     val deliveryState: String,
+    /** text | image | voice | chunk (les chunks sont masqués du fil) */
+    val kind: String = "text",
+    val mediaId: String? = null,
+    val mime: String? = null,
 )
 
 /** États d'un message sortant — repris tels quels de la spécification. */
@@ -160,9 +167,11 @@ class ChatRepository(
     /**
      * Flux du fil, DÉCHIFFRÉ en mémoire. Coffre verrouillé, on n'invente rien : le message
      * apparaît avec un texte explicite plutôt qu'un contenu faux ou une liste vide.
+     * Les chunks binaires (routingClass stream) sont MASQUÉS — ils portent des octets, pas un
+     * message ; la bulle média vient de l'événement de métadonnées.
      */
     fun observeThread(threadId: String): Flow<List<ChatMessage>> =
-        dao.observeThread(threadId).map { rows -> rows.map { it.toMessage() } }
+        dao.observeThread(threadId).map { rows -> rows.map { it.toMessage() }.filter { it.kind != "chunk" } }
 
     fun observeThreads(): Flow<List<ThreadRow>> = dao.observeThreads()
 
@@ -172,32 +181,78 @@ class ChatRepository(
     suspend fun readMessage(eventId: String): ChatMessage? = dao.findEvent(eventId)?.toMessage()
 
     private fun ChatEventRow.toMessage(): ChatMessage {
-        val text = decryptOrExplain(this)
-        return ChatMessage(
-            eventId = eventId,
-            threadId = threadId,
-            text = text,
-            fromAssistant = fromAssistant,
-            createdAtMs = createdAtMs,
-            deliveryState = deliveryState,
-        )
+        val bytes = decryptBytesOrNull(this)
+            ?: return ChatMessage(
+                eventId = eventId, threadId = threadId,
+                text = if (epochKeyProvider(keyEpoch) == null) "🔒 Verrouillé — déverrouillez la mémoire pour lire"
+                else "⚠️ Message illisible (clé d'époque $keyEpoch indisponible)",
+                fromAssistant = fromAssistant, createdAtMs = createdAtMs, deliveryState = deliveryState,
+            )
+        // Décodage du payload : texte v1 brut, ou payload v2 (média). Un octet discriminateur
+        // inattendu ne casse jamais le fil — il devient un texte UTF-8 comme avant.
+        val decoded = runCatching { ChatPayloadCodec.decode(bytes) }.getOrNull()
+        return when (decoded) {
+            is ChatPayloadCodec.PayloadV2 -> {
+                val meta = runCatching { JSONObject(decoded.metaJson) }.getOrNull()
+                val mediaId = meta?.optString("mediaId")?.takeIf { it.isNotBlank() }
+                when (decoded.type) {
+                    "message.attachment.created" -> ChatMessage(
+                        eventId, threadId, "📷 Image", fromAssistant, createdAtMs, deliveryState,
+                        kind = "image", mediaId = mediaId, mime = meta?.optString("mime"),
+                    )
+                    "message.voice.created" -> ChatMessage(
+                        eventId, threadId, "🎙 Note vocale", fromAssistant, createdAtMs, deliveryState,
+                        kind = "voice", mediaId = mediaId, mime = meta?.optString("mime"),
+                    )
+                    "media.chunk" -> ChatMessage(
+                        eventId, threadId, "", fromAssistant, createdAtMs, deliveryState,
+                        kind = "chunk", mediaId = mediaId,
+                    )
+                    else -> ChatMessage(eventId, threadId, "[${decoded.type}]", fromAssistant, createdAtMs, deliveryState)
+                }
+            }
+            else -> ChatMessage(eventId, threadId, String(bytes, Charsets.UTF_8), fromAssistant, createdAtMs, deliveryState)
+        }
     }
 
-    private fun decryptOrExplain(row: ChatEventRow): String {
-        val key = epochKeyProvider(row.keyEpoch) ?: return "🔒 Verrouillé — déverrouillez la mémoire pour lire"
+    private fun decryptBytesOrNull(row: ChatEventRow): ByteArray? {
+        val key = epochKeyProvider(row.keyEpoch) ?: return null
         return try {
             val decoder = Base64.getDecoder()
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, decoder.decode(row.nonce)))
             cipher.updateAAD(ChatBinaryCodec.encodeHeader(row.toEvent()))
-            String(
-                cipher.doFinal(decoder.decode(row.payloadCiphertext) + decoder.decode(row.authTag)),
-                Charsets.UTF_8,
-            )
+            cipher.doFinal(decoder.decode(row.payloadCiphertext) + decoder.decode(row.authTag))
         } catch (error: Exception) {
-            // Jamais de contenu inventé : on dit que le déchiffrement a échoué.
-            "⚠️ Message illisible (clé d'époque ${row.keyEpoch} indisponible)"
+            null
         }
+    }
+
+    /**
+     * W6 — reconstitue les octets d'un média reçu à partir des LIGNES chiffrées du fil (les chunks
+     * restent chiffrés au repos dans Room ; le média complet n'existe qu'en mémoire, à l'affichage).
+     * Retourne null si méta absente, chunk manquant ou sha256 divergent — jamais un média partiel.
+     */
+    suspend fun readMediaBytes(threadId: String, mediaId: String): Pair<ByteArray, String>? {
+        val rows = dao.readThread(threadId)
+        var meta: MediaAssembler.Meta? = null
+        val chunks = HashMap<Int, ByteArray>()
+        for (row in rows) {
+            val bytes = decryptBytesOrNull(row) ?: continue
+            val decoded = runCatching { ChatPayloadCodec.decode(bytes) }.getOrNull() as? ChatPayloadCodec.PayloadV2 ?: continue
+            val json = runCatching { JSONObject(decoded.metaJson) }.getOrNull() ?: continue
+            if (json.optString("mediaId") != mediaId) continue
+            when (decoded.type) {
+                "message.attachment.created", "message.voice.created" -> {
+                    meta = runCatching {
+                        MediaAssembler.parseMeta(json.keys().asSequence().associateWith { key -> json.opt(key) })
+                    }.getOrNull()
+                }
+                "media.chunk" -> chunks[json.optInt("index", -1)] = decoded.binary
+            }
+        }
+        val parsed = meta ?: return null
+        return runCatching { MediaAssembler.assemble(parsed, chunks) to parsed.mime }.getOrNull()
     }
 }
 

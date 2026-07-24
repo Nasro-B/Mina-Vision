@@ -51,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +63,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.mina.gateway.chat.ChatMessage
 import fr.mina.gateway.chat.DeliveryState
 import fr.mina.gateway.chat.LinkState
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -85,6 +87,7 @@ fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
                 onSend = viewModel::send,
                 onSendImage = viewModel::sendImage,
                 onSendVoice = viewModel::sendVoice,
+                loadMedia = viewModel::loadMedia,
                 onRetry = viewModel::retryLink,
                 onDismissError = viewModel::dismissSendError,
                 onUnpair = viewModel::unpair,
@@ -101,6 +104,7 @@ fun ChatScreen(
     onSend: (String) -> Unit,
     onSendImage: (android.net.Uri) -> Unit,
     onSendVoice: (ByteArray) -> Unit,
+    loadMedia: suspend (String) -> Pair<ByteArray, String>? = { null },
     onRetry: () -> Unit,
     onDismissError: () -> Unit,
     onUnpair: () -> Unit,
@@ -137,7 +141,7 @@ fun ChatScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items(messages, key = { it.eventId }) { message -> MessageBubble(message) }
+                    items(messages, key = { it.eventId }) { message -> MessageBubble(message, loadMedia) }
                 }
             }
 
@@ -225,7 +229,7 @@ private fun EmptyConversation(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun MessageBubble(message: ChatMessage) {
+private fun MessageBubble(message: ChatMessage, loadMedia: suspend (String) -> Pair<ByteArray, String>? = { null }) {
     val mine = !message.fromAssistant
     Row(
         Modifier.fillMaxWidth(),
@@ -243,7 +247,12 @@ private fun MessageBubble(message: ChatMessage) {
             modifier = Modifier.widthIn(max = 300.dp),
         ) {
             Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                Text(message.text, style = MaterialTheme.typography.bodyLarge)
+                when (message.kind) {
+                    // W6 : médias reçus — réassemblés en mémoire depuis les lignes chiffrées.
+                    "image" -> MediaImage(message, loadMedia)
+                    "voice" -> MediaVoice(message, loadMedia)
+                    else -> Text(message.text, style = MaterialTheme.typography.bodyLarge)
+                }
                 Spacer(Modifier.size(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -263,6 +272,69 @@ private fun MessageBubble(message: ChatMessage) {
             }
         }
     }
+}
+
+/**
+ * W6 — image reçue : les octets sont réassemblés EN MÉMOIRE depuis les lignes chiffrées du fil
+ * (jamais un fichier en clair au repos). Incomplète/altérée => état honnête, pas d'image partielle.
+ */
+@Composable
+private fun MediaImage(message: ChatMessage, loadMedia: suspend (String) -> Pair<ByteArray, String>?) {
+    var bitmap by remember(message.mediaId) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var failed by remember(message.mediaId) { mutableStateOf(false) }
+    LaunchedEffect(message.mediaId) {
+        val id = message.mediaId ?: run { failed = true; return@LaunchedEffect }
+        val media = loadMedia(id)
+        if (media == null) { failed = true; return@LaunchedEffect }
+        bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            android.graphics.BitmapFactory.decodeByteArray(media.first, 0, media.first.size)
+        }
+        if (bitmap == null) failed = true
+    }
+    when {
+        bitmap != null -> androidx.compose.foundation.Image(
+            bitmap = bitmap!!.asImageBitmap(),
+            contentDescription = "Image reçue",
+            modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
+        )
+        failed -> Text("📷 Image incomplète ou illisible", style = MaterialTheme.typography.bodyMedium)
+        else -> Text("📷 Image…", style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/**
+ * W6 — note vocale reçue : lecture via un fichier TEMPORAIRE du cache, supprimé dès la fin de
+ * lecture (MediaPlayer exige un descripteur ; l'audio ne reste jamais en clair au repos).
+ */
+@Composable
+private fun MediaVoice(message: ChatMessage, loadMedia: suspend (String) -> Pair<ByteArray, String>?) {
+    val context = LocalContext.current
+    var playing by remember(message.mediaId) { mutableStateOf(false) }
+    var note by remember(message.mediaId) { mutableStateOf<String?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = {
+            if (playing) return@TextButton
+            val id = message.mediaId ?: run { note = "Note vocale illisible."; return@TextButton }
+            scope.launch {
+                val media = loadMedia(id)
+                if (media == null) { note = "Note vocale incomplète ou illisible."; return@launch }
+                runCatching {
+                    val temp = java.io.File.createTempFile("mina-voice-recue-", ".m4a", context.cacheDir)
+                    temp.writeBytes(media.first)
+                    val player = android.media.MediaPlayer()
+                    player.setDataSource(temp.absolutePath)
+                    player.setOnCompletionListener { it.release(); temp.delete(); playing = false }
+                    player.setOnErrorListener { p, _, _ -> p.release(); temp.delete(); playing = false; note = "Lecture impossible."; true }
+                    player.prepare()
+                    playing = true
+                    note = null
+                    player.start()
+                }.onFailure { note = "Lecture impossible : ${it.message ?: "échec"}." }
+            }
+        }) { Text(if (playing) "▶ Lecture…" else "▶ Écouter la note vocale") }
+    }
+    note?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
 }
 
 /** Libellés d'état honnêtes : « envoyé » ne s'affiche que quand le PC a accusé réception. */
