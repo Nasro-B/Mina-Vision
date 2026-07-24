@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
                     onOpenChat = { startActivity(Intent(this@MainActivity, ChatActivity::class.java)) },
                     onOpenGuide = { startActivity(Intent(this@MainActivity, AideActivity::class.java)) },
                     onSave = { token -> provision(state.phone, state.telegramIds, token) },
+                    onRemoveGateway = ::removeGateway,
                     onToggleBiometric = ::setBiometricLock,
                 )
             }
@@ -169,6 +170,31 @@ class MainActivity : ComponentActivity() {
                         onFailure = { "Configuration refusée : ${it.message ?: "valeur_invalide"}" },
                     ),
                     hasToken = result.isSuccess || homeState.value.hasToken,
+                )
+            }
+        }
+    }
+
+    // Retire la passerelle SMS/Telegram de CE téléphone (efface numéro, IDs et token) et arrête le
+    // service : indispensable pour DÉPLACER la passerelle vers un autre téléphone, car deux appareils
+    // qui interrogent Telegram avec le même token entrent en conflit (409). N'affecte NI l'appairage
+    // du chat, NI le coffre de conversation — seulement la config passerelle.
+    private fun removeGateway() {
+        homeState.value = homeState.value.copy(status = "Suppression de la passerelle…")
+        MessagingExecutors.io.execute {
+            runCatching {
+                val database = MessagingDatabase.open(this)
+                val secrets = RoomMessagingSecretStore(database.secretDao(), AndroidKeystoreFieldCipher())
+                EncryptedOwnerIdentityStore(secrets).clear()
+                secrets.remove(TelegramGateway.BOT_TOKEN_SECRET_NAME)
+            }
+            stopService(Intent(this, MinaGatewayService::class.java))
+            runOnUiThread {
+                homeState.value = homeState.value.copy(
+                    phone = "",
+                    telegramIds = "",
+                    hasToken = false,
+                    status = "Passerelle retirée. Ce téléphone ne relaie plus les SMS ni Telegram.",
                 )
             }
         }
@@ -275,6 +301,7 @@ private fun ProvisioningHome(
     onOpenChat: () -> Unit,
     onOpenGuide: () -> Unit,
     onSave: (CharArray) -> Unit,
+    onRemoveGateway: () -> Unit,
     onToggleBiometric: (Boolean) -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
@@ -292,7 +319,7 @@ private fun ProvisioningHome(
             Header()
             ConversationCard(onOpenChat)
             SecurityCard(state, onToggleBiometric)
-            GatewayCard(state, onPhoneChange, onTelegramChange, onSave)
+            GatewayCard(state, onPhoneChange, onTelegramChange, onSave, onRemoveGateway)
             TextButton(onClick = onOpenGuide) { Text("Ouvrir le guide") }
             FooterNote(state.deviceId)
         }
@@ -382,6 +409,7 @@ private fun GatewayCard(
     onPhoneChange: (String) -> Unit,
     onTelegramChange: (String) -> Unit,
     onSave: (CharArray) -> Unit,
+    onRemoveGateway: () -> Unit,
 ) {
     var token by remember { mutableStateOf("") }
     Card(
@@ -432,6 +460,14 @@ private fun GatewayCard(
                     .semantics { contentDescription = "Enregistrer la configuration propriétaire Mina Vision, chiffrée localement" },
             ) { Text("Enregistrer et chiffrer") }
             Text(state.status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (state.hasToken || state.phone.isNotBlank()) {
+                TextButton(
+                    onClick = onRemoveGateway,
+                    modifier = Modifier.semantics { contentDescription = "Retirer la passerelle SMS et Telegram de ce téléphone" },
+                ) {
+                    Text("Retirer la passerelle (déplacer vers un autre téléphone)", color = MaterialTheme.colorScheme.error)
+                }
+            }
         }
     }
 }

@@ -12,6 +12,12 @@ class EncryptedOwnerIdentityStore(private val secrets: MessagingSecretStore) {
         secrets.put(USER_IDS_KEY, JSONArray(identity.telegramUserIds.sorted()).toString().toCharArray())
     }
 
+    /** Efface l'identité propriétaire (numéro + IDs Telegram). Le token se retire à part. */
+    fun clear() {
+        secrets.remove(PHONE_KEY)
+        secrets.remove(USER_IDS_KEY)
+    }
+
     fun load(): OwnerIdentity? {
         val phone = secrets.get(PHONE_KEY) ?: return null
         val userIds = secrets.get(USER_IDS_KEY) ?: run {
