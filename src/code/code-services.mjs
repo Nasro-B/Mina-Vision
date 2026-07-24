@@ -3,6 +3,7 @@
 // dépendances concrètes sont assemblées — partout ailleurs, elles restent injectées.
 
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { createCommandRunner } from './run-command.mjs';
 import { createAstParser } from './intelligence/ast-parser.mjs';
 import { createSymbolIndex } from './intelligence/symbol-index.mjs';
@@ -12,6 +13,7 @@ import { createCodebaseIndexer } from './intelligence/codebase-indexer.mjs';
 import { createCodeSemanticSearch } from './intelligence/code-semantic-search.mjs';
 import { createChangeImpactAnalyzer } from './intelligence/change-impact-analyzer.mjs';
 import { createProjectContextLoader } from './intelligence/project-context-loader.mjs';
+import { createGitignoreMatcher } from './intelligence/gitignore-matcher.mjs';
 import { createFileBackup } from './editing/file-backup.mjs';
 import { createDiffEngine } from './editing/diff-engine.mjs';
 import { createPatchApplier } from './editing/patch-applier.mjs';
@@ -59,6 +61,13 @@ export function createCodeServices({
   const symbolIndex = createSymbolIndex();
   const callGraph = createCallGraph();
   const dependencyGraph = createDependencyGraph();
+  // `.gitignore` du projet analysé → Mina Code n'indexe/ne revoit PAS ce que le dépôt ignore
+  // (prototypes morts, env/, sorties de build). Absent ou illisible : on n'ignore rien, comme
+  // avant. Lu une fois à la construction, best-effort.
+  let ignore = null;
+  try {
+    ignore = createGitignoreMatcher(readFileSync(toAbsolute(projectRoot, '.gitignore'), 'utf8'));
+  } catch { /* pas de .gitignore : indexation complète, comportement historique */ }
   const indexer = createCodebaseIndexer({
     astParser,
     callGraph,
@@ -66,6 +75,7 @@ export function createCodeServices({
     symbolIndex,
     fileReader: { readFile, readdir },
     projectRoot,
+    ignore,
   });
   const fileContent = (path) => indexer.fileContent(path);
   const search = createCodeSemanticSearch({ symbolIndex, callGraph, fileContent });

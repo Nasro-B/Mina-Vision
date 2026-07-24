@@ -12,10 +12,17 @@ const FRAMEWORK_RULES = Object.freeze([
   { name: 'cargo test', test: ({ tree }) => tree.includes('Cargo.toml') },
 ]);
 
-const COMMANDS = Object.freeze({
-  vitest: (extra) => ['npx', ['vitest', 'run', ...extra]],
-  jest: (extra) => ['npx', ['jest', ...extra]],
-  mocha: (extra) => ['npx', ['mocha', ...extra]],
+// Frameworks Node : on exécute l'entrée JS LOCALE de l'outil via le binaire Node courant, PAS
+// `npx`. Raison prouvée le 2026-07-24 : depuis Electron sur Windows, `execFile('npx', …)` échoue
+// (ENOENT — npx n'est pas un .exe) et `npx.cmd` échoue aussi (EINVAL — spawn d'un .cmd bloqué
+// par le correctif CVE-2024-27980), sans shell. Résultat : lanceur en échec, 0 vert. L'entrée JS
+// + Node fonctionne partout, sans shell.
+const NODE_TOOL_ENTRIES = Object.freeze({
+  vitest: ['node_modules/vitest/vitest.mjs', 'run'],
+  jest: ['node_modules/jest/bin/jest.js'],
+  mocha: ['node_modules/mocha/bin/mocha.js'],
+});
+const NATIVE_COMMANDS = Object.freeze({
   pytest: (extra) => ['python', ['-m', 'pytest', ...extra]],
   'go test': (extra) => ['go', ['test', './...', ...extra]],
   'cargo test': (extra) => ['cargo', ['test', ...extra]],
@@ -27,9 +34,25 @@ export function createTestRunner({
   projectContext = null,
   spawnImpl = null,
   sandboxRunner = null,
+  // Binaire Node/Electron courant. Sous Electron, ELECTRON_RUN_AS_NODE=1 le fait agir en Node ;
+  // sous Node pur (tests, CI), la variable est simplement ignorée — un seul chemin, partout.
+  nodeBin = process.execPath,
 } = {}) {
   if (!runCommand || typeof runCommand.run !== 'function') throw new TypeError('test_runner_runner_required');
   if (typeof projectRoot !== 'string' || projectRoot.length === 0) throw new TypeError('test_runner_root_required');
+
+  function commandFor(framework, extra) {
+    const nodeEntry = NODE_TOOL_ENTRIES[framework];
+    if (nodeEntry) {
+      return {
+        command: nodeBin,
+        args: [...nodeEntry, ...extra],
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      };
+    }
+    const [command, args] = NATIVE_COMMANDS[framework](extra);
+    return { command, args, env: undefined };
+  }
 
   function detectFramework() {
     const deps = projectContext?.dependencies ?? {};
@@ -49,8 +72,8 @@ export function createTestRunner({
     if (!framework) {
       return Object.freeze({ framework: null, parsed: false, passed: 0, failed: 0, skipped: 0, total: 0, reason: 'test_framework_unknown', failures: Object.freeze([]) });
     }
-    const [command, args] = COMMANDS[framework](extraArgs);
-    const result = await runCommand.run(command, args, { cwd: projectRoot, timeout });
+    const { command, args, env } = commandFor(framework, extraArgs);
+    const result = await runCommand.run(command, args, { cwd: projectRoot, timeout, env });
     const combined = `${result.stdout}\n${result.stderr}`;
     const parsed = parseTestOutput(combined, { framework: framework.split(' ')[0] });
     return Object.freeze({
@@ -84,7 +107,11 @@ export function createTestRunner({
       if (typeof spawnImpl !== 'function') throw new Error('test_runner_watch_unavailable');
       const framework = detectFramework();
       if (framework !== 'vitest') throw new Error(`test_runner_watch_unsupported: ${framework ?? 'aucun framework'}`);
-      const child = spawnImpl('npx', ['vitest', '--watch'], { cwd: projectRoot });
+      // Même raison qu'en batch : Node + entrée locale, jamais `npx` (échoue depuis Electron/Windows).
+      const child = spawnImpl(nodeBin, ['node_modules/vitest/vitest.mjs', '--watch'], {
+        cwd: projectRoot,
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      });
       let buffer = '';
       child.stdout?.on?.('data', (chunk) => {
         buffer += String(chunk);

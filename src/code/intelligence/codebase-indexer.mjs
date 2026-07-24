@@ -28,7 +28,14 @@ export function createCodebaseIndexer({
   vectorStore = null,
   fileReader,
   projectRoot,
+  // Matcher `.gitignore` optionnel : Mina Code n'indexe pas ce que le dépôt ignore (prototypes
+  // morts, env/, sorties de build). Sans lui, la revue crache des findings sur des fichiers qui
+  // ne partiront jamais sur GitHub. Contrat minimal : { ignores(relativePath, isDirectory) }.
+  ignore = null,
 } = {}) {
+  const isIgnored = (relativePath, isDirectory) => (
+    typeof ignore?.ignores === 'function' ? ignore.ignores(relativePath, isDirectory) : false
+  );
   if (!astParser || !callGraph || !dependencyGraph || !symbolIndex) {
     throw new TypeError('codebase_indexer_dependencies_required');
   }
@@ -60,8 +67,10 @@ export function createCodebaseIndexer({
         const path = relative === '' ? name : `${relative}/${name}`;
         if (typeof dirent.isDirectory === 'function' && dirent.isDirectory()) {
           if (IGNORED_DIRECTORIES.has(name)) continue;
+          if (isIgnored(path, true)) continue;
           await walk(path);
         } else if (INDEXABLE_EXTENSIONS.some((extension) => name.endsWith(extension))) {
+          if (isIgnored(path, false)) continue;
           found.push(path);
         }
       }
