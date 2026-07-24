@@ -34,6 +34,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -92,6 +93,7 @@ class MainActivity : ComponentActivity() {
                     onPhoneChange = { homeState.value = homeState.value.copy(phone = it) },
                     onTelegramChange = { homeState.value = homeState.value.copy(telegramIds = it) },
                     onOpenChat = { startActivity(Intent(this@MainActivity, ChatActivity::class.java)) },
+                    onOpenGuide = { startActivity(Intent(this@MainActivity, AideActivity::class.java)) },
                     onSave = { token -> provision(state.phone, state.telegramIds, token) },
                     onToggleBiometric = ::setBiometricLock,
                 )
@@ -271,6 +273,7 @@ private fun ProvisioningHome(
     onPhoneChange: (String) -> Unit,
     onTelegramChange: (String) -> Unit,
     onOpenChat: () -> Unit,
+    onOpenGuide: () -> Unit,
     onSave: (CharArray) -> Unit,
     onToggleBiometric: (Boolean) -> Unit,
 ) {
@@ -290,6 +293,7 @@ private fun ProvisioningHome(
             ConversationCard(onOpenChat)
             SecurityCard(state, onToggleBiometric)
             GatewayCard(state, onPhoneChange, onTelegramChange, onSave)
+            TextButton(onClick = onOpenGuide) { Text("Ouvrir le guide") }
             FooterNote(state.deviceId)
         }
     }
