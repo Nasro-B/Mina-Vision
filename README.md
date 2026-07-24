@@ -18,7 +18,7 @@ dépendance à un service central.
 | **Navigateur** | Missions pilotées à la voix : naviguer, chercher, cliquer, saisir, extraire |
 | **Bureau Windows** | Ouvre et pilote n'importe quelle application (souris, clavier, raccourcis) |
 | **Téléphone Android** | Caméra, SMS, commandes via ADB (USB ou Wi-Fi) |
-| **SMS sans internet** | Joindre Mina et recevoir ses réponses par SMS, sans aucune connexion internet : réseau cellulaire → passerelle (SIM) → PC en réseau local. Réservé au numéro propriétaire, une réponse par SMS, jamais d'actions sur le PC depuis un SMS |
+| **SMS sans internet** | Joindre Mina et recevoir ses réponses par SMS, sans aucune connexion internet : réseau cellulaire → passerelle (SIM) → PC en réseau local. Chaque réponse est confirmée sur le PC par défaut, une réponse par SMS, jamais d'actions sur le PC depuis un SMS |
 | **Mémoire** | Coffre chiffré local (argon2 + AEAD), recherche sémantique, phrase de récupération |
 | **Code** | Indexe et analyse son propre code : recherche, graphe d'appels, tests, revue de sécurité |
 | **Documents** | Génère de vrais PDF et Word ; met en quarantaine les documents reçus |
