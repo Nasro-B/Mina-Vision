@@ -23,6 +23,8 @@ object ChatPayloadCodec {
         "message.attachment.created",
         "message.voice.created",
         "media.chunk",
+        // Appels : demande d'ouverture du composeur (ACTION_DIAL) — l'humain appuie lui-même.
+        "call.dial.requested",
     )
 
     sealed interface DecodedPayload

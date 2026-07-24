@@ -386,4 +386,34 @@ describe('serveur du canal mina_app', () => {
     await expect(server.sendMediaToDevice('device-absent', { bytes: Buffer.from([1]), mime: 'image/jpeg' }))
       .rejects.toThrow('chat_appareil_non_connecte');
   });
+
+  it('Appels — demande de composeur chiffrée/signée reçue et décodée par le téléphone', async () => {
+    const registry = createChatDeviceRegistry();
+    const { port, pc, server } = await startServer({ registry });
+    const { code } = registry.openPairing();
+    const session = await handshake({ port, pc, registry, pairingCode: code });
+    const deviceCrypto = createChatCrypto({
+      signingPrivateKey: session.device.privateKey,
+      verifyPublicKey: pc.publicKey,
+      epochKey: session.epochKey,
+    });
+
+    const sent = await server.sendDialToDevice(session.deviceId, { number: '+33612345678' });
+    expect(sent.requested).toBe(true);
+
+    const { decodeChatPayload } = await import('../src/contracts/chat-payload.mjs');
+    const event = await nextMessage(session.socket);
+    const payload = decodeChatPayload(deviceCrypto.verifyAndDecryptBytes(event));
+    expect(payload.type).toBe('call.dial.requested');
+    expect(payload.meta.number).toBe('+33612345678');
+  });
+
+  it('Appels — numéro invalide refusé avant tout envoi', async () => {
+    const registry = createChatDeviceRegistry();
+    const { port, pc, server } = await startServer({ registry });
+    const { code } = registry.openPairing();
+    const session = await handshake({ port, pc, registry, pairingCode: code });
+    await expect(server.sendDialToDevice(session.deviceId, { number: 'javascript:alert(1)' }))
+      .rejects.toThrow('chat_numero_invalide');
+  });
 });

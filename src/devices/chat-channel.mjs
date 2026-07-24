@@ -145,6 +145,12 @@ export function createChatChannel({
       return server.sendMediaToDevice(deviceId, media);
     },
 
+    /** Appels — demande d'ouverture du composeur pré-rempli sur le téléphone (ACTION_DIAL). */
+    async sendDial(deviceId, request) {
+      if (!server) throw new Error('chat_canal_inactif');
+      return server.sendDialToDevice(deviceId, request);
+    },
+
     closePairing() {
       registry.closePairing();
     },
