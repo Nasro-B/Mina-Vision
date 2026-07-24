@@ -1846,6 +1846,52 @@ const renderCapabilities = (entries) => {
     list.append(item);
   }
 };
+// Catalogue COMPLET (conscience de Mina) : readiness, santé, outils et réglages non sensibles,
+// rendus EN TÊTE de la liste des capacités — la même vérité que decrire_capacites à la voix.
+const renderCapabilityCatalog = (catalog) => {
+  const list = document.querySelector('#capabilities-list');
+  if (!list || !catalog) return;
+  const prepend = (label, text, badgeClass = null) => {
+    const item = document.createElement('li');
+    const name = document.createElement('strong');
+    name.textContent = label;
+    item.append(name);
+    if (badgeClass) {
+      const badge = document.createElement('span');
+      badge.className = badgeClass;
+      badge.textContent = text;
+      item.append(' ', badge);
+    } else {
+      const span = document.createElement('span');
+      span.className = 'muted';
+      span.textContent = ` ${text}`;
+      item.append(span);
+    }
+    list.prepend(item);
+  };
+  const settings = catalog.settings;
+  if (settings) {
+    const providers = Object.entries(settings.providers ?? {})
+      .filter(([, value]) => value?.enabled)
+      .map(([name, value]) => (value.model ? `${name} (${value.model})` : name));
+    prepend('Réglages actifs', `inférence ${settings.inferenceMode ?? '?'}${settings.offline ? ' · hors-ligne' : ''}`
+      + ` · appels ${settings.callMode ?? '?'} · SMS ${settings.smsSendMode ?? '?'}`
+      + (providers.length ? ` · ${providers.join(', ')}` : ''));
+  }
+  const tools = catalog.capabilities?.tools ?? [];
+  if (tools.length) prepend('Outils vocaux', `${tools.length} fonctions : ${tools.map((tool) => tool.name).join(', ')}`);
+  for (const issue of [...(catalog.health ?? [])].reverse()) {
+    prepend(`Santé · ${issue.id}`, `${issue.level}${issue.detail ? ` — ${issue.detail}` : ''}`,
+      issue.level === 'unavailable' || issue.level === 'locked' ? 'badge blocked' : 'badge warning');
+  }
+  const readiness = catalog.readiness ?? {};
+  prepend('Prête à agir', [
+    readiness.missionReady ? 'missions ✓' : 'missions —',
+    readiness.memoryUnlocked ? 'mémoire ✓' : 'mémoire verrouillée',
+    readiness.phoneConnected ? 'téléphone ✓' : 'téléphone hors ligne',
+    readiness.sandboxAvailable ? 'sandbox ✓' : 'sandbox indisponible',
+  ].join(' · '));
+};
 // Canal `mina_app` : etat reel du serveur, appareils appaires, code d'appairage.
 // Aucun contenu de conversation n'est lu ici — l'ecran ne sert qu'a decider qui a le droit
 // de parler a Mina depuis un telephone.
@@ -1909,7 +1955,11 @@ document.querySelector('#chat-devices')?.addEventListener('click', (event) => {
     .catch((error) => log(`Revocation : ${error.message}`));
 });
 
-const refreshCapabilities = async () => renderCapabilities(await api.capabilitiesList());
+const refreshCapabilities = async () => {
+  renderCapabilities(await api.capabilitiesList());
+  // Catalogue complet en fail-soft : une panne du catalogue ne casse jamais la liste runtime.
+  try { renderCapabilityCatalog(await api.capabilityCatalog?.()); } catch { /* liste runtime déjà affichée */ }
+};
 document.querySelector('#capabilities-refresh')?.addEventListener('click', () => {
   Promise.all([refreshCapabilities(), refreshStartup(), refreshChatChannel()])
     .catch((error) => log(`État système : ${error.message}`));

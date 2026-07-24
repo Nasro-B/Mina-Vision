@@ -121,6 +121,7 @@ function createPreloadApi(ipcRenderer) {
     capabilityCatalog: () => ipcRenderer.invoke('mina:capability-catalog'),
     // Catalogue de vérité runtime (Task 8) : état réel de chaque domaine avec raison.
     capabilitiesList: () => ipcRenderer.invoke('mina:capabilities:list'),
+    capabilityCatalog: () => ipcRenderer.invoke('mina:capability-catalog'),
     // Démarrage automatique avec Windows.
     startupStatus: () => ipcRenderer.invoke('mina:startup:status'),
     setStartup: (enabled) => ipcRenderer.invoke('mina:startup:set', { enabled }),
