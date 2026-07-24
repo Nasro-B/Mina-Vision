@@ -24,7 +24,13 @@ describe('contrat de composition des domaines (main.mjs)', () => {
     expect(main).toContain('createRuntimeCapabilityCatalog()');
     expect(main).toContain("ipcMain.handle('mina:capabilities:list'");
     for (const needle of [
-      "reportCapability('automation', 'unavailable'",
+      // Gouvernance (2026-07-24 soir) : automation/recovery/evaluation/emergency/approvals/
+      // connectors sont COMPOSÉS avec leurs vrais fournisseurs — l'état publié vient de la
+      // composition elle-même, et l'échec de composition publie unavailable NOMMÉ pour les six.
+      'governanceDomains = composeGovernanceDomains({',
+      'for (const entry of governanceDomains.capabilities)',
+      'reportCapability(entry.domain, entry.state, entry.reason)',
+      "for (const domain of ['automation', 'recovery', 'evaluation', 'emergency', 'approvals', 'connectors'])",
       // Biométrie faciale : état DYNAMIQUE depuis 2026-07-24 (embedder ONNX réel branché) —
       // available si un modèle est provisionné, sinon unavailable avec raison. Plus un stub figé.
       "reportCapability('biometrics.face', faceEmbedderState, faceEmbedderReason)",
