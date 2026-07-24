@@ -316,4 +316,16 @@ describe('browser executor: mission latency', () => {
     const closedExecutor = await createBrowserExecutor({ launchContext: closing.launchContext });
     await expect(closedExecutor.observe()).rejects.toThrow('Le navigateur a été fermé pendant la mission');
   });
+
+  it('transmet headless au launchContext (navigateur de recherche = invisible)', async () => {
+    const fake = createBrowserFake();
+    await createBrowserExecutor({ launchContext: fake.launchContext, profileDir: '/p', headless: true });
+    expect(fake.launchContext).toHaveBeenCalledWith('/p', { headless: true });
+  });
+
+  it('reste visible (non headless) par défaut pour les missions interactives', async () => {
+    const fake = createBrowserFake();
+    await createBrowserExecutor({ launchContext: fake.launchContext, profileDir: '/p' });
+    expect(fake.launchContext).toHaveBeenCalledWith('/p', { headless: false });
+  });
 });

@@ -1925,6 +1925,14 @@ api.onVoiceInterrupted(() => {
   stopVoicePlayback();
 });
 
+// Reprise de session (coupure réseau en pleine réponse) : on jette le reliquat audio du tour
+// interrompu AVANT que Gemini ne rejoue le tour — sinon le flux rejoué s'empile sur la file locale
+// et Mina répète le début de sa phrase. Vidage INCONDITIONNEL, sans re-dire (contrairement à
+// voice-interrupted qui, dans sa fenêtre de grâce, peut relancer une réplique).
+api.onVoiceDropPlayback?.(() => {
+  stopVoicePlayback();
+});
+
 api.status().then((status) => {
   applyStatusFromHealth(status);
   if (status.ok) elements.dentalMode.textContent = status.config.dryRun ? "Aperçu, rien n'est modifié" : 'Sélection avec confirmation';

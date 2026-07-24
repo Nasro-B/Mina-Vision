@@ -3,11 +3,13 @@ import { createWebObserver } from '../perception/web-observer.mjs';
 
 const DEFAULT_VIEWPORT = Object.freeze({ width: 1_440, height: 900 });
 
-const defaultLaunchContext = async (profileDir) => {
+const defaultLaunchContext = async (profileDir, { headless = false } = {}) => {
   const { chromium } = await import('playwright');
   return chromium.launchPersistentContext(profileDir, {
     channel: 'chrome',
-    headless: false,
+    // Missions interactives + musique = fenêtre VISIBLE (Nasro regarde Mina agir). Recherche web de
+    // fond = headless (invisible) : lire une page pour répondre ne doit pas faire surgir Chrome.
+    headless,
     viewport: DEFAULT_VIEWPORT,
   });
 };
@@ -21,8 +23,9 @@ export async function createBrowserExecutor({
   launchContext = defaultLaunchContext,
   profileDir = path.resolve('profiles/mina-chrome'),
   webObserverFactory,
+  headless = false,
 } = {}) {
-  const context = await launchContext(profileDir);
+  const context = await launchContext(profileDir, { headless });
   let page = context.pages().at(-1) || await context.newPage();
   let closed = false;
   const createObserver = (currentPage) => (webObserverFactory
