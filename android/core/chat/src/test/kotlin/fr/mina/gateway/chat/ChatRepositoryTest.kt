@@ -164,6 +164,27 @@ class ChatRepositoryTest {
     }
 
     @Test
+    fun `W6 - media recu du PC - chunks masques du fil, bulle media presente, octets reassembles`() = runTest {
+        // Simule la réception PC : on fabrique méta + chunks avec le chunker (payload v2), on les
+        // scelle comme le PC (même AES-GCM/AAD via sendMedia du dépôt n'est pas utilisable ici car
+        // sens inverse) — on passe par sealAndEnqueue indirect : sendMedia écrit méta+chunks, puis
+        // on relit comme si c'était le fil. Le point prouvé : décodage payload v2 → bulle + masquage
+        // + réassemblage intégral.
+        repository.sendMedia("thread-main", ByteArray(200_000) { (it % 251).toByte() }, "image/jpeg")
+
+        val visible = repository.observeThread("thread-main").first()
+        // 1 méta (bulle image) visible, les 2 chunks masqués.
+        assertEquals(1, visible.size)
+        assertEquals("image", visible.single().kind)
+        val mediaId = visible.single().mediaId!!
+
+        val media = repository.readMediaBytes("thread-main", mediaId)!!
+        assertEquals("image/jpeg", media.second)
+        assertEquals(200_000, media.first.size)
+        assertTrue(media.first.withIndex().all { (i, b) -> b == (i % 251).toByte() })
+    }
+
+    @Test
     fun `l outbox ne rend que les envois dus — la temporisation est respectee`() = runTest {
         val eventId = repository.sendText("thread-main", "bonjour")
         db.chatDao().rescheduleOutbox(eventId, attempts = 1, nextAtMs = clock + 60_000, error = "hors_ligne")
