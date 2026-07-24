@@ -1330,6 +1330,18 @@ api.onEvent((event) => {
     announceRetryOnce();
   } else if (event.type === 'action_error') {
     log(`Action plantée (${event.action?.name || 'inconnue'}) : ${event.error} — Mina contourne.`);
+  } else if (event.type === 'chat_media_received') {
+    // Pièce jointe / note vocale reçue du téléphone sur le canal mina_app. Rien du binaire n'est
+    // affiché ; on annonce l'arrivée et, si Mina a compris (vision/transcription), sa légende.
+    const label = event.kind === 'voice' ? 'note vocale' : event.kind === 'image' ? 'image' : 'fichier';
+    if (event.readable === false) {
+      log(`Téléphone : ${label} reçue mais illisible — rien gardé.`);
+    } else if (event.caption) {
+      log(`Téléphone : ${label} reçue. ${event.caption}`);
+      if (event.kind === 'image') void say(event.caption);
+    } else {
+      log(`Téléphone : ${label} reçue et gardée (analyse indisponible).`);
+    }
   }
 });
 
