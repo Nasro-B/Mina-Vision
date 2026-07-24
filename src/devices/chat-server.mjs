@@ -128,8 +128,12 @@ export function createChatServer({
     sessions.set(deviceId, socket);
     registry.touch(deviceId);
 
-    socket.send(JSON.stringify({ type: 'epoch', ...wrapped, pcPublicKeySpki: identity.publicKeySpki }));
-    note('chat_app_session_ouverte', { deviceId, keyEpoch });
+    // Négociation de capacité (W2) : le PC annonce les versions de payload qu'il sait TRAITER.
+    // Média (v2) seulement si handleMedia est réellement câblé — sinon le téléphone l'apprend et
+    // refuse d'envoyer une pièce jointe qui serait acquittée puis silencieusement perdue.
+    const payloadVersions = handleMedia ? [1, 2] : [1];
+    socket.send(JSON.stringify({ type: 'epoch', ...wrapped, pcPublicKeySpki: identity.publicKeySpki, payloadVersions }));
+    note('chat_app_session_ouverte', { deviceId, keyEpoch, payloadVersions });
   }
 
   async function handleEvent(socket, session, raw) {

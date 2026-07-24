@@ -16,6 +16,7 @@ class ChatSettings(context: Context) {
         private const val PAIRED_AT = "paired_at_ms"
         private const val PC_PUBLIC_KEY = "pc_public_key_spki"
         private const val BIOMETRIC_LOCK = "biometric_lock"
+        private const val PC_SUPPORTS_MEDIA = "pc_supports_media"
         const val DEFAULT_PORT = 8771
     }
 
@@ -23,6 +24,15 @@ class ChatSettings(context: Context) {
     fun biometricLockEnabled(): Boolean = prefs.getBoolean(BIOMETRIC_LOCK, false)
 
     fun setBiometricLock(enabled: Boolean) = prefs.edit().putBoolean(BIOMETRIC_LOCK, enabled).apply()
+
+    /**
+     * Le PC appairé sait-il traiter les pièces jointes (payload v2) ? Faux par défaut : on ne le
+     * suppose pas — c'est le handshake (message `epoch`, champ `payloadVersions`) qui l'établit.
+     * Effacé au désappairage comme le reste, donc renégocié à chaque nouvel appairage.
+     */
+    fun pcSupportsMedia(): Boolean = prefs.getBoolean(PC_SUPPORTS_MEDIA, false)
+
+    fun setPcSupportsMedia(enabled: Boolean) = prefs.edit().putBoolean(PC_SUPPORTS_MEDIA, enabled).apply()
 
     fun endpoint(): String? {
         val host = prefs.getString(HOST, null)?.takeIf { it.isNotBlank() } ?: return null

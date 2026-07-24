@@ -57,6 +57,8 @@ class ChatRepository(
     private val currentEpoch: () -> Int = { 1 },
     private val signEvent: ((ChatEvent) -> String)? = null,
     private val verifyKey: PublicKey? = null,
+    /** Le PC appairé sait-il TRAITER les pièces jointes (payload v2) ? Négocié au handshake. */
+    private val peerAcceptsMedia: () -> Boolean = { true },
 ) {
     companion object {
         private const val TTL_MS = 30L * 24 * 60 * 60 * 1_000
@@ -81,6 +83,9 @@ class ChatRepository(
      * Retourne le mediaId. Réutilise l'outbox durable : rien n'est perdu si le PC est éteint.
      */
     suspend fun sendMedia(threadId: String, bytes: ByteArray, mime: String, extraMeta: Map<String, Any> = emptyMap()): String {
+        // Négociation : si le PC appairé n'a pas annoncé savoir traiter les pièces jointes, on
+        // refuse AVANT d'envoyer — mieux vaut le dire que voir le média acquitté puis perdu.
+        if (!peerAcceptsMedia()) throw IllegalStateException("chat_pc_sans_pieces_jointes")
         val piece = MediaChunker.chunk(bytes, mime, extraMeta)
         // Borne : refuse si l'outbox ne peut pas accueillir méta + tous les chunks.
         require(dao.outboxSize() + piece.chunkPayloads.size + 1 < MAX_OUTBOX) { "chat_outbox_pleine" }

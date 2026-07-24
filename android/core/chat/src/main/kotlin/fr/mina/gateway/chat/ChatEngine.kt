@@ -38,6 +38,7 @@ class ChatEngine private constructor(context: Context) {
         epochKeyProvider = { epoch -> vault.epochKey(epoch) },
         currentEpoch = { vault.currentEpoch() },
         signEvent = { event -> signer.sign(event) },
+        peerAcceptsMedia = { settings.pcSupportsMedia() },
     )
 
     /** Clé publique du PC telle qu'enregistrée à l'appairage — null tant qu'il n'y a pas d'appairage. */
@@ -100,6 +101,14 @@ class ChatEngine private constructor(context: Context) {
         )
         wrapKey.fill(0)
         vault.installEpochKey(keyEpoch, epochKey)
+        // Capacité média négociée : le PC liste les versions de payload qu'il sait traiter.
+        // Présent et contenant 2 => pièces jointes OK ; présent sans 2 => refus honnête à l'envoi.
+        // Absent (message inattendu) => on ne dégrade pas une capacité déjà acquise.
+        offer.optJSONArray("payloadVersions")?.let { versions ->
+            var media = false
+            for (i in 0 until versions.length()) if (versions.optInt(i) == 2) media = true
+            settings.setPcSupportsMedia(media)
+        }
         // La clé du PC n'est mémorisée qu'APRÈS un désenveloppement réussi : une clé qui
         // n'ouvre rien ne mérite pas d'être conservée comme référence.
         if (settings.pcPublicKeySpki() != pcKeySpki) {

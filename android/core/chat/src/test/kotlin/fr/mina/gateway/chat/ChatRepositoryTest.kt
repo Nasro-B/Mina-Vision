@@ -140,6 +140,30 @@ class ChatRepositoryTest {
     }
 
     @Test
+    fun `sendMedia refuse si le PC n annonce pas les pieces jointes — rien mis en file`() = runTest {
+        val repo = ChatRepository(
+            dao = db.chatDao(), deviceId = "device-samsung", now = { clock },
+            epochKeyProvider = { epoch -> if (locked || epoch != 1) null else epochKey },
+            peerAcceptsMedia = { false },
+        )
+        val error = runCatching { repo.sendMedia("thread-main", ByteArray(10) { 1 }, "image/jpeg") }.exceptionOrNull()
+        assertEquals("chat_pc_sans_pieces_jointes", error?.message)
+        assertEquals(0, repo.pendingCount())
+    }
+
+    @Test
+    fun `sendMedia met en file la meta puis les chunks quand le PC accepte`() = runTest {
+        val repo = ChatRepository(
+            dao = db.chatDao(), deviceId = "device-samsung", now = { clock },
+            epochKeyProvider = { epoch -> if (locked || epoch != 1) null else epochKey },
+            peerAcceptsMedia = { true },
+        )
+        repo.sendMedia("thread-main", ByteArray(10) { 1 }, "image/jpeg")
+        // 10 octets tiennent en 1 chunk : 1 méta (payload v2) + 1 chunk = 2 lignes d'outbox.
+        assertEquals(2, repo.pendingCount())
+    }
+
+    @Test
     fun `l outbox ne rend que les envois dus — la temporisation est respectee`() = runTest {
         val eventId = repository.sendText("thread-main", "bonjour")
         db.chatDao().rescheduleOutbox(eventId, attempts = 1, nextAtMs = clock + 60_000, error = "hors_ligne")

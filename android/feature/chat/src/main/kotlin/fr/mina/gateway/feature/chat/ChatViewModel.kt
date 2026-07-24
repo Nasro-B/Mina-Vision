@@ -129,6 +129,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         "chat_outbox_pleine" -> "Trop de messages en attente. Rallumez le PC pour les envoyer."
         "chat_hote_vide" -> "Adresse du PC manquante."
         "chat_port_invalide" -> "Port invalide (1 à 65535)."
+        "chat_pc_sans_pieces_jointes" -> "Ce PC ne prend pas encore les pièces jointes. Mettez Mina à jour côté PC."
         else -> error.message ?: "Envoi impossible."
     }
 }
