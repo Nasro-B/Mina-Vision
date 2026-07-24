@@ -6,7 +6,9 @@ product
 
 ## Users
 
-Nasro seul : développeur et propriétaire unique de Mina Vision, à la fois l'utilisateur ET le créateur du produit. Utilise le tableau de bord depuis son poste de travail (bureau, écran desktop, souris/clavier), en complément d'une interaction principalement vocale avec l'agent. Contexte d'usage : sessions longues en arrière-plan (le panneau reste ouvert pendant que Mina exécute des missions, écoute, ou attend), avec des pics d'attention ponctuels pour vérifier un statut, lancer une mission manuellement, ou diagnostiquer un problème.
+**Utilisateur principal — Nasro** : développeur, propriétaire et créateur de Mina Vision, à la fois l'utilisateur ET le créateur du produit. Utilise le tableau de bord depuis son poste de travail (bureau, écran desktop, souris/clavier), en complément d'une interaction principalement vocale avec l'agent. Contexte d'usage : sessions longues en arrière-plan (le panneau reste ouvert pendant que Mina exécute des missions, écoute, ou attend), avec des pics d'attention ponctuels pour vérifier un statut, lancer une mission manuellement, ou diagnostiquer un problème.
+
+**Utilisateurs additionnels** (depuis la publication publique du 2026-07-24 : dépôt open-source + APK compagnon) : d'autres personnes peuvent installer et personnaliser Mina — la fenêtre de bienvenue et les profils multi-utilisateurs (nom, pronoms, langue, ton, thème) existent pour eux, chacun avec son thème et sa personnalisation. Nasro reste le propriétaire et le créateur ; les noms « Mina », « Mina Vision » et « Nasro Berkoun » restent protégés par la LICENSE.
 
 Tâche principale sur n'importe quel écran : soit lancer/piloter une mission (voix ou texte), soit vérifier l'état réel d'un sous-système (mémoire, voix, sandbox, intégrations) pour comprendre ce qui s'est passé ou pourquoi quelque chose a échoué.
 
@@ -37,4 +39,4 @@ HUD technique calme. Précis, discret, esprit console de contrôle — jamais cr
 
 ## Accessibility & Inclusion
 
-Utilisateur unique mais sessions longues (fatigue oculaire) : contraste texte ≥4.5:1 en clair comme en sombre, jamais de gris clair "élégant" illisible. `prefers-reduced-motion` respecté (déjà en place, à préserver). Le clavier et les raccourcis globaux sont une voie d'usage réelle (pas juste accessoire) — les états de focus doivent rester visibles dans les deux thèmes.
+Sessions longues (fatigue oculaire) : contraste texte ≥4.5:1 en clair comme en sombre, jamais de gris clair "élégant" illisible. `prefers-reduced-motion` respecté (déjà en place, à préserver). Le clavier et les raccourcis globaux sont une voie d'usage réelle (pas juste accessoire) — les états de focus doivent rester visibles dans les deux thèmes.

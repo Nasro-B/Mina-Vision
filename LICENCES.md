@@ -1,10 +1,13 @@
 # Licences et dépendances — Mina Vision
 
-> Généré le 2026-07-22 (plan de réconciliation, R-17 + SBOM léger). App **privée, non
-> distribuée** : Mina Vision tourne uniquement sur le poste de Nasro. Ce statut porte les
-> décisions ci-dessous — **le gate de release (Wave 4) repose la question à chaque fois : «
-> distribution prévue ? »** Si un jour l'app est distribuée (installeur, autre machine, tiers),
-> relire la section espeak-ng AVANT tout envoi.
+> Généré le 2026-07-22 (R-17 + SBOM léger), **mis à jour le 2026-07-24 : le code source est
+> désormais PUBLIC** (dépôt GitHub + release APK compagnon). Point crucial pour la GPL : les
+> artefacts réellement distribués n'embarquent **aucun code GPL** — le dépôt public ne contient
+> que le source (`node_modules` gitignoré, donc pas d'espeak-ng) et l'APK est l'app Android
+> `fr.mina.gateway` (zéro dépendance Node). **Aucune obligation GPL n'est donc déclenchée à ce
+> jour** (§1). Ce qui reste gaté : la distribution d'un **installeur/binaire packagé du poste
+> Electron AVEC `node_modules`** — celui-là embarquerait espeak-ng → relire §1 AVANT d'envoyer un
+> tel paquet.
 
 ## 1. Décision espeak-ng (GPL-3.0-or-later)
 
@@ -14,10 +17,15 @@
   le lendemain avec la création de la LICENSE dédiée.
 - Usage réel : phonémisation pour Kokoro (TTS local). Dépendance NÉCESSAIRE au repli vocal local.
 - **Décision : conservé.** Les obligations GPL (fourniture des sources, licence compatible de
-  l'ensemble) se déclenchent à la **distribution** — une app privée exécutée par son seul auteur
-  n'en déclenche aucune.
-- **Si distribution un jour** : soit distribuer l'ensemble conformément à la GPL (sources
-  incluses), soit remplacer le phonémiseur (alternatives non-GPL à évaluer à ce moment-là).
+  l'ensemble) se déclenchent à la **distribution d'un binaire combiné** contenant espeak-ng.
+  Publier le SOURCE (sans `node_modules`) ou l'APK Android (sans dépendance Node) ne convoie aucun
+  code GPL → la publication publique du 2026-07-24 (dépôt + release APK) n'a déclenché aucune
+  obligation.
+- **⚠️ Gate encore ouvert — distribution d'un installeur/binaire packagé du poste Electron** (avec
+  `node_modules`, donc espeak-ng embarqué) : soit distribuer l'ensemble sous GPL (sources incluses
+  — ce qui entre en **tension avec la LICENSE de protection du nom**, plus restrictive), soit
+  remplacer le phonémiseur par une alternative non-GPL. **Décision Nasro à prendre AVANT de publier
+  un tel paquet — non tranchée à ce jour.**
 
 ## 2. Inventaire des dépendances directes (prod)
 
