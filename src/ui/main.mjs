@@ -97,6 +97,9 @@ import { composeCapabilityCatalog } from '../core/capability-catalog.mjs';
 import { composeOperationalBudgets } from '../core/operational-budgets.mjs';
 import { createVersionedJsonStore } from '../core/versioned-json-store.mjs';
 import { createChatChannel } from '../devices/chat-channel.mjs';
+import { createChatMediaHandler } from '../chat/chat-media-handler.mjs';
+import { createMediaAssembler } from '../chat/media-assembler.mjs';
+import { createMediaStore } from '../chat/media-store.mjs';
 import { createChatResponder } from '../devices/chat-responder.mjs';
 import { loadOrCreatePcChatIdentity } from '../devices/pc-chat-identity.mjs';
 import {
@@ -2341,6 +2344,18 @@ app.whenReady().then(async () => {
         respond: createChatResponder({
           generate: async (input) => (await telegramTextGenerator()).generate(input),
           memory: memoryController,
+          logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_app', entry) },
+        }),
+        // Pièces jointes / notes vocales : réassemblées (gardes + sha256) puis stockées CHIFFRÉES
+        // (clé HKDF dédiée, jamais la clé maître). À la complétion, la mémoire retient « [pièce
+        // jointe …] » — jamais le binaire. Le texte v1 est totalement inchangé par ce chemin.
+        handleMedia: createChatMediaHandler({
+          assembler: createMediaAssembler(),
+          store: createMediaStore({
+            directory: path.join(app.getPath('userData'), 'chat-media'),
+            key: Buffer.from(hkdfSync('sha256', chatMasterKey, Buffer.from('Mina Vision local memory v1', 'utf8'), Buffer.from('chat-media', 'utf8'), 32)),
+            writeFile, readFile, rename, mkdir,
+          }),
           logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_app', entry) },
         }),
         port: Number(process.env.MINA_CHAT_PORT ?? 8771),

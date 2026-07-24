@@ -131,6 +131,15 @@ export function createChatCrypto({ signingPrivateKey, verifyPublicKey, epochKey 
      * reviendrait à traiter des octets d'origine inconnue.
      */
     verifyAndDecrypt(event) {
+      return this.verifyAndDecryptBytes(event).toString('utf8');
+    },
+
+    /**
+     * Comme verifyAndDecrypt mais renvoie les OCTETS bruts (Buffer). Nécessaire pour les payloads
+     * binaires (pièces jointes/chunks) : un .toString('utf8') corromprait le contenu non textuel.
+     * Le texte v1 passe par verifyAndDecrypt (qui délègue ici puis décode en UTF-8) — inchangé.
+     */
+    verifyAndDecryptBytes(event) {
       if (!verifyPublicKey) throw new TypeError('verify_public_key_requise');
       const signature = Buffer.from(event.signature, 'base64');
       const valid = createVerify('sha256')
@@ -142,11 +151,10 @@ export function createChatCrypto({ signingPrivateKey, verifyPublicKey, epochKey 
       decipher.setAAD(encodeChatHeader(event));
       decipher.setAuthTag(Buffer.from(event.authTag, 'base64'));
       try {
-        const plaintext = Buffer.concat([
+        return Buffer.concat([
           decipher.update(Buffer.from(event.payloadCiphertext, 'base64')),
           decipher.final(),
         ]);
-        return plaintext.toString('utf8');
       } catch {
         // Tag invalide OU contexte modifié (AAD) : dans les deux cas, contenu non fiable.
         throw new Error('chat_dechiffrement_impossible');
