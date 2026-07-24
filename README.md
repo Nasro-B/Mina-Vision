@@ -131,6 +131,10 @@ en chiffrement de bout en bout.
 cd android && ./gradlew assembleDebug
 ```
 
+**Distribuer aux utilisateurs.** `./gradlew packageMinaApk` produit `Mina Vision.apk` (build debug,
+signé clé debug → installable en sideload). Le binaire reste hors dépôt (`*.apk` gitignoré) ; on le
+publie en **release GitHub**. Guide d'installation côté utilisateur : [docs/operations/INSTALLER-MINA-TELEPHONE.md](docs/operations/INSTALLER-MINA-TELEPHONE.md).
+
 **Appairage.** Sur le PC : onglet *Configuration & mémoire* › *Système Windows* › **Ouvrir
 l'appairage** — un code à 6 chiffres s'affiche, valable 5 minutes et une seule fois. Sur le
 téléphone : saisir l'adresse du PC et ce code.
@@ -193,6 +197,7 @@ npm run test:unit
 | [docs/operations/TELEGRAM.md](docs/operations/TELEGRAM.md) | Canal Telegram (conversation et commandes) |
 | [docs/operations/FIREBASE.md](docs/operations/FIREBASE.md) | Sauvegarde chiffrée et relais Firebase |
 | [docs/operations/ANDROID-HUAWEI.md](docs/operations/ANDROID-HUAWEI.md) | Téléphone Android : appairage, caméra, SMS |
+| [docs/operations/INSTALLER-MINA-TELEPHONE.md](docs/operations/INSTALLER-MINA-TELEPHONE.md) | Installer l'APK sur un téléphone (utilisateur final, sideload) |
 | [docs/operations/RECOVERY.md](docs/operations/RECOVERY.md) | Récupération du coffre mémoire |
 | [docs/operations/SECURITY.md](docs/operations/SECURITY.md) | Modèle de sécurité et invariants |
 | [LICENCES.md](LICENCES.md) | Licences des dépendances et décisions |
