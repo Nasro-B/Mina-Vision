@@ -26,6 +26,23 @@ describe('capability catalog (amélioration A)', () => {
     expect(catalog.capabilities.permanent.length).toBeGreaterThan(5);
   });
 
+  it('expose les OUTILS et les PARAMÈTRES non sensibles (conscience complète de Mina)', () => {
+    const catalog = composeCapabilityCatalog({
+      tools: [
+        { name: 'lire_journal', description: 'Lit le journal.' },
+        { name: 'jouer_musique', description: 'Joue de la musique.' },
+        { name: 42, description: 'ignoré (nom non-string)' },
+      ],
+      settings: { inferenceMode: 'auto', callMode: 'dial_only', providers: { gemini: { enabled: true, model: 'gemini-3.5-flash' } } },
+    });
+    expect(catalog.capabilities.tools).toEqual([
+      { name: 'lire_journal', description: 'Lit le journal.' },
+      { name: 'jouer_musique', description: 'Joue de la musique.' },
+    ]); // le nom non-string est filtré
+    expect(catalog.settings).toMatchObject({ inferenceMode: 'auto', callMode: 'dial_only' });
+    expect(catalog.settings.providers.gemini).toEqual({ enabled: true, model: 'gemini-3.5-flash' });
+  });
+
   it('un snapshot vide produit un catalogue honnête, jamais optimiste', () => {
     const catalog = composeCapabilityCatalog({});
     expect(catalog.readiness.memoryUnlocked).toBe(false);

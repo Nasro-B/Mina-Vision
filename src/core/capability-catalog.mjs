@@ -51,12 +51,19 @@ export function composeCapabilityCatalog(snapshot = {}, { budgets = null } = {})
     permanent: PERMANENT_CAPABILITIES,
     skills: Object.freeze([...(Array.isArray(snapshot.skills) ? snapshot.skills : [])]),
     bundledSkills: Object.freeze([...(Array.isArray(snapshot.bundledSkills) ? snapshot.bundledSkills : [])]),
+    // Conscience COMPLÈTE : la liste réelle des outils vocaux (fonctions appelables) et les
+    // paramètres NON SENSIBLES actifs, pour que Mina sache exactement ce qu'elle peut faire et
+    // comment elle est réglée. Les valeurs viennent de la vue safe de la config (aucun secret).
+    tools: Object.freeze((Array.isArray(snapshot.tools) ? snapshot.tools : [])
+      .filter((tool) => tool && typeof tool.name === 'string')
+      .map((tool) => Object.freeze({ name: tool.name, description: String(tool.description ?? '') }))),
   });
 
   return Object.freeze({
     readiness,
     health: Object.freeze(health.map((issue) => Object.freeze(issue))),
     capabilities,
+    ...(snapshot.settings ? { settings: Object.freeze({ ...snapshot.settings }) } : {}),
     ...(budgets ? { budgets } : {}),
     composedAt: Date.now(),
   });
