@@ -12,6 +12,7 @@ import { createHash, createPublicKey, createVerify, randomBytes } from 'node:cry
 import { WebSocketServer } from 'ws';
 import { parseChatEvent } from '../contracts/chat.mjs';
 import { decodeChatPayload } from '../contracts/chat-payload.mjs';
+import { chunkMedia, encodeMediaMetaPayload, encodeMediaChunkPayload } from '../chat/media-chunker.mjs';
 import { encodeChatSignatureInput } from '../contracts/chat-binary-codec.mjs';
 import { createChatCrypto, deriveDeviceWrapKey, wrapEpochKey } from './chat-crypto.mjs';
 import { createMonotonicUlid } from '../contracts/event-id.mjs';
@@ -228,6 +229,43 @@ export function createChatServer({
     socket.send(JSON.stringify(reply));
   }
 
+  /**
+   * W6 — envoi d'un média PC → téléphone : découpe (méta payload v2 + chunks), chiffre+signe
+   * chaque événement comme une réponse texte, envoie sur la session ACTIVE de l'appareil.
+   * Fail-loud : appareil non connecté => erreur claire (pas de file d'attente fantôme — le
+   * téléphone lancé re-synchronise, et l'appelant peut réessayer quand l'appareil est là).
+   */
+  async function sendMediaToDevice(deviceId, { bytes, mime, extraMeta = {} } = {}) {
+    const socket = sessions.get(deviceId);
+    if (!socket || socket.readyState !== 1) throw new Error('chat_appareil_non_connecte');
+    if (!registry.isApproved(deviceId)) throw new Error('chat_appareil_non_appaire');
+    const { eventType, meta, chunks } = chunkMedia(Buffer.from(bytes), { mime, extraMeta });
+    const keyEpoch = registry.keyEpoch();
+    const seal = (routingClass, payload) => {
+      const createdAtMs = clock();
+      return crypto.encryptAndSign({
+        header: {
+          version: 2,
+          eventId: ulid(),
+          threadId: 'thread-main',
+          senderDeviceId: 'pc-mina',
+          deviceSequence: 0,
+          keyEpoch,
+          routingClass,
+          createdAtMs,
+          expiresAtMs: createdAtMs + TTL_MS,
+        },
+        plaintext: payload,
+      });
+    };
+    socket.send(JSON.stringify(seal('message', encodeMediaMetaPayload({ eventType, meta }))));
+    for (const chunk of chunks) {
+      socket.send(JSON.stringify(seal('stream', encodeMediaChunkPayload({ mediaId: meta.mediaId, index: chunk.index, binary: chunk.binary }))));
+    }
+    note('chat_app_media_envoye', { deviceId, mediaId: meta.mediaId, mime, chunkCount: chunks.length });
+    return Object.freeze({ mediaId: meta.mediaId, chunkCount: chunks.length, sizeBytes: meta.sizeBytes });
+  }
+
   return Object.freeze({
     async listen() {
       http = createServer((_request, response) => {
@@ -312,6 +350,8 @@ export function createChatServer({
 
     /** Appareils réellement connectés à cet instant — pas ceux qui sont seulement approuvés. */
     connectedDevices: () => Object.freeze([...sessions.keys()]),
+
+    sendMediaToDevice,
 
     async close() {
       for (const socket of sessions.values()) socket.close(1001, 'arret');
