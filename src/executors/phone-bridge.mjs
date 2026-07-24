@@ -3,7 +3,19 @@ import { randomBytes } from 'node:crypto';
 import { createPhysicalDeviceRegistry } from '../devices/physical-device-registry.mjs';
 import { classifyAdbEndpoint, createAndroidTransport } from '../devices/android-transport.mjs';
 import { verifyDeviceProof } from '../devices/device-identity-proof.mjs';
-import { parseAdbMdnsEndpoints } from './adb-mdns-peer.mjs';
+import { execFile as execFileArp } from 'node:child_process';
+import { ouiOf, parseAdbMdnsEndpoints, parseArpTable } from './adb-mdns-peer.mjs';
+
+// Appareils du réseau à ne JAMAIS toucher, par OUI MAC (3 premiers octets).
+//   - 09:8d:05 → télé Condor de Nasro (consigne du 2026-07-24 : ne rien y installer, ne pas la
+//     connecter). Extensible via MINA_ADB_EXCLUDE_OUI (séparés par « , » ou « ; »).
+const DEFAULT_EXCLUDED_OUI = Object.freeze(['09:8d:05']);
+
+const defaultReadArpTable = () => new Promise((resolve) => {
+  execFileArp('arp', ['-a'], { encoding: 'utf8', windowsHide: true, timeout: 5_000 }, (error, stdout) => {
+    resolve(error ? new Map() : parseArpTable(stdout));
+  });
+});
 
 const SERIAL_PATTERN = /^[A-Za-z0-9._:-]+$/;
 const DEVICE_ID_PATTERN = /^[A-Za-z0-9._:-]{1,160}$/u;
@@ -118,7 +130,13 @@ export function createPhoneBridge({
   createTelegramCommandId = () => `msg-${randomBytes(16).toString('hex')}`,
   now = Date.now,
   wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  readArpTable = defaultReadArpTable,
+  excludedOui = [
+    ...DEFAULT_EXCLUDED_OUI,
+    ...String(process.env.MINA_ADB_EXCLUDE_OUI ?? '').split(/[;,]/u).map((value) => value.trim().toLowerCase()).filter(Boolean),
+  ],
 } = {}) {
+  const excludedOuiSet = new Set(excludedOui);
   let device = null;
   let preview = null;
   const activeIdentityResolver = resolveDeviceIdentity ?? (async ({ serial }) => {
@@ -259,10 +277,24 @@ export function createPhoneBridge({
       const { stdout } = await run(adbPath, ['mdns', 'services'], { binary: false });
       announced = parseAdbMdnsEndpoints(stdout);
     } catch {
-      return Object.freeze({ discovered: 0, connected: 0, endpoints: Object.freeze([]) });
+      return Object.freeze({ discovered: 0, connected: 0, excluded: 0, endpoints: Object.freeze([]) });
     }
+    // Table ARP pour écarter les appareils interdits (télé Condor 09:8d:05, etc.) AVANT tout
+    // adb connect : Mina ne doit ni les toucher ni rien y installer.
+    const arpTable = excludedOuiSet.size > 0 ? await readArpTable().catch(() => new Map()) : new Map();
+    const isExcluded = (endpoint) => {
+      const oui = ouiOf(arpTable.get(endpoint.split(':')[0]));
+      return oui !== null && excludedOuiSet.has(oui);
+    };
+
     const connected = [];
+    let excluded = 0;
     for (const endpoint of announced) {
+      if (isExcluded(endpoint)) {
+        // Appareil sur liste d'exclusion (ex. télé Condor) : jamais de connexion, jamais d'install.
+        excluded += 1;
+        continue;
+      }
       try {
         await run(adbPath, ['connect', endpoint], { binary: false });
         connected.push(endpoint);
@@ -273,6 +305,7 @@ export function createPhoneBridge({
     return Object.freeze({
       discovered: announced.length,
       connected: connected.length,
+      excluded,
       endpoints: Object.freeze(connected),
     });
   };

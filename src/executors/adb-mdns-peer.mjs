@@ -38,6 +38,23 @@ export function parseAdbMdnsEndpoints(output) {
   return [...endpoints];
 }
 
+/** OUI (3 premiers octets) d'une MAC, normalisé `xx:xx:xx` — ou null si illisible. */
+export function ouiOf(mac) {
+  const parts = String(mac ?? '').trim().toLowerCase().split(/[:-]/u);
+  if (parts.length < 3 || !parts.slice(0, 3).every((octet) => /^[0-9a-f]{2}$/u.test(octet))) return null;
+  return parts.slice(0, 3).join(':');
+}
+
+/** Table ARP `ip -> mac` depuis la sortie de `arp -a` (formats Windows et Unix). */
+export function parseArpTable(output) {
+  const table = new Map();
+  for (const line of String(output ?? '').split(/\r?\n/u)) {
+    const match = line.match(/(\d{1,3}(?:\.\d{1,3}){3})\s+(?:at\s+)?([0-9a-fA-F]{2}(?:[:-][0-9a-fA-F]{2}){5})/u);
+    if (match) table.set(match[1], match[2]);
+  }
+  return table;
+}
+
 export function createAdbMdnsPeerKeeper({
   serial, role, adbPath = 'adb', run = defaultRun, onStatus = () => {},
   setIntervalFn = setInterval, clearIntervalFn = clearInterval, intervalMs = 5_000,

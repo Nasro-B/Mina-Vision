@@ -29,10 +29,12 @@ describe('découverte Wi-Fi du téléphone (mDNS + connect, sans USB)', () => {
       .mockResolvedValueOnce({ stdout: MDNS, stderr: '' })
       .mockResolvedValueOnce({ stdout: 'connected', stderr: '' })
       .mockResolvedValueOnce({ stdout: 'connected', stderr: '' });
-    const bridge = createPhoneBridge({ run, adbPath: 'adb.exe', resolveDeviceIdentity: resolveIdentity });
+    const bridge = createPhoneBridge({
+      run, adbPath: 'adb.exe', readArpTable: async () => new Map(), resolveDeviceIdentity: resolveIdentity,
+    });
 
     await expect(bridge.discoverWifiPhones()).resolves.toEqual({
-      discovered: 2, connected: 2, endpoints: ['192.168.1.10:38361', '192.168.1.12:5555'],
+      discovered: 2, connected: 2, excluded: 0, endpoints: ['192.168.1.10:38361', '192.168.1.12:5555'],
     });
     expect(run).toHaveBeenNthCalledWith(1, 'adb.exe', ['mdns', 'services'], { binary: false });
     expect(run).toHaveBeenNthCalledWith(2, 'adb.exe', ['connect', '192.168.1.10:38361'], { binary: false });
@@ -70,7 +72,40 @@ describe('découverte Wi-Fi du téléphone (mDNS + connect, sans USB)', () => {
   it('mDNS indisponible ne fait pas échouer la découverte', async () => {
     const run = vi.fn().mockRejectedValueOnce(new Error('adb: unknown command mdns'));
     const bridge = createPhoneBridge({ run, adbPath: 'adb.exe', resolveDeviceIdentity: resolveIdentity });
-    await expect(bridge.discoverWifiPhones()).resolves.toEqual({ discovered: 0, connected: 0, endpoints: [] });
+    await expect(bridge.discoverWifiPhones()).resolves.toEqual({ discovered: 0, connected: 0, excluded: 0, endpoints: [] });
+  });
+
+  it('n\'appelle JAMAIS adb connect sur un appareil exclu (télé Condor 09:8d:05)', async () => {
+    const mdns = [
+      'List of discovered mdns services',
+      'adb-TV\t_adb._tcp\t192.168.1.20:5555',
+      'adb-PHONE\t_adb._tcp\t192.168.1.10:5555',
+    ].join('\n');
+    const run = vi.fn()
+      .mockResolvedValueOnce({ stdout: mdns, stderr: '' })
+      .mockResolvedValue({ stdout: 'connected', stderr: '' });
+    // La télé Condor (09:8d:05) est en .20 ; un téléphone légitime en .10.
+    const readArpTable = vi.fn(async () => new Map([
+      ['192.168.1.20', '09-8d-05-aa-bb-cc'],
+      ['192.168.1.10', '92-79-e3-a2-a8-76'],
+    ]));
+    const bridge = createPhoneBridge({ run, adbPath: 'adb.exe', readArpTable, resolveDeviceIdentity: resolveIdentity });
+
+    const result = await bridge.discoverWifiPhones();
+    expect(result).toMatchObject({ discovered: 2, connected: 1, excluded: 1, endpoints: ['192.168.1.10:5555'] });
+    // La preuve dure : aucun adb connect vers la télé.
+    expect(run.mock.calls.flatMap((call) => call[1])).not.toContain('192.168.1.20:5555');
+  });
+
+  it('respecte MINA_ADB_EXCLUDE_OUI en plus du défaut', async () => {
+    const mdns = ['List', 'adb-X\t_adb._tcp\t192.168.1.30:5555'].join('\n');
+    const run = vi.fn().mockResolvedValueOnce({ stdout: mdns, stderr: '' });
+    const readArpTable = vi.fn(async () => new Map([['192.168.1.30', 'aa:bb:cc:11:22:33']]));
+    const bridge = createPhoneBridge({
+      run, adbPath: 'adb.exe', readArpTable, excludedOui: ['aa:bb:cc'], resolveDeviceIdentity: resolveIdentity,
+    });
+    const result = await bridge.discoverWifiPhones();
+    expect(result).toMatchObject({ connected: 0, excluded: 1 });
   });
 });
 
