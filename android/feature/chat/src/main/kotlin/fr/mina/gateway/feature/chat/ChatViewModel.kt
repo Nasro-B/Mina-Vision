@@ -68,6 +68,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Envoie une image (préparée : redimensionnée, EXIF retiré) en pièce jointe chiffrée. */
+    fun sendImage(uri: android.net.Uri) {
+        viewModelScope.launch {
+            runCatching {
+                val prepared = MediaPrep.prepareImage(getApplication(), uri)
+                engine.repository.sendMedia(
+                    MAIN_THREAD_ID, prepared.bytes, prepared.mime,
+                    mapOf("width" to prepared.width, "height" to prepared.height),
+                )
+            }.onFailure { sendError.value = humanReason(it) }.onSuccess { sendError.value = null }
+            engine.start() // pousse tout de suite l'outbox
+            refreshPending()
+        }
+    }
+
     fun dismissSendError() { sendError.value = null }
 
     fun retryLink() {
