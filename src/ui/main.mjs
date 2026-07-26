@@ -87,6 +87,7 @@ import { createTelegramHomeCommands } from '../messaging/telegram-home-commands.
 import { createTelegramMailCommands } from '../messaging/telegram-mail-commands.mjs';
 import { createTelegramCommandRouter } from '../messaging/telegram-command-router.mjs';
 import { createUtteranceAggregator } from '../voice/utterance-aggregator.mjs';
+import { createEchoGuard } from '../voice/echo-guard.mjs';
 import { createGroqWebAnswer, createWebAnswerChain, createWebAnswerService } from '../research/web-answer.mjs';
 import { createLocalVoiceClient } from '../voice/local-voice-client.mjs';
 import { createDeepgramStt } from '../voice/deepgram-stt.mjs';
@@ -1412,6 +1413,12 @@ const rememberSpokenTurn = (role, text, engine) => {
 
 // Routage vocal partagé Gemini/Deepgram : quelle que soit l'oreille, un énoncé suit EXACTEMENT le
 // même chemin — wake router, puis couche dialogue déterministe pour ce que le routeur ignore.
+// Garde anti-écho : ce que Mina vient de DIRE ne doit jamais revenir comme un ordre. Sans elle, le
+// micro capte les haut-parleurs (« Je cherche sur le web ») et la couche dialogue y lit verbe +
+// surface → mission navigateur fantôme qui échoue aussitôt (« la mission a échoué » sans demande).
+// Partagée Gemini/Deepgram/[DIS] — les mots de contrôle (« stop ») sont routés AVANT la garde.
+const voiceEchoGuard = createEchoGuard();
+
 const buildUtteranceRoute = (engine) => {
   const router = createVoiceCommandRouter({
     onWake: (phrase) => send('mina:voice-wake', phrase),
@@ -1421,6 +1428,12 @@ const buildUtteranceRoute = (engine) => {
   return (utterance) => {
     // Mots de contrôle (pause/reprise/stop) — en pause, l'énoncé est consommé : silence total.
     if (handleVoiceControlWords(utterance)) return;
+    if (voiceEchoGuard.isEcho(utterance)) {
+      // Écho de la propre voix de Mina : jeté avant tout routage (ni mission, ni dialogue, ni
+      // mémoire « owner » polluée par ses propres phrases). Journalisé pour rester diagnosticable.
+      void activityJournal?.append('voice_echo_dropped', { chars: utterance.length, engine });
+      return;
+    }
     send('mina:voice-transcript', utterance);
     rememberSpokenTurn('owner', utterance, engine);
     const routed = router.push(utterance);
@@ -1704,6 +1717,9 @@ const startGeminiVoice = async () => {
     // déterministes [DIS] sont déjà couvertes par le handler mina:voice-say.
     onModelTranscript: (fragment, { turnComplete } = {}) => {
       modelSpeechBuffer += fragment;
+      // Nourrit la garde anti-écho PENDANT qu'elle parle (le buffer complet, pas le fragment :
+      // les fragments streaming coupent les mots en deux) — l'écho micro arrive en même temps.
+      voiceEchoGuard.record(modelSpeechBuffer);
       if (!turnComplete) return;
       // Fin de tour modèle : la suppression post-« stop » se relâche — le prochain tour repart propre.
       speechGate.noteTurnComplete();
@@ -1959,6 +1975,9 @@ const registerIpc = () => {
     if (pauseGate.isPaused()) return { spoken: false, reason: 'paused' };
     const line = String(text ?? '').replace(/\s+/gu, ' ').trim().slice(0, 1_200);
     if (!line) return { spoken: false, reason: 'empty' };
+    // Enregistré AVANT le test voice : même parlée par le repli local (Kokoro, renderer), la
+    // réplique peut revenir en écho micro — la garde doit la connaître dans tous les cas.
+    voiceEchoGuard.record(line);
     if (!voice) return { spoken: false, reason: 'voice_inactive' };
     await voice.sendText(`${VOICE_READBACK_PREFIX}${line}`);
     rememberSpokenTurn('mina', line, 'dis');
