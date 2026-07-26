@@ -204,6 +204,7 @@ npm run test:unit
 | [docs/operations/SECURITY.md](docs/operations/SECURITY.md) | Modèle de sécurité et invariants |
 | [LICENCES.md](LICENCES.md) | Licences des dépendances et décisions |
 | [docs/operations/AUDIT-PRE-PUBLICATION.md](docs/operations/AUDIT-PRE-PUBLICATION.md) | Audit de confidentialité du dépôt |
+| [docs/operations/SECURITY-AUDIT.md](docs/operations/SECURITY-AUDIT.md) | Rapport d'audit de sécurité (menaces, crypto, sandbox, dépendances) |
 
 ## État du projet
 
