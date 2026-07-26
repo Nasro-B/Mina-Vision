@@ -880,8 +880,16 @@ const confirmDigestAction = async ({ reason, action }) => {
   });
 };
 
+// Un executor est MORT si son contexte est fermé OU si sa page courante l'est (fenêtre/onglet
+// Chrome fermé à la main : le contexte peut survivre sans page → toute mission échouait en boucle
+// sur « page.title: Target page, context or browser has been closed », cas réel 2026-07-25).
+// On retire l'ancien (close best-effort : libère le verrou du profil) puis on relance propre.
+const executorDead = (executor) => Boolean(executor)
+  && (executor.isClosed?.() === true || executor.getPage?.()?.isClosed?.() === true);
+const retireExecutor = async (executor) => { try { await executor?.close(); } catch { /* déjà mort */ } };
+
 const getBrowserExecutor = async () => {
-  if (browserExecutor?.isClosed?.()) browserExecutor = null;
+  if (executorDead(browserExecutor)) { await retireExecutor(browserExecutor); browserExecutor = null; }
   if (!browserExecutor) {
     browserExecutor = await createBrowserExecutor({
       profileDir: path.join(app.getPath('userData'), 'mina-chrome-profile'),
@@ -894,7 +902,7 @@ const getBrowserExecutor = async () => {
 // du navigateur visible). Utilisé UNIQUEMENT par research.readWeb — « cherche/réfléchit » ne fait
 // donc plus surgir de fenêtre Chrome à l'écran.
 const getResearchBrowser = async () => {
-  if (researchBrowser?.isClosed?.()) researchBrowser = null;
+  if (executorDead(researchBrowser)) { await retireExecutor(researchBrowser); researchBrowser = null; }
   if (!researchBrowser) {
     researchBrowser = await createBrowserExecutor({
       headless: true,
@@ -3198,15 +3206,31 @@ app.whenReady().then(async () => {
       }
     },
   });
+  // Anti-spam du journal des keepers ADB Wi-Fi (cas réel 2026-07-25 : port Samsung éphémère mort →
+  // « adb connect … » + « device not found » réécrits toutes les ~60-90 s pendant des heures).
+  // Une erreur IDENTIQUE n'est réécrite qu'1×/5 min ; une reconnexion réarme le filtre — la
+  // PROCHAINE panne est de nouveau journalisée immédiatement. L'événement UI, lui, part à chaque
+  // statut (l'interface veut l'état vivant).
+  const makeAdbWifiStatusLogger = (scope, code) => {
+    let last = { key: '', at: 0 };
+    return (status) => {
+      if (status.connected) { last = { key: '', at: 0 }; return; }
+      const key = String(status.reason ?? '').slice(0, 200);
+      const now = Date.now();
+      if (key === last.key && now - last.at < 5 * 60_000) return;
+      last = { key, at: now };
+      technicalLog.record({ severity: 'warning', scope, code, message: status.reason });
+    };
+  };
+  const logAdbWifiStatus = makeAdbWifiStatusLogger('phone:adb-wifi', 'adb_wifi_reconnect_pending');
+  const logSamsungAdbWifiStatus = makeAdbWifiStatusLogger('samsung:adb-wifi', 'samsung_adb_wifi_reconnect_pending');
   adbWifiKeeper = createAdbWifiKeeper({
     bridge: getPhoneBridge(),
     loadEndpoint: adbWifiEndpointStore.loadEndpoint,
     saveEndpoint: adbWifiEndpointStore.saveEndpoint,
     onStatus: (status) => {
       send('mina:event', { type: 'adb_wifi_status', ...status });
-      if (!status.connected) technicalLog.record({
-        severity: 'warning', scope: 'phone:adb-wifi', code: 'adb_wifi_reconnect_pending', message: status.reason,
-      });
+      logAdbWifiStatus(status);
     },
   });
   void adbWifiKeeper.start();
@@ -3238,9 +3262,7 @@ app.whenReady().then(async () => {
       },
       onStatus: (status) => {
         send('mina:event', { type: 'adb_wifi_status', ...status });
-        if (!status.connected) technicalLog.record({
-          severity: 'warning', scope: 'samsung:adb-wifi', code: 'samsung_adb_wifi_reconnect_pending', message: status.reason,
-        });
+        logSamsungAdbWifiStatus(status);
       },
     });
     samsungAdbWifiKeeper.start();

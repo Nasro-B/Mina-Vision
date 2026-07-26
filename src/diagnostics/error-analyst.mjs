@@ -41,6 +41,24 @@ const RULES = Object.freeze([
     remede: 'Réessayer dans quelques minutes ; si fréquent, changer de fournisseur ou passer en mode économe.',
   },
   {
+    pattern: /web_answer_http_413|http_413/iu,
+    gravite: 'transitoire',
+    explication: 'Le fournisseur de recherche web a refusé la requête comme « trop volumineuse » côté serveur.',
+    remede: 'Reformuler la demande plus court et réessayer ; le fournisseur de secours prend normalement le relais tout seul.',
+  },
+  {
+    pattern: /Target page, context or browser has been closed|browser has been closed/iu,
+    gravite: 'transitoire',
+    explication: 'La fenêtre Chrome pilotée par la mission a été fermée pendant l\'action.',
+    remede: 'Relancer la mission : Mina rouvre un navigateur propre automatiquement.',
+  },
+  {
+    pattern: /browser_text_target_not_focused/u,
+    gravite: 'dégradé',
+    explication: 'La page n\'avait aucun champ de saisie actif au moment de taper — le texte a été refusé plutôt que tapé au mauvais endroit.',
+    remede: 'Demander à Mina de cliquer d\'abord le champ visé (ou préciser où taper), puis redonner le texte.',
+  },
+  {
     pattern: /Connection error|ECONNRESET|ETIMEDOUT|ENOTFOUND|fetch failed/iu,
     gravite: 'transitoire',
     explication: 'Coupure réseau ou fournisseur injoignable pendant l\'appel.',
