@@ -2583,7 +2583,7 @@ app.whenReady().then(async () => {
   // PC est chiffrée par lui. Coffre fermé, on ne fait pas semblant d'écouter.
   try {
     if (chatMasterKey) {
-      const chatIdentity = await loadOrCreatePcChatIdentity({
+  const chatIdentity = await loadOrCreatePcChatIdentity({
         filePath: path.join(app.getPath('userData'), 'chat-pc-identity.json'),
         masterKey: chatMasterKey,
         readFile,
@@ -2705,7 +2705,7 @@ app.whenReady().then(async () => {
         host: process.env.MINA_CHAT_HOST ?? '0.0.0.0',
         logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_app', entry) },
       });
-      await chatChannel.load();
+  await chatChannel.load();
       const listening = await chatChannel.start();
       void activityJournal?.append('chat_app_canal', {
         listening: Boolean(listening),

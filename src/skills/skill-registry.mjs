@@ -18,8 +18,19 @@ export function createSkillRegistry({ root } = {}) {
       const directory = join(rootReal, entry.name);
       const stat = await lstat(directory);
       if (stat.isSymbolicLink()) throw new Error('skill_reparse_point_forbidden');
-      const parsed = await readSkillMetadata(directory);
-      if (parsed.metadata.digest === 'sha256:manifest-placeholder') throw new Error('skill_manifest_digest_missing');
+      // Un dossier MAL FORMÉ (SKILL.md absent ou illisible/invalide) est IGNORÉ, jamais fatal :
+      // cas réel 2026-07-27 — Mina avait généré un skill à imbrication double
+      // (pianiste-…/pianiste-…/SKILL.md) et ce seul dossier faisait avorter TOUT le boot en
+      // silence (refresh() rejetait avant createWindow). Un skill cassé = un skill indisponible,
+      // pas une application morte. Les gardes SÉCURITÉ (symlink, slug, doublon) restent
+      // fail-closed ci-dessus/dessous ; le fail-closed de CONTENU reste à l'installation (audit).
+      let parsed;
+      try {
+        parsed = await readSkillMetadata(directory);
+      } catch {
+        continue;
+      }
+      if (parsed.metadata.digest === 'sha256:manifest-placeholder') continue;
       if (next.has(parsed.metadata.name)) throw new Error(`skill_duplicate:${parsed.metadata.name}`);
       next.set(parsed.metadata.name, Object.freeze({
         slug: entry.name,
