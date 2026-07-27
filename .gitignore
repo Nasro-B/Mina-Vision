@@ -36,7 +36,12 @@ connectors/out/
 skill-quarantine/
 sandbox/jobs/
 exports/
-emergency/
+# ANCRÉ à la racine (le « / » initial est vital) : ce motif vise le dossier de DONNÉES d'urgence
+# généré au runtime. Sans ancre, « emergency/ » matchait à toute profondeur et excluait le CODE
+# SOURCE `src/emergency/` — un clone du dépôt public ne démarrait plus (ERR_MODULE_NOT_FOUND),
+# défaut CRITIQUE F-01 de l'audit 2026-07-27. Contrat de non-régression :
+# tests/repo-completeness.test.mjs.
+/emergency/
 *.sqlite
 *.sqlite-journal
 *.db
