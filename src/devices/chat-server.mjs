@@ -149,6 +149,20 @@ export function createChatServer({
       socket.send(JSON.stringify({ type: 'rejected', reason: 'expediteur_inattendu' }));
       return;
     }
+    // F-02 : l'autorisation est revalidée à CHAQUE trame, jamais seulement à la poignée de main.
+    // Sans cela, un appareil révoqué gardait un canal vivant tant que sa socket restait ouverte.
+    if (!registry.isApproved(session.deviceId)) {
+      note('chat_app_evenement_refuse', { deviceId: session.deviceId, reason: 'appareil_revoque' });
+      rejectSocket(socket, 'appareil_revoque');
+      return;
+    }
+    // ...et l'époque de clé doit être l'époque COURANTE du registre : une révocation ouvre une
+    // nouvelle époque, donc une trame chiffrée avec l'ancienne clé est refusée par construction.
+    if (event.keyEpoch !== registry.keyEpoch()) {
+      note('chat_app_evenement_refuse', { deviceId: session.deviceId, reason: 'epoque_perimee' });
+      rejectSocket(socket, 'epoque_perimee');
+      return;
+    }
     if (event.expiresAtMs <= clock()) {
       socket.send(JSON.stringify({ type: 'rejected', reason: 'evenement_expire' }));
       return;
@@ -308,7 +322,28 @@ export function createChatServer({
     return Object.freeze({ requested: true });
   }
 
+  /**
+   * Ferme immédiatement la session vivante d'un appareil (F-02). Appelé par la révocation : une
+   * socket déjà ouverte ne doit pas survivre au retrait de l'autorisation. Sans effet — et sans
+   * erreur — si l'appareil n'a pas de session.
+   */
+  function disconnectDevice(deviceId, reason = 'appareil_revoque') {
+    const socket = sessions.get(deviceId);
+    if (!socket) return Object.freeze({ disconnected: false });
+    sessions.delete(deviceId);
+    try {
+      rejectSocket(socket, reason);
+    } catch {
+      // Socket déjà morte : l'objectif (plus de session vivante) est atteint de toute façon.
+    }
+    note('chat_app_session_fermee', { deviceId, reason });
+    return Object.freeze({ disconnected: true });
+  }
+
   return Object.freeze({
+    disconnectDevice,
+    /** Vrai si l'appareil a une session WebSocket vivante (contrat de test F-02). */
+    hasSession: (deviceId) => sessions.has(deviceId),
     async listen() {
       http = createServer((_request, response) => {
         response.writeHead(426, { 'content-type': 'text/plain; charset=utf-8' });

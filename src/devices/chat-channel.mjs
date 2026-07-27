@@ -158,6 +158,10 @@ export function createChatChannel({
     async revoke(deviceId) {
       const outcome = registry.revoke(deviceId);
       if (outcome.ok) {
+        // F-02 : couper la session VIVANTE, pas seulement l'autorisation future. Sans cette
+        // fermeture, une WebSocket déjà ouverte continuait d'obtenir des accusés et des réponses
+        // après la révocation. Fait AVANT la persistance : la coupure ne doit pas attendre un I/O.
+        server?.disconnectDevice?.(deviceId, 'appareil_revoque');
         await persist();
         logger?.append?.({ event: 'chat_app_appareil_revoque', deviceId, keyEpoch: outcome.keyEpoch });
       }
