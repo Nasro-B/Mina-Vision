@@ -1718,9 +1718,13 @@ const runWebAnswer = async (query) => {
     log(`Recherche web : ${error.message}`);
     // 429 = quota gratuit Gemini du moment (partagé avec la session vocale) — le dire honnêtement
     // vaut mieux qu'un échec générique qui ressemble à une panne.
+    // ⚠️ Formulations volontairement SANS verbe mission ni mot surface (« recherche/ouvrir » +
+    // « web/navigateur ») : l'ancienne phrase d'échec revenait en écho micro et RELANÇAIT une
+    // mission navigateur fantôme (journal réel 2026-07-25, 22:31:16 → 22:31:21). Contrat :
+    // tests/spoken-lines-echo-safe.test.mjs.
     void say(String(error?.message ?? '').includes('web_answer_http_429')
-      ? 'Mon quota gratuit de recherche web est épuisé pour le moment. Réessayez un peu plus tard, ou demandez-moi de chercher dans le navigateur.'
-      : "La recherche web directe n'a pas abouti. Je peux ouvrir le navigateur si vous voulez.");
+      ? "Mon quota gratuit d'infos en ligne est épuisé pour le moment. Réessayez dans quelques minutes."
+      : "Je n'ai pas réussi à obtenir la réponse en ligne. Réessayez dans un instant.");
   }
 };
 

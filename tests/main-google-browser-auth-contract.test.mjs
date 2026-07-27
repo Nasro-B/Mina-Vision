@@ -8,7 +8,10 @@ describe('main Google browser authentication wiring', () => {
 
     expect(source).toContain("import { createBrowserProfileAuthenticator } from '../executors/browser-profile-auth.mjs';");
     expect(source).toContain("ipcMain.handle('mina:browser:google-login'");
-    expect(source).toContain('browserExecutor?.isClosed?.()');
+    // Depuis 2026-07-25, la détection couvre AUSSI la page fermée à la main (contexte vivant,
+    // page morte → missions en boucle « browser has been closed ») : executorDead + relance.
+    expect(source).toContain('executorDead(browserExecutor)');
+    expect(source).toContain("executor.getPage?.()?.isClosed?.()");
     expect(source).toContain("name: 'connecter_gmail_navigateur'");
     expect(renderer).toContain('api.connectGoogleBrowser()');
   });
