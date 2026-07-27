@@ -855,6 +855,18 @@ const startHttpsmsWebhookServer = async () => {
       });
       send('mina:event', { type: 'sms_received', providerId: 'httpsms', sender: message.sender });
     },
+    // F-06 : un échec de traitement (coffre verrouillé, écriture mémoire impossible…) n'est plus
+    // avalé en silence. Il apparaît dans le journal technique — donc dans l'onglet Diagnostic —
+    // avec l'information qui compte : le SMS a-t-il été gardé quelque part, ou est-il perdu ?
+    onProcessingError: ({ stage, messageId, persisted, error }) => {
+      technicalLog.record({
+        severity: 'error',
+        scope: 'httpsms:webhook',
+        code: persisted ? 'httpsms_inbound_traitement_echoue' : 'httpsms_inbound_perdu',
+        message: `${stage} · message ${messageId ?? 'inconnu'} · ${persisted ? 'conservé, rejouable' : 'NON conservé'} · ${error}`,
+      });
+      send('mina:event', { type: 'sms_inbound_failed', providerId: 'httpsms', persisted });
+    },
   });
   const { port } = await server.start();
   httpsmsWebhookServer = server;
