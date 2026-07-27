@@ -16,5 +16,20 @@ export default defineConfig({
     include: ['tests/**/*.test.mjs'],
     testTimeout: 10_000,
     maxWorkers: 2,
+    coverage: {
+      provider: 'v8',
+      // DÉNOMINATEUR HONNÊTE (finding F-08 de l'audit 2026-07-27). Par défaut, V8 ne rapporte que
+      // les fichiers CHARGÉS pendant les tests : cinq modules trackés — dont le processus
+      // principal Electron et deux workers, qui ne peuvent pas être importés hors d'Electron —
+      // disparaissaient purement du calcul, tandis que quatre modules alors ignorés par git y
+      // figuraient. Le taux publié ne décrivait donc pas le dépôt.
+      // `all: true` force TOUT le source applicatif dans le dénominateur : un fichier jamais
+      // exécuté apparaît à 0 %, ce qui est la vérité, au lieu d'être silencieusement absent.
+      all: true,
+      include: ['src/**/*.mjs', 'src/**/*.js', 'src/**/*.cjs'],
+      // Exclusions explicites : contenu non applicatif seulement.
+      exclude: ['src/**/*.test.mjs', 'src/ui/**/*.html', 'src/ui/**/*.css'],
+      reporter: ['text-summary', 'json-summary', 'html'],
+    },
   },
 });
