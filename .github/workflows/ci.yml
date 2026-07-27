@@ -1,0 +1,77 @@
+name: CI
+
+# Finding F-07 de l'audit 2026-07-27 : la branche `master` n'avait AUCUN contrôle automatisé —
+# ni workflow, ni check obligatoire. Ce pipeline s'exécute sur un CLONE PROPRE, ce qui vérifie
+# aussi, à chaque poussée, l'invariant du finding F-01 : tout le code exécuté doit être versionné
+# (un fichier oublié par un motif .gitignore fait échouer l'installation ou les tests ici, et non
+# plus seulement chez un utilisateur).
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+# Une seule exécution par branche : une nouvelle poussée annule la précédente au lieu de faire
+# la queue derrière elle.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    # Windows imposé par le produit lui-même : Electron `sandbox: true`, Windows Sandbox et le
+    # binding natif better-sqlite3 sont reconstruits pour l'ABI Electron de cette plateforme.
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node 22 (version imposée par le projet)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # `npm ci` respecte package-lock.json à la lettre et déclenche `postinstall`
+      # (rebuild-native.mjs) — c'est ce qui prouve qu'une installation neuve fonctionne.
+      - name: Installer les dépendances (clone propre)
+        run: npm ci
+
+      # Gate F-01 exécuté tôt et isolément : s'il casse, le message est explicite (un fichier
+      # source est exclu par .gitignore) au lieu d'un échec d'import obscur plus loin.
+      - name: Complétude du dépôt (aucun fichier source ignoré)
+        run: node ./node_modules/vitest/vitest.mjs run tests/repo-completeness.test.mjs
+
+      # Le gate officiel : unitaire puis intégration. La concurrence est bornée dans
+      # vitest.config.mjs (finding F-04) pour rester reproductible.
+      - name: Suite complète (unitaire + intégration)
+        run: npm test
+
+      - name: Audit des dépendances (informatif, ne bloque pas la fusion)
+        run: npm audit --audit-level=critical
+        continue-on-error: true
+
+  android:
+    # Le module Android est optionnel pour le PC mais publié en release : son build ne doit pas
+    # pourrir en silence.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 17 (exigé par le module Android)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Tests JVM + lint + APK debug
+        working-directory: android
+        run: ./gradlew testDebugUnitTest lintDebug assembleDebug --no-daemon
