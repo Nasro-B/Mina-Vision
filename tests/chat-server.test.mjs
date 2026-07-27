@@ -416,4 +416,90 @@ describe('serveur du canal mina_app', () => {
     await expect(server.sendDialToDevice(session.deviceId, { number: 'javascript:alert(1)' }))
       .rejects.toThrow('chat_numero_invalide');
   });
+
+  // Finding F-02 (audit 2026-07-27, ÉLEVÉE), scénario exact reproduit : un appareil appairé dont
+  // la WebSocket reste OUVERTE continuait, après révocation, à obtenir un `ack` et une réponse
+  // déchiffrable — `handleEvent` ne revalidait pas l'approbation et acceptait l'ancienne époque
+  // fournie par le client. La révocation doit être immédiate sur les sessions vivantes.
+  it('F-02 — un appareil révoqué ne reçoit plus ni ack ni réponse sur sa socket déjà ouverte', async () => {
+    const registry = createChatDeviceRegistry();
+    // Chaque époque a SA clé (le défaut consistait à accepter la clé de l'ancienne époque).
+    const epochKeys = new Map();
+    const { port, pc, server } = await startServer({
+      registry,
+      epochKeyFor: (epoch) => {
+        if (!epochKeys.has(epoch)) epochKeys.set(epoch, randomBytes(32));
+        return epochKeys.get(epoch);
+      },
+      respond: async ({ text }) => `Mina a lu « ${text} »`,
+    });
+    const { code } = registry.openPairing();
+    const session = await handshake({ port, pc, registry, pairingCode: code });
+
+    const deviceCrypto = createChatCrypto({
+      signingPrivateKey: session.device.privateKey,
+      verifyPublicKey: createPublicKey({
+        key: Buffer.from(session.answer.pcPublicKeySpki, 'base64'), format: 'der', type: 'spki',
+      }),
+      epochKey: session.epochKey,
+    });
+    const sendWithOldEpoch = (text) => {
+      const createdAtMs = Date.now();
+      const event = deviceCrypto.encryptAndSign({
+        header: {
+          version: 2,
+          eventId: createMonotonicUlid()(),
+          threadId: 'thread-main',
+          senderDeviceId: session.deviceId,
+          deviceSequence: 1,
+          keyEpoch: session.answer.keyEpoch, // ancienne époque, volontairement
+          routingClass: 'message',
+          createdAtMs,
+          expiresAtMs: createdAtMs + 60_000,
+        },
+        plaintext: text,
+      });
+      session.socket.send(JSON.stringify(event));
+      return event;
+    };
+
+    // 1. Avant révocation : le canal fonctionne (sinon le test ne prouverait rien).
+    sendWithOldEpoch('avant révocation');
+    expect(await nextMessage(session.socket)).toMatchObject({ type: 'ack' });
+    await nextMessage(session.socket); // la réponse chiffrée de Mina
+
+    // 2. Révocation DIRECTE dans le registre, sans passer par chat-channel : c'est le pire cas,
+    //    celui où personne n'a pensé à fermer la socket. La sécurité ne doit pas dépendre de la
+    //    discipline de l'appelant.
+    const outcome = registry.revoke(session.deviceId);
+    expect(outcome.ok).toBe(true);
+    expect(registry.isApproved(session.deviceId)).toBe(false);
+
+    // 3. Barrière de fond : la trame suivante est REFUSÉE (ni ack, ni réponse déchiffrable),
+    //    parce que handleEvent revalide l'approbation et l'époque à chaque événement.
+    sendWithOldEpoch('après révocation');
+    const after = await nextMessage(session.socket).catch(() => null);
+    expect(after?.type).not.toBe('ack');
+    // « refused » = refus qui FERME la socket (code 1008) ; « rejected » = refus sans fermeture.
+    // Les deux sont acceptables ici ; ce qui est interdit, c'est un ack ou une réponse.
+    expect(after === null || after.type === 'refused' || after.type === 'rejected').toBe(true);
+    expect(after?.reason).toBe('appareil_revoque');
+
+    // 4. Et la session est coupée : plus aucun canal vivant pour cet appareil.
+    await new Promise((resolve) => { setTimeout(resolve, 50); });
+    expect(server.hasSession(session.deviceId)).toBe(false);
+  });
+
+  it('F-02 — disconnectDevice ferme la session vivante d\'un appareil (API utilisée par la révocation)', async () => {
+    const registry = createChatDeviceRegistry();
+    const { port, pc, server } = await startServer({ registry });
+    const { code } = registry.openPairing();
+    const session = await handshake({ port, pc, registry, pairingCode: code });
+
+    expect(server.hasSession(session.deviceId)).toBe(true);
+    expect(server.disconnectDevice(session.deviceId)).toMatchObject({ disconnected: true });
+    expect(server.hasSession(session.deviceId)).toBe(false);
+    // Idempotent : re-déconnecter un appareil sans session ne lève pas.
+    expect(server.disconnectDevice(session.deviceId)).toMatchObject({ disconnected: false });
+  });
 });
