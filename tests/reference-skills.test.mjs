@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { auditSkillPackage } from '../src/skills/skill-auditor.mjs';
 import { createSkillInstaller } from '../src/skills/skill-installer.mjs';
 import { createSkillLoader } from '../src/skills/skill-loader.mjs';
+import { createSkillRegistry } from '../src/skills/skill-registry.mjs';
 
 let temporary;
 afterEach(async () => {
@@ -23,6 +24,35 @@ describe('reference skills', () => {
       const report = await auditSkillPackage({ directory: resolve('skills-reference', name) });
       expect(report).toMatchObject({ name, installable: true, scripts: [], channels: scope.channels, capabilities: scope.capabilities });
     }
+  });
+
+  // Finding F-03 (audit 2026-07-27) : le skill pianiste était livré avec un manifeste réduit à
+  // `name` + `description` → `skill_metadata_fields_invalid`, jamais enregistré (le correctif de
+  // résilience du registre évitait le crash de boot mais ne rendait pas le skill utilisable).
+  // C'est aussi le PREMIER skill de référence à déclarer un script : il ne peut donc pas être
+  // exposé sur telegram (le schéma l'interdit), d'où un cas de test distinct.
+  it('le skill pianiste a un manifeste conforme, un digest vérifiable et déclare son script (F-03)', async () => {
+    const directory = resolve('skills-reference', 'pianiste-volonte-lumiere');
+    const report = await auditSkillPackage({ directory });
+    expect(report).toMatchObject({
+      name: 'pianiste-volonte-lumiere',
+      installable: true,
+      scripts: ['scripts/write_piano_midi.py'],
+      channels: ['local', 'voice'], // jamais telegram : un skill à script y est interdit
+      capabilities: ['conversation.reply_draft', 'sandbox.propose'],
+    });
+
+    // Le registre l'expose réellement (c'était le symptôme : pianistRegistered = false).
+    const entries = await createSkillRegistry({ root: resolve('skills-reference') }).scan();
+    expect(entries.map((entry) => entry.name)).toContain('pianiste-volonte-lumiere');
+
+    // Et le chargement complet passe la vérification de digest (fichiers non altérés).
+    const loaded = await createSkillLoader({ root: resolve('skills-reference') }).load('pianiste-volonte-lumiere');
+    expect(loaded.digest).toMatch(/^sha256:[a-f0-9]{64}$/u);
+    expect(Object.keys(loaded.references)).toEqual([
+      'references/langage-musical.md',
+      'references/contrat-midi.md',
+    ]);
   });
 
   it('installs a reference skill only through quarantine and confirmation', async () => {
