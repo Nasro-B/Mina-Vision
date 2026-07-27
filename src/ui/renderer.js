@@ -425,7 +425,12 @@ const startMission = async (goal = elements.goal.value, environment = selectedEn
     void reportTechnicalError(`mission:${environment}`, 'mission_request_failed', error);
     log(`Erreur : ${error.message}`);
     setStatus('Action bloquée', 'blocked');
-    void say("La mission a échoué, mon créateur.");
+    // Cause fréquente et actionnable (journal réel 2026-07-27 : 6 missions mobiles échouées en
+    // 90 s sur la même cause) : dire le REMÈDE précis plutôt qu'un échec générique.
+    // Formulation écho-inerte (contrat spoken-lines-echo-safe).
+    void say(String(error?.message ?? '').includes('déverrouillé et autorisé')
+      ? 'Le téléphone est verrouillé ou refuse le débogage. Déverrouille-le, accepte la demande de débogage, puis redemande-moi.'
+      : "La mission a échoué, mon créateur.");
   } finally {
     setBusy(false);
   }
