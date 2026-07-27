@@ -118,6 +118,29 @@ describe('strict SKILL.md registry', () => {
     }
   });
 
+  it('ignore un dossier mal formé (SKILL.md absent ou imbriqué) sans faire tomber le scan — cas réel 2026-07-27', async () => {
+    // Cas réel : Mina avait généré « pianiste-…/pianiste-…/SKILL.md » (double imbrication) et ce
+    // SEUL dossier faisait avorter TOUT le boot de l'application (refresh() rejetait avant la
+    // création de la fenêtre). Contrat : un dossier invalide = ignoré, les skills valides restent.
+    await createSkill('research-summary', {});
+    await mkdir(join(root, 'pianiste-volonte-lumiere', 'pianiste-volonte-lumiere'), { recursive: true });
+    await writeFile(join(root, 'pianiste-volonte-lumiere', 'pianiste-volonte-lumiere', 'SKILL.md'), document({ name: 'pianiste-volonte-lumiere' }));
+
+    const entries = await createSkillRegistry({ root }).scan();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].name).toBe('research-summary');
+  });
+
+  it('ignore un SKILL.md au digest placeholder (skill jamais finalisé) au lieu de bloquer le boot', async () => {
+    await createSkill('research-summary', {});
+    // SKILL.md écrit SANS le remplacement du digest → placeholder tel quel.
+    await mkdir(join(root, 'brouillon-skill'), { recursive: true });
+    await writeFile(join(root, 'brouillon-skill', 'SKILL.md'), document({ name: 'brouillon-skill' }));
+
+    const entries = await createSkillRegistry({ root }).scan();
+    expect(entries.map((entry) => entry.name)).toEqual(['research-summary']);
+  });
+
   it('rejects YAML aliases, unknown capabilities, SMS, oversized files and escaping references', async () => {
     expect(() => parseSkillDocument(document({ extra: 'anchor: &a [x]\nalias: *a\n' }))).toThrow('skill_yaml_alias_forbidden');
     expect(() => parseSkillDocument(document({ capabilities: ['computer.destroy'], channels: ['local'] })))
