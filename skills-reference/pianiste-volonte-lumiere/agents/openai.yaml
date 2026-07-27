@@ -1,0 +1,12 @@
+interface:
+  display_name: "Pianiste Volont\xE9 & Lumi\xE8re"
+  short_description: "Compose et interpr\xE8te un piano m\xE9taphysique"
+  default_prompt: "Utilise $pianiste-volonte-lumiere pour composer une pi\xE8ce originale\
+    \ pour piano, philosophique et classique."
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true
