@@ -1,39 +1,41 @@
-# Récupération — Mina Vision
+> 🇬🇧 **English** · [🇫🇷 Français](RECOVERY.fr.md)
 
-Procédures pas à pas pour les scénarios de perte/panne. Pour le raisonnement de sécurité derrière chaque garantie, voir `docs/operations/SECURITY.md`.
+# Recovery — Mina Vision
 
-## Mémoire locale verrouillée / phrase de récupération perdue
+Step-by-step procedures for loss/failure scenarios. For the security reasoning behind each guarantee, see `docs/operations/SECURITY.md`.
 
-1. Sans la phrase de récupération, le coffre local (`src/crypto/keyring.mjs`) ne peut pas être rouvert — il n'existe aucune porte dérobée.
-2. Si une sauvegarde Firebase existe avec une **phrase différente** (ou la même, si elle a été notée ailleurs) : utiliser `src/backup/restore-service.mjs` pour restaurer dans un nouveau coffre local. Le manifeste signé garantit qu'une mauvaise clé échoue proprement sans toucher la cible.
-3. Sans phrase de récupération ni sauvegarde exploitable : la mémoire locale est définitivement perdue. Mina redémarre avec une mémoire vide et une nouvelle phrase générée à la prochaine initialisation.
+## Local memory locked / recovery phrase lost
 
-## Restaurer une sauvegarde tout en respectant un oubli confirmé
+1. Without the recovery phrase, the local vault (`src/crypto/keyring.mjs`) cannot be reopened — there is no backdoor.
+2. If a Firebase backup exists with a **different phrase** (or the same one, if it was written down elsewhere): use `src/backup/restore-service.mjs` to restore into a new local vault. The signed manifest guarantees that a wrong key fails cleanly without touching the target.
+3. Without a recovery phrase or a usable backup: the local memory is permanently lost. Mina restarts with an empty memory and a new phrase generated at the next initialization.
 
-1. Identifier le `snapshotId` à restaurer et la cible (nouvelle base ou base existante).
-2. S'assurer que tous les tombstones postérieurs à ce snapshot ont été publiés (`backup.publishTombstone`) — sinon un élément oublié après la date du snapshot **réapparaîtrait**. En usage normal, la publication suit automatiquement chaque confirmation d'oubli locale ; vérifier l'audit (`src/audit/diagnostics.mjs`) en cas de doute.
-3. Lancer `restore.restore({ snapshotId, target })`. La restauration est atomique : soit tout le snapshot filtré par les tombstones est appliqué, soit rien.
-4. Vérifier après restauration qu'un élément précédemment oublié ne réapparaît pas (`memoryService.recall(...)` sur l'identité concernée doit rester vide).
+## Restoring a backup while honoring a confirmed forget
 
-Preuve automatisée de cette garantie : `tests/integration/memory-backup-restore.test.mjs`.
+1. Identify the `snapshotId` to restore and the target (new database or existing one).
+2. Make sure all tombstones later than that snapshot have been published (`backup.publishTombstone`) — otherwise an item forgotten after the snapshot date **would reappear**. In normal use, publication follows every local forget confirmation automatically; check the audit (`src/audit/diagnostics.mjs`) if in doubt.
+3. Run `restore.restore({ snapshotId, target })`. The restore is atomic: either the whole tombstone-filtered snapshot applies, or nothing does.
+4. After restoring, verify that a previously forgotten item does not reappear (`memoryService.recall(...)` on the relevant identity must stay empty).
 
-## Export diagnostic (pour support/débogage)
+Automated proof of this guarantee: `tests/integration/memory-backup-restore.test.mjs`.
 
-1. Depuis l'écran local, demander explicitement un export diagnostic — jamais automatique.
-2. `src/audit/export.mjs` produit un zip borné en taille contenant uniquement le rapport redacté (`src/audit/diagnostics.mjs`) : compteurs par type d'événement, horodatages, validité de la chaîne d'audit — jamais le contenu des événements.
-3. Le digest SHA-256 de l'archive est retourné avec le chemin — à conserver pour vérifier l'intégrité du fichier transmis.
+## Diagnostic export (for support/debugging)
 
-## Téléphone perdu ou volé
+1. From the local screen, explicitly request a diagnostic export — never automatic.
+2. `src/audit/export.mjs` produces a size-bounded zip containing only the redacted report (`src/audit/diagnostics.mjs`): counters per event type, timestamps, audit chain validity — never event contents.
+3. The archive's SHA-256 digest is returned with the path — keep it to verify the integrity of the transmitted file.
 
-Voir `docs/operations/SECURITY.md` § Perte du téléphone pour la procédure complète (révocation Telegram, `markUnhealthy`, non-persistance des secrets vers le PC/Firebase).
+## Lost or stolen phone
 
-## Panne Firebase pendant une restauration
+See `docs/operations/SECURITY.md` § Lost phone for the full procedure (Telegram revocation, `markUnhealthy`, no secret persistence to PC/Firebase).
 
-Une panne Firebase pendant `restore.restore(...)` échoue proprement (erreur réseau propagée, cible jamais partiellement écrite grâce à l'atomicité de la restauration). Relancer `restore.restore(...)` une fois Firebase de nouveau disponible — l'opération est idempotente côté lecture (aucune écriture destructive tant que la transaction cible n'a pas committé).
+## Firebase outage during a restore
 
-## Réinstallation complète
+A Firebase outage during `restore.restore(...)` fails cleanly (network error propagated, target never partially written thanks to restore atomicity). Rerun `restore.restore(...)` once Firebase is available again — the operation is read-idempotent (no destructive write until the target transaction commits).
 
-1. Suivre `docs/operations/INSTALLATION.md` pour une installation propre.
-2. Si une sauvegarde Firebase existe : restaurer immédiatement après la première initialisation de la mémoire (avant toute nouvelle activité), avec la phrase de récupération d'origine.
-3. Réappairer le Huawei (`docs/runbooks/huawei-pairing.md`) — l'identité physique n'est jamais restaurée automatiquement depuis une sauvegarde mémoire ; elle nécessite une nouvelle validation locale.
-4. Reprovisionner le token Telegram (`docs/operations/TELEGRAM.md`) — les tokens ne sont jamais inclus dans une sauvegarde mémoire chiffrée (domaine de clés distinct, jamais mélangé).
+## Full reinstall
+
+1. Follow `docs/operations/INSTALLATION.md` for a clean install.
+2. If a Firebase backup exists: restore immediately after the first memory initialization (before any new activity), with the original recovery phrase.
+3. Re-pair the phone — the physical identity is never restored automatically from a memory backup; it requires a fresh local validation.
+4. Re-provision the Telegram token (`docs/operations/TELEGRAM.md`) — tokens are never included in an encrypted memory backup (distinct key domain, never mixed).

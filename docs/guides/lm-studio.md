@@ -1,80 +1,81 @@
-# Modèles locaux avec LM Studio
+> 🇬🇧 **English** · [🇫🇷 Français](lm-studio.fr.md)
 
-Mina Vision peut fonctionner avec des modèles d'IA **100 % locaux**, sans aucune
-clé cloud, via [LM Studio](https://lmstudio.ai). C'est optionnel : Mina démarre
-sans, et bascule sur le cloud (Gemini, DeepSeek, …) si le local est absent.
+# Local models with LM Studio
 
-Trois usages, chacun optionnel et indépendant :
-- **texte** (conversation, raisonnement) ;
-- **vision** (analyse d'images/captures) ;
-- **embeddings** (mémoire sémantique — recherche par sens, pas seulement par mots).
+Mina Vision can run with **100% local** AI models, without any cloud key, via
+[LM Studio](https://lmstudio.ai). It is optional: Mina starts without it, and
+falls back to the cloud (Gemini, DeepSeek, …) when local is absent.
 
----
-
-## 1. Installer et lancer LM Studio
-
-1. Installez LM Studio, téléchargez un modèle (texte, et/ou vision, et/ou
-   embeddings).
-2. Dans LM Studio → onglet **Serveur local** (Local Server) → **Démarrer**. Par
-   défaut il écoute sur `http://127.0.0.1:1234`.
-3. Chargez le(s) modèle(s) voulu(s) dans le serveur.
-
-> Mina n'accepte qu'un serveur en **loopback local** (`127.0.0.1`/`localhost`) et en
-> **HTTP** : le point de tout faire tourner sur votre machine, jamais exposé au réseau.
+Three uses, each optional and independent:
+- **text** (conversation, reasoning);
+- **vision** (analyzing images/screenshots);
+- **embeddings** (semantic memory — search by meaning, not just by words).
 
 ---
 
-## 2. Variables d'environnement
+## 1. Install and start LM Studio
 
-Dans votre `.env` (voir aussi `.env.example`) :
+1. Install LM Studio, download a model (text, and/or vision, and/or embeddings).
+2. In LM Studio → **Local Server** tab → **Start**. By default it listens on
+   `http://127.0.0.1:1234`.
+3. Load the desired model(s) into the server.
+
+> Mina only accepts a server on **local loopback** (`127.0.0.1`/`localhost`) over
+> **HTTP**: the whole point is running everything on your machine, never exposed
+> to the network.
+
+---
+
+## 2. Environment variables
+
+In your `.env` (see also `.env.example`):
 
 ```bash
-# Active la recherche de modèles locaux (true par défaut).
+# Enables local model discovery (true by default).
 LM_STUDIO_ENABLED=true
 
-# URL du serveur local LM Studio (loopback + HTTP obligatoires).
+# LM Studio local server URL (loopback + HTTP required).
 LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1
 
-# Noms des modèles chargés dans LM Studio (laisser vide = usage non activé).
+# Names of the models loaded in LM Studio (leave empty = that use disabled).
 LM_STUDIO_TEXT_MODEL=
 LM_STUDIO_VISION_MODEL=
 LM_STUDIO_EMBEDDING_MODEL=
 
-# Délai max d'une requête locale (ms). Défaut 240000 (4 min) — un gros modèle sur
-# CPU peut être lent.
+# Max duration of a local request (ms). Default 240000 (4 min) — a large model
+# on CPU can be slow.
 LM_STUDIO_TIMEOUT_MS=240000
 ```
 
-Chaque champ modèle est indépendant : renseignez seulement ceux que vous utilisez.
-Le nom doit correspondre **exactement** à l'identifiant du modèle affiché dans le
-serveur LM Studio.
+Each model field is independent: fill in only the ones you use. The name must
+match **exactly** the model identifier shown by the LM Studio server.
 
 ---
 
-## 3. Choisir local ou cloud
+## 3. Choosing local or cloud
 
-La variable globale d'inférence décide de la priorité :
+The global inference variable decides the priority:
 
 ```bash
-# auto        → local si disponible, sinon cloud (défaut)
-# local-first → local d'abord, cloud seulement en secours
-# local-only  → jamais de cloud (100 % hors ligne pour l'IA)
+# auto        → local when available, otherwise cloud (default)
+# local-first → local first, cloud only as fallback
+# local-only  → never cloud (100% offline for AI)
 MINA_INFERENCE_MODE=auto
 
-# Coupe TOUT appel réseau d'IA, quel que soit le mode ci-dessus.
+# Cuts ALL AI network calls, whatever the mode above.
 MINA_OFFLINE=false
 ```
 
-Pour un fonctionnement entièrement local et privé : `MINA_INFERENCE_MODE=local-only`
-avec les modèles LM Studio renseignés.
+For fully local, private operation: `MINA_INFERENCE_MODE=local-only` with the
+LM Studio models configured.
 
 ---
 
-## 4. Vérifier
+## 4. Verify
 
-1. LM Studio lancé, modèle(s) chargé(s), serveur démarré.
-2. Variables posées, Mina redémarrée.
-3. **Config → Capacités** doit indiquer le domaine d'inférence local **disponible**.
-   S'il reste « indisponible » ou « dégradé », la raison exacte est affichée
-   (serveur injoignable, modèle introuvable, délai dépassé) — jamais un état
-   optimiste.
+1. LM Studio running, model(s) loaded, server started.
+2. Variables set, Mina restarted.
+3. **Config → Capabilities** must show the local inference domain as
+   **available**. If it stays "unavailable" or "degraded", the exact reason is
+   displayed (server unreachable, model not found, timeout) — never an
+   optimistic state.

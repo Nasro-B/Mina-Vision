@@ -1,72 +1,75 @@
-# Débloquer le bac à sable Windows (`sandbox_runtimes_unavailable`)
+> 🇬🇧 **English** · [🇫🇷 Français](sandbox-runtimes.fr.md)
 
-Mina peut exécuter du code (Python / JavaScript / PowerShell) dans un **Windows Sandbox**
-jetable — une VM temporaire, sans accès réseau, détruite à la fin. C'est optionnel : Mina
-fonctionne sans. Tant qu'il n'est pas provisionné, l'état affiche `sandbox_runtimes_unavailable`.
+# Unlocking the Windows Sandbox (`sandbox_runtimes_unavailable`)
 
-## Ce dont le bac à sable a besoin
+Mina can run code (Python / JavaScript / PowerShell) inside a disposable **Windows Sandbox** —
+a temporary VM, with no network access, destroyed at the end. It is optional: Mina works
+without it. Until it is provisioned, the state shows `sandbox_runtimes_unavailable`.
 
-La détection teste, dans l'ordre : fonctionnalité Windows Sandbox activée → exécutable présent →
-virtualisation CPU → espace de travail NTFS → **runtimes présents**. Le message
-`sandbox_runtimes_unavailable` signifie que **les 4 premiers passent** et qu'il ne manque plus
-que les 3 runtimes.
+## What the sandbox needs
 
-### 1. Activer Windows Sandbox (si pas déjà fait)
+Detection tests, in order: Windows Sandbox feature enabled → executable present → CPU
+virtualization → NTFS workspace → **runtimes present**. The message
+`sandbox_runtimes_unavailable` means **the first 4 pass** and only the 3 runtimes are missing.
 
-Fonctionnalité Windows (Pro/Entreprise), virtualisation activée dans le BIOS. Pour vérifier :
+### 1. Enable Windows Sandbox (if not already done)
+
+Windows feature (Pro/Enterprise), virtualization enabled in the BIOS. To check:
 
 ```powershell
 (Get-CimInstance Win32_OptionalFeature -Filter "Name='Containers-DisposableClientVM'").InstallState
 ```
 
-`1` = activé. Sinon : « Activer ou désactiver des fonctionnalités Windows » → cocher
-**Bac à sable Windows**, redémarrer.
+`1` = enabled. Otherwise: "Turn Windows features on or off" → check **Windows Sandbox**,
+reboot.
 
-### 2. Provisionner les 3 runtimes
+### 2. Provision the 3 runtimes
 
-Un script télécharge Python, Node et PowerShell **portables** depuis leurs sources officielles,
-vérifie leur intégrité, et écrit le manifeste que le bac à sable attend.
+A script downloads **portable** Python, Node and PowerShell from their official sources,
+verifies their integrity, and writes the manifest the sandbox expects.
 
-> ⚠️ Le script **télécharge ~120 Mo de binaires**. C'est une action que **tu** lances toi-même.
+> ⚠️ The script **downloads ~120 MB of binaries**. This is an action **you** launch yourself.
 
 ```bash
-# 1. Voir le plan sans rien télécharger
+# 1. See the plan without downloading anything
 node scripts/provision-sandbox-runtimes.mjs --dry-run
 ```
 
 ```bash
-# 2. Provisionner (télécharge). Python demande une confirmation de hash (voir plus bas).
+# 2. Provision (downloads). Python asks for a hash confirmation (see below).
 node scripts/provision-sandbox-runtimes.mjs
 ```
 
-#### Le hash Python (RÈGLE N°1 : aucun hash supposé)
+#### The Python hash (RULE #1: no assumed hash)
 
-Node et PowerShell publient un fichier de checksums officiel : le script vérifie tout seul.
-Python **ne publie pas** de fichier de checksums téléchargeable pour le paquet *embeddable*. Au
-premier lancement, le script télécharge le zip, **affiche le sha256 calculé** et l'URL python.org,
-puis s'arrête. Tu vérifies la ligne sur la page officielle, puis relances :
+Node and PowerShell publish an official checksums file: the script verifies them on its own.
+Python **does not publish** a downloadable checksums file for the *embeddable* package. On the
+first run, the script downloads the zip, **prints the computed sha256** and the python.org URL,
+then stops. You verify the line on the official page, then rerun:
 
 ```bash
-node scripts/provision-sandbox-runtimes.mjs --python-sha256=<le hash affiché, une fois vérifié sur python.org>
+node scripts/provision-sandbox-runtimes.mjs --python-sha256=<the printed hash, once verified on python.org>
 ```
 
-Ainsi aucun hash n'est inventé : Node/PowerShell sont ancrés à leur éditeur, Python est validé par toi.
+That way no hash is ever invented: Node/PowerShell are anchored to their publisher, Python is
+validated by you.
 
-### 3. Vérifier
+### 3. Verify
 
-Le script **re-vérifie** le manifeste produit avec le même code que le bac à sable et refuse de
-finir si quelque chose cloche. Après succès, redémarre Mina : la sonde « runtimes » passe au vert.
+The script **re-verifies** the produced manifest with the same code the sandbox uses and
+refuses to finish if anything is off. After success, restart Mina: the "runtimes" probe turns
+green.
 
-## Où sont rangés les runtimes
+## Where the runtimes live
 
-Par défaut sous `%APPDATA%\Mina Vision\cache\sandbox-runtime\`. Déportable avec la variable
-d'environnement `MINA_SANDBOX_RUNTIME_ROOT` (utile pour les mettre sur un autre disque). Le
-`runtime-manifest.json` y liste, pour chaque langage : version, sha256 de l'exécutable, URL
-source officielle, chemin relatif.
+By default under `%APPDATA%\Mina Vision\cache\sandbox-runtime\`. Relocatable with the
+`MINA_SANDBOX_RUNTIME_ROOT` environment variable (useful to put them on another drive). The
+`runtime-manifest.json` there lists, for each language: version, executable sha256, official
+source URL, relative path.
 
-## Sécurité
+## Security
 
-- Le bac à sable s'exécute **sans réseau** (`network: false` imposé) : le code testé ne sort pas.
-- Chaque exécution re-vérifie le sha256 de l'exécutable avant de le lancer (côté invité) :
-  un binaire altéré est refusé.
-- Les runtimes sont téléchargés une seule fois depuis les sources officielles, jamais depuis un tiers.
+- The sandbox runs **without network** (`network: false` enforced): tested code cannot phone out.
+- Every execution re-verifies the executable's sha256 before launching it (guest side): a
+  tampered binary is refused.
+- Runtimes are downloaded once from official sources, never from a third party.

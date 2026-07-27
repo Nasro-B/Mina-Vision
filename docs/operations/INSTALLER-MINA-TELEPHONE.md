@@ -1,69 +1,73 @@
-# Installer Mina Vision sur ton téléphone (APK Android)
+> 🇬🇧 **English** · [🇫🇷 Français](INSTALLER-MINA-TELEPHONE.fr.md)
 
-Ce guide s'adresse à l'**utilisateur final**. L'application téléphone (« Mina Vision.apk »,
-paquet `fr.mina.gateway`) sert de passerelle privée entre ton téléphone et l'application Mina
-Vision qui tourne sur ton PC : conversation, mémoire, médias — chiffrés, appairés à **un seul PC**.
+# Install Mina Vision on your phone (Android APK)
 
-> L'APK n'est **pas** dans le dépôt de code (seul le code source y est). On l'installe depuis une
-> **release GitHub** ou un fichier que t'a transmis la personne qui a construit l'app.
+This guide is for the **end user**. The phone application ("Mina Vision.apk", package
+`fr.mina.gateway`) acts as a private gateway between your phone and the Mina Vision
+application running on your PC: conversation, memory, media — encrypted, paired to **one
+single PC**.
 
-## Ce qu'il te faut
+> The APK is **not** in the code repository (only the source code is). You install it from a
+> **GitHub release** or from a file given to you by the person who built the app.
 
-- Un téléphone **Android 10 ou plus récent** (minSdk 29).
-- L'application **Mina Vision lancée sur le PC**, sur le **même réseau Wi-Fi** que le téléphone.
-- Le fichier **`Mina Vision.apk`** (voir ci-dessous où le récupérer).
+## What you need
 
-## 1. Récupérer l'APK
+- An **Android 10 or newer** phone (minSdk 29).
+- The **Mina Vision app running on the PC**, on the **same Wi-Fi network** as the phone.
+- The **`Mina Vision.apk`** file (see below where to get it).
 
-- **Depuis GitHub** : page **Releases** du dépôt → dernière version → télécharger
-  **`Mina Vision.apk`** (GitHub peut l'afficher `Mina.Vision.apk` — c'est le même fichier).
-- **Ou** : le fichier `Mina Vision.apk` transmis directement (clé USB, message, etc.).
+## 1. Get the APK
 
-## 2. Autoriser l'installation
+- **From GitHub**: the repository's **Releases** page → latest version → download
+  **`Mina Vision.apk`** (GitHub may display it as `Mina.Vision.apk` — same file).
+- **Or**: the `Mina Vision.apk` file handed to you directly (USB stick, message, etc.).
 
-Android bloque par défaut les apps hors Play Store. Une seule fois :
+## 2. Allow the installation
 
-1. Ouvre le fichier `Mina Vision.apk` (appli **Fichiers** → Téléchargements).
-2. Android propose **« Autoriser cette source »** / **« Sources inconnues »** → active pour
-   l'appli qui ouvre le fichier (Fichiers ou Chrome).
-3. Reviens en arrière, rouvre le fichier, **Installer**.
+Android blocks apps from outside the Play Store by default. One time only:
 
-> **Alternative câble (adb)**, si tu préfères : téléphone en débogage USB, puis sur le PC
+1. Open the `Mina Vision.apk` file (**Files** app → Downloads).
+2. Android offers **"Allow from this source"** / **"Unknown sources"** → enable it for the app
+   opening the file (Files or Chrome).
+3. Go back, reopen the file, **Install**.
+
+> **Cable alternative (adb)**, if you prefer: phone in USB debugging, then on the PC
 > `adb install "Mina Vision.apk"`.
 
-## 3. Appairer avec le PC
+## 3. Pair with the PC
 
-Mina ne parle **qu'à un PC appairé** — rien ne se connecte tout seul.
+Mina only talks to a **paired PC** — nothing connects on its own.
 
-1. Sur le **PC** : onglet **Config → « Application Mina sur téléphone »** → **Ouvrir l'appairage**.
-   Le PC affiche une **adresse** (ex. `192.168.1.20`), un **port**, et un **code**.
-2. Sur le **téléphone** : ouvre Mina Vision → saisis l'**adresse**, le **port** et le **code**.
-3. C'est appairé. Tu peux fermer l'appairage sur le PC.
+1. On the **PC**: **Config → "Mina app on phone"** tab → **Open pairing**.
+   The PC displays an **address** (e.g. `192.168.1.20`), a **port**, and a **code**.
+2. On the **phone**: open Mina Vision → enter the **address**, the **port** and the **code**.
+3. Paired. You can close pairing on the PC.
 
-> Tu tapes l'adresse toi-même : **aucune IP n'est codée en dur** dans l'app.
+> You type the address yourself: **no IP is hardcoded** in the app.
 
-## Bon à savoir
+## Good to know
 
-- **Signature** : l'APK est **signé avec la clé debug d'Android** — normal pour une installation
-  hors Play Store, sûr en usage local. (Une signature Play Store demanderait un keystore dédié,
-  non configuré à ce jour.)
-- **Vie privée** : l'app ne contient aucune donnée personnelle en dur ; tout ce qui est échangé
-  est chiffré et lié au PC appairé. Révoquer l'appareil côté PC coupe la lecture des messages suivants.
-- **Mettre à jour** : installe simplement l'APK plus récent par-dessus (même `applicationId`).
-- **Désappairer** : révoque l'appareil dans l'onglet Config du PC, ou désinstalle l'app
-  (retire les identifiants stockés dans l'Android Keystore).
+- **Signature**: the APK is **signed with the Android debug key** — normal for an install
+  outside the Play Store, safe for local use. (A Play Store signature would require a dedicated
+  keystore, not configured to date.)
+- **Privacy**: the app contains no hardcoded personal data; everything exchanged is encrypted
+  and bound to the paired PC. Revoking the device on the PC side cuts it off from all
+  subsequent messages.
+- **Updating**: simply install the newer APK on top (same `applicationId`).
+- **Unpairing**: revoke the device in the PC's Config tab, or uninstall the app (removes the
+  credentials stored in the Android Keystore).
 
-## Pour celui qui construit l'APK (rappel)
+## For whoever builds the APK (reminder)
 
 ```bash
 cd android
-./gradlew packageMinaApk        # produit build/app/build/outputs → build/dist/Mina Vision.apk
+./gradlew packageMinaApk        # produces build/dist/Mina Vision.apk
 ```
 
-Puis publier en release GitHub (action manuelle, jamais automatique) :
+Then publish as a GitHub release (manual action, never automatic):
 
 ```bash
-gh release create v0.1.0 "android/app/build/dist/Mina Vision.apk" --title "Mina Vision 0.1.0" --notes "Application téléphone — sideload, appairage local."
+gh release create v0.1.0 "android/app/build/dist/Mina Vision.apk" --title "Mina Vision 0.1.0" --notes "Phone application — sideload, local pairing."
 ```
 
-Le binaire reste **hors dépôt** (`*.apk` gitignoré) : seule la release le distribue.
+The binary stays **out of the repository** (`*.apk` gitignored): only the release distributes it.

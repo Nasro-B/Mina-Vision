@@ -1,51 +1,53 @@
-# Reconnaissance faciale locale — provisionner un modèle
+> 🇬🇧 **English** · [🇫🇷 Français](face-model.fr.md)
 
-La reconnaissance faciale de Mina est **locale** (aucune image ne part sur Internet) et **optionnelle**.
-Tant qu'aucun modèle n'est provisionné, la capacité `biometrics.face` reste honnêtement
-« indisponible » et **aucune reconnaissance ne peut jamais renvoyer un faux positif** (fail-closed).
+# Local face recognition — provisioning a model
 
-## Pourquoi tu fournis le modèle toi-même
+Mina's face recognition is **local** (no image ever leaves for the Internet) and **optional**.
+As long as no model is provisioned, the `biometrics.face` capability stays honestly
+"unavailable" and **no recognition can ever return a false positive** (fail-closed).
 
-C'est une capacité de **sécurité**. Un modèle inadapté ou un préprocessing erroné donnerait une
-authentification faciale dangereuse. Mina ne télécharge donc **pas** un modèle au hasard : tu choisis
-un modèle ONNX d'embedding facial que tu as validé (ex. **ArcFace** ou **MobileFaceNet**, largement
-disponibles au format ONNX), et tu déclares ses paramètres exacts. Le script vérifie tout avant de
-l'activer.
+## Why you provide the model yourself
 
-## Étapes
+This is a **security** capability. An unsuitable model or wrong preprocessing would make facial
+authentication dangerous. So Mina does **not** download a random model: you pick an ONNX face
+embedding model you have validated (e.g. **ArcFace** or **MobileFaceNet**, widely available in
+ONNX format), and you declare its exact parameters. The script verifies everything before
+enabling it.
 
-1. Récupère un modèle d'embedding facial au format `.onnx` (112×112 en général, sortie 512-D).
-2. Repère les noms EXACTS de ses tenseurs d'entrée/sortie (avec Netron, ou `onnxruntime`).
-3. Lance le provisionnement (tu exécutes toi-même — le script lit/copie un fichier local) :
+## Steps
+
+1. Get a face embedding model in `.onnx` format (usually 112×112 input, 512-D output).
+2. Find the EXACT names of its input/output tensors (with Netron, or `onnxruntime`).
+3. Run the provisioning (you run it yourself — the script reads/copies a local file):
 
 ```bash
-node scripts/provision-face-model.mjs --model=chemin/vers/arcface.onnx --input=input.1 --output=683 --width=112 --height=112 --mean=0.5,0.5,0.5 --std=0.5,0.5,0.5 --layout=nchw
+node scripts/provision-face-model.mjs --model=path/to/arcface.onnx --input=input.1 --output=683 --width=112 --height=112 --mean=0.5,0.5,0.5 --std=0.5,0.5,0.5 --layout=nchw
 ```
 
-Le script :
-- copie le modèle sous `%APPDATA%\Mina Vision\cache\models\face\`,
-- calcule son `sha256`,
-- **charge réellement** le modèle (vérifie checksum + signature des tenseurs),
-- **exécute un embedding de test** sur une image neutre (échoue si la sortie est absurde),
-- écrit `manifest.json` seulement si tout passe.
+The script:
+- copies the model under `%APPDATA%\Mina Vision\cache\models\face\`,
+- computes its `sha256`,
+- **actually loads** the model (verifies checksum + tensor signatures),
+- **runs a test embedding** on a neutral image (fails if the output is absurd),
+- writes `manifest.json` only if everything passes.
 
-4. Redémarre Mina. La capacité `biometrics.face` passe « available ».
+4. Restart Mina. The `biometrics.face` capability turns "available".
 
-## Paramètres
+## Parameters
 
-| Option | Rôle |
+| Option | Role |
 |--------|------|
-| `--input` / `--output` | noms exacts des tenseurs ONNX (doivent correspondre au modèle, sinon refus) |
-| `--width` / `--height` | taille d'entrée du modèle (défaut 112×112) |
-| `--mean` / `--std` | normalisation par canal RGB (défaut 0.5,0.5,0.5 — plage [-1,1]) |
-| `--layout` | `nchw` (défaut, [1,3,H,W]) ou `nhwc` ([1,H,W,3]) |
+| `--input` / `--output` | exact ONNX tensor names (must match the model, otherwise refused) |
+| `--width` / `--height` | model input size (default 112×112) |
+| `--mean` / `--std` | per-RGB-channel normalization (default 0.5,0.5,0.5 — range [-1,1]) |
+| `--layout` | `nchw` (default, [1,3,H,W]) or `nhwc` ([1,H,W,3]) |
 
-Si les noms de tenseurs ou la normalisation ne correspondent pas au modèle, le script **refuse**
-d'écrire le manifeste — jamais de biométrie à moitié configurée.
+If the tensor names or the normalization do not match the model, the script **refuses** to
+write the manifest — never a half-configured biometric.
 
-## Sécurité
+## Security
 
-- Le modèle est vérifié par `sha256` à chaque chargement au runtime : un fichier altéré est refusé.
-- Les profils faciaux enregistrés sont chiffrés dans le coffre (comme la mémoire).
-- L'embedding se fait entièrement sur le PC (onnxruntime CPU) : aucune image, aucun gabarit facial
-  ne quitte la machine.
+- The model is `sha256`-verified at every runtime load: a tampered file is refused.
+- Enrolled face profiles are encrypted in the vault (like the memory).
+- Embedding happens entirely on the PC (onnxruntime CPU): no image, no facial template ever
+  leaves the machine.

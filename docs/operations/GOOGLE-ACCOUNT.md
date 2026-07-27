@@ -1,45 +1,62 @@
-# Connecter un compte Google — Mina Vision
+> 🇬🇧 **English** · [🇫🇷 Français](GOOGLE-ACCOUNT.fr.md)
 
-Couvre Gmail, Google Calendar, Google Contacts (People API) et Google Tasks en une seule connexion. Aucune de ces étapes ne demande le mot de passe Google à Mina Vision — la connexion se fait toujours dans le navigateur de Nasro, avec l'écran de consentement officiel Google.
+# Connecting a Google account — Mina Vision
 
-## Prérequis — une seule fois
+Covers Gmail, Google Calendar, Google Contacts (People API) and Google Tasks in a single
+connection. None of these steps ever asks Mina Vision for the Google password — sign-in always
+happens in your own browser, on the official Google consent screen.
 
-1. **Initialiser le coffre local Mina Vision** (si pas déjà fait) : ouvrir l'app (icône bureau) → section « Mémoire » → « Initialiser » → noter la phrase de récupération affichée **une seule fois**, hors du PC. Sans cette étape, aucun secret (Google inclus) ne peut être stocké.
+## Prerequisite — once
 
-## Étape 1 — Créer un client OAuth dans Google Cloud Console (Nasro uniquement)
+1. **Initialize the local Mina Vision vault** (if not already done): open the app → "Memory"
+   section → "Initialize" → write down the recovery phrase shown **exactly once**, away from
+   the PC. Without this step, no secret (Google included) can be stored.
 
-1. Aller sur [console.cloud.google.com](https://console.cloud.google.com), se connecter avec `<votre-compte>@gmail.com`.
-2. Créer un projet (ex. « Mina Vision ») ou en sélectionner un existant.
-3. **APIs et services → Bibliothèque** : activer *Gmail API*, *Google Calendar API*, *People API*, *Google Tasks API*.
-4. **APIs et services → Écran de consentement OAuth** :
-   - Type : *Externe* (compte Gmail standard, pas Google Workspace).
-   - Renseigner nom de l'app (« Mina Vision »), e-mail de contact.
-   - Ajouter `<votre-compte>@gmail.com` comme **utilisateur de test** (évite la revue de vérification Google pour un usage personnel).
-5. **APIs et services → Identifiants → Créer des identifiants → ID client OAuth** :
-   - Type d'application : **Application de bureau** (« Desktop app ») — pas « Application Web ». Ce type accepte automatiquement n'importe quel port `127.0.0.1`, donc aucune URI de redirection à saisir manuellement.
-   - Noter le **Client ID** et le **Client Secret** affichés.
+## Step 1 — Create an OAuth client in Google Cloud Console (owner only)
 
-## Étape 2 — Connecter le compte
+1. Go to [console.cloud.google.com](https://console.cloud.google.com), sign in with
+   `<your-account>@gmail.com`.
+2. Create a project (e.g. "Mina Vision") or select an existing one.
+3. **APIs & Services → Library**: enable *Gmail API*, *Google Calendar API*, *People API*,
+   *Google Tasks API*.
+4. **APIs & Services → OAuth consent screen**:
+   - Type: *External* (standard Gmail account, not Google Workspace).
+   - Fill in the app name ("Mina Vision") and a contact e-mail.
+   - Add `<your-account>@gmail.com` as a **test user** (avoids Google's verification review for
+     personal use).
+5. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
+   - Application type: **Desktop app** — not "Web application". This type automatically accepts
+     any `127.0.0.1` port, so there is no redirect URI to enter manually.
+   - Note the displayed **Client ID** and **Client Secret**.
+
+## Step 2 — Connect the account
 
 ```powershell
 Set-Location 'C:\Serveurs\Mina Vision'
 npm run connect:google
 ```
 
-- Première exécution : l'outil demande le Client ID et le Client Secret de l'étape 1 (saisie visible dans ce terminal, jamais journalisée ni transmise ailleurs), puis les enregistre chiffrés pour les prochaines fois.
-- Le navigateur par défaut s'ouvre sur l'écran de consentement Google — se connecter avec `<votre-compte>@gmail.com`, accepter les permissions demandées (Gmail, Calendrier, Contacts, Tâches).
-- Une fois validé, un onglet « Compte connecté » s'affiche — le terminal confirme la connexion et le jeton chiffré est enregistré dans le coffre local.
+- First run: the tool asks for the Client ID and Client Secret from step 1 (typed visibly in
+  this terminal, never logged nor transmitted anywhere else), then stores them encrypted for
+  next time.
+- The default browser opens on the Google consent screen — sign in with
+  `<your-account>@gmail.com`, accept the requested permissions (Gmail, Calendar, Contacts,
+  Tasks).
+- Once validated, a "Account connected" tab appears — the terminal confirms the connection and
+  the encrypted token is stored in the local vault.
 
-## Ce qui reste après la connexion
+## What remains after connecting
 
-Les identifiants sont stockés et prêts, mais le câblage de `src/ui/main.mjs` pour utiliser réellement ce compte Gmail/Calendrier/Contacts/Tâches dans l'application n'est pas encore fait (les adaptateurs `gmail.mjs`/`google-personal.mjs` existent et sont testés, mais ne sont pas encore branchés dans le process principal — même limite documentée pour tous les domaines v4 dans `docs/superpowers/EXECUTION-LOG.md`). Ce câblage est la suite logique, pas bloqué sur toi.
+The credentials are stored and ready, but the wiring in `src/ui/main.mjs` to actually use this
+Gmail/Calendar/Contacts/Tasks account in the application is not done yet (the
+`gmail.mjs`/`google-personal.mjs` adapters exist and are tested, but are not yet plugged into
+the main process). That wiring is the logical next step, not blocked on you.
 
-## Google Home SDK (séparé, pour la maison connectée)
+## Google Home SDK (separate, for the smart home)
 
-Le SDK Google Home 1.9 est un téléchargement distinct depuis une page Google authentifiée (pas la même chose que l'OAuth ci-dessus) :
+The Google Home SDK 1.9 is a separate download from an authenticated Google page (not the same
+thing as the OAuth above):
 
-1. Se connecter sur la page officielle Google Home Developer avec `<votre-compte>@gmail.com`.
-2. Télécharger le SDK 1.9.
-3. Déposer le contenu sous `%USERPROFILE%\.mina\sdk\google-home\1.9`.
-
-Détail : voir `Pour Nasro.md`.
+1. Sign in on the official Google Home Developer page with `<your-account>@gmail.com`.
+2. Download SDK 1.9.
+3. Drop its contents under `%USERPROFILE%\.mina\sdk\google-home\1.9`.

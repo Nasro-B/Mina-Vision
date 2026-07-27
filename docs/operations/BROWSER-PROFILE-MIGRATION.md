@@ -1,28 +1,29 @@
-# Profils navigateur — inventaire et migration (Task 21)
+> 🇬🇧 **English** · [🇫🇷 Français](BROWSER-PROFILE-MIGRATION.fr.md)
 
-> Généré le 2026-07-22. Outil : `node scripts/inventory-browser-profiles.mjs` (read-only :
-> chemin, taille, date, catégories — jamais le contenu). **Aucune suppression automatique,
-> jamais** : la décision appartient à Nasro, consignée dans le CHANGELOG (« En attente côté
-> Nasro »).
+# Browser profiles — inventory and migration (Task 21)
 
-## Inventaire du 2026-07-22
+> Generated 2026-07-22. Tool: `node scripts/inventory-browser-profiles.mjs` (read-only: path,
+> size, date, categories — never the contents). **No automatic deletion, ever**: the decision
+> belongs to the owner, recorded in the changelog.
 
-| Profil | Taille | Dernière modif | Données présentes | Statut |
+## Inventory of 2026-07-22
+
+| Profile | Size | Last modified | Data present | Status |
 |---|---|---|---|---|
-| `profiles/` (racine du projet) | 150 Mo | 2026-07-18 | aucune base Chromium détectée à la racine | **legacy, candidat à l'archivage** |
-| `userData/mina-chrome-profile` | 118 Mo | 2026-07-22 | Login Data, Web Data, History | **ACTIF** — c'est lui que les missions navigateur utilisent (`browser-profile-auth`) |
+| `profiles/` (project root) | 150 MB | 2026-07-18 | no Chromium database detected at the root | **legacy, archive candidate** |
+| `userData/mina-chrome-profile` | 118 MB | 2026-07-22 | Login Data, Web Data, History | **ACTIVE** — the one browser missions use (`browser-profile-auth`) |
 
-## Règles
+## Rules
 
-1. Le profil ACTIF est `userData/mina-chrome-profile` — ne jamais le déplacer app ouverte.
-2. `profiles/` (projet) n'est plus référencé par le code actif ; il est ignoré par git.
-3. Migration éventuelle : fermer Mina ET tout processus Chromium avant toute copie ; préférer
-   les mécanismes d'export officiels du navigateur ; après accord explicite de Nasro, déplacer
-   vers une quarantaine récupérable (`profiles.perdu-<date>/`) avant toute suppression réelle.
-4. Durcissement ACL du profil actif : app FERMÉE uniquement (leçon de l'incident icacls du
-   2026-07-22 — voir CHANGELOG).
+1. The ACTIVE profile is `userData/mina-chrome-profile` — never move it while the app is open.
+2. `profiles/` (project) is no longer referenced by active code; it is ignored by git.
+3. Possible migration: close Mina AND every Chromium process before any copy; prefer the
+   browser's official export mechanisms; after the owner's explicit agreement, move to a
+   recoverable quarantine (`profiles.perdu-<date>/`) before any real deletion.
+4. ACL hardening of the active profile: app CLOSED only (lesson from the 2026-07-22 icacls
+   incident).
 
-## Décision en attente (Nasro)
+## Pending decision (owner)
 
-- [ ] Archiver ou garder `profiles/` (150 Mo, dernier usage 18/07). Si archivage : je le
-      déplace en quarantaine récupérable sur ordre, jamais de suppression directe.
+- [ ] Archive or keep `profiles/` (150 MB, last used 07-18). If archiving: it is moved to a
+      recoverable quarantine on order, never deleted directly.
