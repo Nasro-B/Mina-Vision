@@ -228,9 +228,11 @@ above.
 
 ## License
 
-Source-available license — see [LICENSE](LICENSE). Use, study, modification and redistribution
-allowed; **the names "Mina", "Mina Vision" and "Nasro Berkoun" are protected** and may not be
-removed, replaced or misused. A published derivative work must carry a distinct name and credit
-"Based on Mina Vision, created by Nasro Berkoun, in collaboration with Sol and Fable".
+Source-available license — see [LICENSE](LICENSE) (French, the only binding version; an English
+courtesy translation is available in [LICENSE.en.md](LICENSE.en.md)). Use, study, modification
+and redistribution allowed; **the names "Mina", "Mina Vision" and "Nasro Berkoun" are
+protected** and may not be removed, replaced or misused. A published derivative work must carry
+a distinct name and credit "Based on Mina Vision, created by Nasro Berkoun, in collaboration
+with Sol and Fable".
 
 Claims and customer service: mina.vision.ai@gmail.com

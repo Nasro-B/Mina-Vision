@@ -1,35 +1,36 @@
-# Licences et dépendances — Mina Vision
+> 🇬🇧 **English** · [🇫🇷 Français](LICENCES.fr.md)
 
-> Généré le 2026-07-22 (R-17 + SBOM léger), **mis à jour le 2026-07-24 : le code source est
-> désormais PUBLIC** (dépôt GitHub + release APK compagnon). Point crucial pour la GPL : les
-> artefacts réellement distribués n'embarquent **aucun code GPL** — le dépôt public ne contient
-> que le source (`node_modules` gitignoré, donc pas d'espeak-ng) et l'APK est l'app Android
-> `fr.mina.gateway` (zéro dépendance Node). **Aucune obligation GPL n'est donc déclenchée à ce
-> jour** (§1). Ce qui reste gaté : la distribution d'un **installeur/binaire packagé du poste
-> Electron AVEC `node_modules`** — celui-là embarquerait espeak-ng → relire §1 AVANT d'envoyer un
-> tel paquet.
+# Licenses and dependencies — Mina Vision
 
-## 1. Décision espeak-ng (GPL-3.0-or-later)
+> Generated 2026-07-22 (R-17 + light SBOM), **updated 2026-07-24: the source code is now
+> PUBLIC** (GitHub repository + companion APK release). Key point for the GPL: the artifacts
+> actually distributed embed **no GPL code** — the public repository contains only the source
+> (`node_modules` gitignored, hence no espeak-ng) and the APK is the Android app
+> `fr.mina.gateway` (zero Node dependency). **No GPL obligation is therefore triggered to
+> date** (§1). What remains gated: distributing a **packaged Electron installer/binary WITH
+> `node_modules`** — that one would embed espeak-ng → re-read §1 BEFORE shipping such a package.
 
-- `espeak-ng@1.0.2` est sous **GPL-3.0-or-later** ; Mina Vision est sous licence source disponible
-  propre (`package.json` : `SEE LICENSE IN LICENSE`, voir [LICENSE](LICENSE)) — ce champ disait
-  encore `ISC` (défaut `npm init`) au moment de la génération de ce document (2026-07-22), corrigé
-  le lendemain avec la création de la LICENSE dédiée.
-- Usage réel : phonémisation pour Kokoro (TTS local). Dépendance NÉCESSAIRE au repli vocal local.
-- **Décision : conservé.** Les obligations GPL (fourniture des sources, licence compatible de
-  l'ensemble) se déclenchent à la **distribution d'un binaire combiné** contenant espeak-ng.
-  Publier le SOURCE (sans `node_modules`) ou l'APK Android (sans dépendance Node) ne convoie aucun
-  code GPL → la publication publique du 2026-07-24 (dépôt + release APK) n'a déclenché aucune
-  obligation.
-- **⚠️ Gate encore ouvert — distribution d'un installeur/binaire packagé du poste Electron** (avec
-  `node_modules`, donc espeak-ng embarqué) : soit distribuer l'ensemble sous GPL (sources incluses
-  — ce qui entre en **tension avec la LICENSE de protection du nom**, plus restrictive), soit
-  remplacer le phonémiseur par une alternative non-GPL. **Décision Nasro à prendre AVANT de publier
-  un tel paquet — non tranchée à ce jour.**
+## 1. espeak-ng decision (GPL-3.0-or-later)
 
-## 2. Inventaire des dépendances directes (prod)
+- `espeak-ng@1.0.2` is under **GPL-3.0-or-later**; Mina Vision is under its own
+  source-available license (`package.json`: `SEE LICENSE IN LICENSE`, see [LICENSE](LICENSE)) —
+  that field still said `ISC` (the `npm init` default) when this document was generated
+  (2026-07-22), fixed the next day along with the dedicated LICENSE.
+- Actual use: phonemization for Kokoro (local TTS). A NECESSARY dependency for the local voice
+  fallback.
+- **Decision: kept.** GPL obligations (source availability, license compatibility of the
+  whole) are triggered by **distributing a combined binary** containing espeak-ng. Publishing
+  the SOURCE (without `node_modules`) or the Android APK (no Node dependency) conveys no GPL
+  code → the public release of 2026-07-24 (repository + APK release) triggered no obligation.
+- **⚠️ Gate still open — distributing a packaged Electron installer/binary** (with
+  `node_modules`, hence espeak-ng embedded): either distribute the whole under the GPL (sources
+  included — which is in **tension with the name-protection LICENSE**, more restrictive), or
+  replace the phonemizer with a non-GPL alternative. **Owner decision to make BEFORE shipping
+  such a package — not settled to date.**
 
-| Paquet | Version | Licence |
+## 2. Direct dependency inventory (prod)
+
+| Package | Version | License |
 |---|---|---|
 | @azure/msal-node | 5.4.0 | MIT |
 | @google/genai | 2.11.0 | Apache-2.0 |
@@ -43,7 +44,7 @@
 | diff | 9.0.0 | BSD-3-Clause |
 | docx | 9.5.1 | MIT |
 | dotenv | 17.4.2 | BSD-2-Clause |
-| **espeak-ng** | **1.0.2** | **GPL-3.0-or-later** (voir §1) |
+| **espeak-ng** | **1.0.2** | **GPL-3.0-or-later** (see §1) |
 | firebase | 12.16.0 | Apache-2.0 |
 | google-auth-library | 10.9.0 | Apache-2.0 |
 | imapflow | 1.4.7 | MIT |
@@ -62,36 +63,38 @@
 | yaml | 2.9.0 | ISC |
 | zod | 4.4.3 | MIT |
 
-Dev : @electron/rebuild (MIT), @vitest/coverage-v8 (MIT), electron 43.1.0 (MIT), fast-check
-(MIT), vitest (MIT). Retirées le 2026-07-22 (R-16, zéro import) : `@google/generative-ai`,
-`mqtt`, `ws` — **`ws` réintroduit dès le lendemain** (canal `mina_app`, 2026-07-22 soir/23) :
-`WebSocketServer` réel dans `src/devices/chat-server.mjs`, plus un import mort. Tableau
-ci-dessus déjà à jour ; vulnérabilité associée en §3. `@google/generative-ai` et `mqtt` restent
-absents (vérifié 2026-07-24 : zéro occurrence dans `package.json`/`src/`).
+Dev: @electron/rebuild (MIT), @vitest/coverage-v8 (MIT), electron 43.1.0 (MIT), fast-check
+(MIT), vitest (MIT), jsdom (MIT). Removed on 2026-07-22 (R-16, zero imports):
+`@google/generative-ai`, `mqtt`, `ws` — **`ws` re-introduced the very next day** (the
+`mina_app` channel, 2026-07-22 evening/23): a real `WebSocketServer` in
+`src/devices/chat-server.mjs`, no longer a dead import. The table above is already up to date;
+the associated vulnerability is in §3. `@google/generative-ai` and `mqtt` remain absent
+(verified 2026-07-24: zero occurrences in `package.json`/`src/`).
 
-Aucune dépendance AGPL. Une seule GPL (espeak-ng, §1). Le skill-auditor refuse par ailleurs
-tout skill AGPL à l'installation (`skill_license_incompatible`).
+No AGPL dependency. A single GPL (espeak-ng, §1). The skill-auditor also refuses any AGPL skill
+at install time (`skill_license_incompatible`).
 
-## 3. Vulnérabilités npm audit — atteignabilité et décisions (2026-07-22, ré-audité 2026-07-24)
+## 3. npm audit vulnerabilities — reachability and decisions (2026-07-22, re-audited 2026-07-24)
 
-13 avis (7 moderate, 6 high, 0 critical) — 12 au 2026-07-22, plus 1 apparu avec le retour de
-`ws` en dépendance directe (voir §2). La majorité reste **transitive ou sans correctif publié**
-(`fixAvailable: false` sauf mention) ; `ws` fait exception : dépendance **directe**, correctif
-publié. Aucune promesse `npm audit fix` automatique — décision par chemin d'atteignabilité :
+13 advisories (7 moderate, 6 high, 0 critical) — 12 as of 2026-07-22, plus 1 that appeared with
+the return of `ws` as a direct dependency (see §2). Most remain **transitive or without a
+published fix** (`fixAvailable: false` unless noted); `ws` is the exception: a **direct**
+dependency with a published fix. No blanket `npm audit fix` promises — each decision follows
+the real reachability path:
 
-| Avis | Sévérité | Chemin d'entrée réel | Décision |
+| Advisory | Severity | Actual entry path | Decision |
 |---|---|---|---|
-| adm-zip « Crafted ZIP triggers 4GB memory allocation » | high | Install de skills + quarantaine mail = SEULES surfaces qui ouvrent des zips non fiables | **Mitigé applicativement** : refus AVANT décompression (ratio >100:1, tailles incohérentes, bornes 20/25 MiB, ≤500 entrées) — la bombe n'est jamais décompressée. Suivre les releases adm-zip |
-| onnxruntime-node (via son adm-zip embarqué) | high | Décompression de MODÈLES locaux installés par Nasro — aucune entrée non fiable | Acceptée, surveillée |
-| sharp (CVE libvips 2026-33327/28, 35590/91) | high | sharp n'encode QUE les captures d'écran locales du worker desktop — jamais d'image externe | Acceptée, surveillée ; monter sharp dès qu'un correctif sort |
-| @huggingface/transformers / kokoro-js (via onnxruntime) | high | Modèles TTS/embeddings locaux | Acceptée, surveillée |
-| file-type (boucle infinie ASF) + chaîne jimp/@jimp/* / nut-js | moderate | jimp n'est utilisé par nut-js que sur des captures locales | Acceptée ; `fixAvailable: true` partiel sur la chaîne nut-tree : à reprendre quand le fork publie |
-| ws « Uninitialized memory disclosure » (GHSA-58qx-3vcg-4xpx, moderate) + « Memory exhaustion DoS from tiny fragments » (GHSA-96hv-2xvq-fx4p, high), plage 8.0.0–8.20.1 | high | `src/devices/chat-server.mjs` — `WebSocketServer` réel du canal `mina_app`, reçoit des frames depuis un téléphone appairé (LAN/USB, jamais Internet ouvert) | **Mitigé le 2026-07-24** : `ws` mis à jour 8.19.0 → 8.21.1 (hors plage vulnérable), tests du serveur de chat verts après mise à jour |
+| adm-zip "Crafted ZIP triggers 4GB memory allocation" | high | Skill install + mail quarantine = the ONLY surfaces that open untrusted zips | **Mitigated in-app**: refusal BEFORE decompression (ratio >100:1, inconsistent sizes, 20/25 MiB bounds, ≤500 entries) — the bomb is never decompressed. Watch adm-zip releases |
+| onnxruntime-node (via its embedded adm-zip) | high | Decompression of LOCAL models installed by the owner — no untrusted input | Accepted, monitored |
+| sharp (libvips CVE 2026-33327/28, 35590/91) | high | sharp only encodes local screenshots from the desktop worker — never an external image | Accepted, monitored; bump sharp as soon as a fix ships |
+| @huggingface/transformers / kokoro-js (via onnxruntime) | high | Local TTS/embedding models | Accepted, monitored |
+| file-type (ASF infinite loop) + jimp/@jimp/* / nut-js chain | moderate | jimp is only used by nut-js on local captures | Accepted; partial `fixAvailable: true` on the nut-tree chain: revisit when the fork publishes |
+| ws "Uninitialized memory disclosure" (GHSA-58qx-3vcg-4xpx, moderate) + "Memory exhaustion DoS from tiny fragments" (GHSA-96hv-2xvq-fx4p, high), range 8.0.0–8.20.1 | high | `src/devices/chat-server.mjs` — the real `WebSocketServer` of the `mina_app` channel, receives frames from a paired phone (LAN/USB, never the open Internet) | **Mitigated on 2026-07-24**: `ws` updated 8.19.0 → 8.21.1 (out of the vulnerable range), chat server tests green after the update |
 
-Re-vérification : `npm audit --json` à chaque vague de release (gate Wave 4) — rejoué le
-2026-07-24 pendant cet audit doc (13 avis, détail ci-dessus).
+Re-verification: `npm audit --json` at every release wave (Wave 4 gate) — replayed on
+2026-07-24 during this documentation audit (13 advisories, detail above).
 
-## 4. Régénération
+## 4. Regenerating
 
 ```bash
 npm ls --omit=dev --depth=0
@@ -101,5 +104,5 @@ npm ls --omit=dev --depth=0
 npm audit --json
 ```
 
-Licences des directes : lire `node_modules/<paquet>/package.json` (champ `license`). Mettre à
-jour CE fichier à chaque ajout/retrait de dépendance — le gate de release le vérifie.
+Licenses of direct dependencies: read `node_modules/<package>/package.json` (`license` field).
+Update THIS file on every dependency addition/removal — the release gate checks it.

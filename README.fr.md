@@ -204,7 +204,7 @@ npm run test:unit
 | [docs/operations/INSTALLER-MINA-TELEPHONE.fr.md](docs/operations/INSTALLER-MINA-TELEPHONE.fr.md) | Installer l'APK sur un téléphone (utilisateur final, sideload) |
 | [docs/operations/RECOVERY.fr.md](docs/operations/RECOVERY.fr.md) | Récupération du coffre mémoire |
 | [docs/operations/SECURITY.fr.md](docs/operations/SECURITY.fr.md) | Modèle de sécurité et invariants |
-| [LICENCES.md](LICENCES.md) | Licences des dépendances et décisions |
+| [LICENCES.fr.md](LICENCES.fr.md) | Licences des dépendances et décisions |
 | [docs/operations/AUDIT-PRE-PUBLICATION.fr.md](docs/operations/AUDIT-PRE-PUBLICATION.fr.md) | Audit de confidentialité du dépôt |
 | [docs/operations/SECURITY-AUDIT.fr.md](docs/operations/SECURITY-AUDIT.fr.md) | Rapport d'audit de sécurité (menaces, crypto, sandbox, dépendances) |
 
@@ -226,7 +226,8 @@ garde-fous de sécurité décrits plus haut.
 
 ## Licence
 
-Licence source disponible — voir [LICENSE](LICENSE). Usage, étude, modification et
+Licence source disponible — voir [LICENSE](LICENSE) (français, seule version faisant foi ; une
+traduction de courtoisie en anglais existe : [LICENSE.en.md](LICENSE.en.md)). Usage, étude, modification et
 redistribution autorisés ; **les noms « Mina », « Mina Vision » et « Nasro Berkoun » sont
 protégés** et ne peuvent être retirés, remplacés ni détournés. Une œuvre dérivée publiée doit
 porter un nom distinct et créditer « Basé sur Mina Vision, créé par Nasro Berkoun, en collaboration avec Sol et Fable ».

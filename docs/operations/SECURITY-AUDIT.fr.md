@@ -6,11 +6,11 @@
 - **Vérification** : chaque affirmation vérifiable a été **rejouée contre le code source** par Claude (Opus) le 2026-07-25 — références `fichier:ligne` ci-dessous. Deux imprécisions du rapport d'origine ont été corrigées (voir « Corrections »).
 - **Statut** : structure de sécurité solide, vérifiée. Aucun secret réel dans le code (audit pré-publication + purge historique du faux fixture DeepSeek).
 
-> Ce document est un **instantané daté**. Les décomptes de vulnérabilités et l'état de distribution évoluent — la source de vérité runtime reste `LICENCES.md §3` (dépendances) et **Config → Capacités** (état des domaines).
+> Ce document est un **instantané daté**. Les décomptes de vulnérabilités et l'état de distribution évoluent — la source de vérité runtime reste `LICENCES.fr.md §3` (dépendances) et **Config → Capacités** (état des domaines).
 
 ## Corrections apportées au rapport d'origine
 
-1. **Nombre de vulnérabilités npm : 13, pas 12.** Le « 12 » était le décompte du 2026-07-22 ; après le retour de `ws` en dépendance directe (canal `mina_app`), le ré-audit du 2026-07-24 donne **13 avis** (7 moderate, 6 high, 0 critical). Source : `LICENCES.md §3`.
+1. **Nombre de vulnérabilités npm : 13, pas 12.** Le « 12 » était le décompte du 2026-07-22 ; après le retour de `ws` en dépendance directe (canal `mina_app`), le ré-audit du 2026-07-24 donne **13 avis** (7 moderate, 6 high, 0 critical). Source : `LICENCES.fr.md §3`.
 2. **La mention « strictement local et mono-utilisateur » est caduque.** Depuis le 2026-07-24, le dépôt est **public** (GitHub), l'**APK compagnon est publié** (release v0.1.0), et l'application est **multi-utilisateurs** (fenêtre de bienvenue + profils). Le modèle de sécurité reste correct (Nasro = unique propriétaire/autorité), mais « mono-utilisateur / non distribué » est faux — voir « Contexte de distribution ».
 
 ---
@@ -27,7 +27,7 @@ Les invariants sont **exécutables** : `tests/security-invariants.test.mjs` verr
 
 ## 2. Audit des dépendances (npm audit)
 
-**13 avis** (7 moderate, 6 high, 0 critical) au ré-audit du 2026-07-24. La majorité est **transitive ou sans correctif publié** ; décision par chemin d'atteignabilité réel (détail complet : `LICENCES.md §3`).
+**13 avis** (7 moderate, 6 high, 0 critical) au ré-audit du 2026-07-24. La majorité est **transitive ou sans correctif publié** ; décision par chemin d'atteignabilité réel (détail complet : `LICENCES.fr.md §3`).
 
 | Paquet | Sévérité | Vulnérabilité | Chemin d'impact | Statut |
 | :--- | :--- | :--- | :--- | :--- |
@@ -59,11 +59,11 @@ Toutes les requêtes SQLite locales utilisent des **requêtes préparées à val
 
 ## 6. Contexte de distribution *(remplace la mention « R15 mono-utilisateur » du rapport d'origine)*
 
-- **Distribution** : le code source est **public** (dépôt GitHub) et l'**APK compagnon est publié** (release v0.1.0, sideload). Ce ne sont pas des artefacts « mono-poste » — voir la note GPL/espeak-ng (`LICENCES.md §1`) sur les conditions d'un futur installeur packagé.
+- **Distribution** : le code source est **public** (dépôt GitHub) et l'**APK compagnon est publié** (release v0.1.0, sideload). Ce ne sont pas des artefacts « mono-poste » — voir la note GPL/espeak-ng (`LICENCES.fr.md §1`) sur les conditions d'un futur installeur packagé.
 - **Multi-utilisateurs** : l'application supporte **plusieurs profils** (nom, pronoms, langue, ton, thème) via la fenêtre de bienvenue. Ces profils sont de la **personnalisation** — ils n'accordent **aucun privilège** et ne modifient jamais `MINA.md`.
 - **Propriétaire / autorité = Nasro** (`MINA.md`) : seul le propriétaire, par **confirmation locale sur le PC**, autorise une action sensible. Une identité distante (téléphone, Telegram) doit être **liée et vérifiée** avant tout accès, et ne peut jamais autoriser une action `local_only` à distance. Un profil actif ≠ un propriétaire.
 - **Multi-tenant SaaS (SATIM, Vike SSR, isolation de tenants)** : **N/A** — Mina Vision n'est pas un service SaaS ; ces préoccupations concernent d'autres projets et sont hors périmètre de ce dépôt.
 
 ---
 
-*Voir aussi : [`SECURITY.md`](SECURITY.md) (runbook opérationnel), [`LICENCES.md`](../../LICENCES.md) (dépendances + §3 vulnérabilités), [`AUDIT-PRE-PUBLICATION.md`](AUDIT-PRE-PUBLICATION.md) (confidentialité du dépôt).*
+*Voir aussi : [`SECURITY.md`](SECURITY.md) (runbook opérationnel), [`LICENCES.md`](../../LICENCES.fr.md) (dépendances + §3 vulnérabilités), [`AUDIT-PRE-PUBLICATION.md`](AUDIT-PRE-PUBLICATION.md) (confidentialité du dépôt).*
