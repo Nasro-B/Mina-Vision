@@ -19,11 +19,14 @@ describe('security-scanner', () => {
   });
 
   it('détecte les secrets en dur avec preuve fichier:ligne', () => {
+    // Fixture FAUSSE assemblée à l'exécution (F-12) : le scanner reçoit la même chaîne, mais
+    // aucun littéral de forme « clé Google » ne subsiste dans le source du dépôt.
+    const fakeGoogleKey = ['AIza', 'SyA1234567890', 'abcdefghijklmnopqrstuv'].join('');
     const scanner = createSecurityScanner({
       fileContent: contentMap({
         'config.mjs': [
           "const ok = process.env.API_KEY;",
-          "const mauvais = 'AIzaSyA1234567890abcdefghijklmnopqrstuv';",
+          `const mauvais = '${fakeGoogleKey}';`,
           "const password = 'hunter2secret';",
         ].join('\n'),
       }),
@@ -155,7 +158,8 @@ describe('code-reviewer', () => {
   });
 
   it('focus=security ne rapporte pas le style', async () => {
-    const reviewer = buildReviewer({ 'mixte.mjs': "console.log('x');\nconst p = 'AIzaSyA1234567890abcdefghijklmnopqrstuv';" });
+    const fakeGoogleKey = ['AIza', 'SyA1234567890', 'abcdefghijklmnopqrstuv'].join(''); // fixture (F-12)
+    const reviewer = buildReviewer({ 'mixte.mjs': `console.log('x');\nconst p = '${fakeGoogleKey}';` });
     const report = await reviewer.review({ files: ['mixte.mjs'], focus: 'security' });
     expect(report.findings.some((entry) => entry.category === 'style')).toBe(false);
     expect(report.findings.some((entry) => entry.category === 'secret')).toBe(true);
