@@ -141,6 +141,9 @@ export function createLocalComputerUseProvider({
       previousCall: call,
       actionResult,
       observation: safeObservation,
+      // F-05 : la preuve collectée au démarrage doit accompagner CHAQUE tour ; sans elle, le
+      // planificateur perdait le contexte factuel dès le deuxième échange.
+      evidence: session.evidence,
       outputContract: 'strict_json_action_with_expected_effect',
     }));
     const response = parsePlan(raw, {

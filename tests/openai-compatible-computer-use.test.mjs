@@ -308,4 +308,52 @@ describe('OpenAI-compatible Computer Use provider', () => {
     await expect(provider.start({ goal: 'Observe le bureau', environment: 'desktop', observation }))
       .rejects.toThrow('computer_use_environment_unsupported');
   });
+
+  // Finding F-05 (audit 2026-07-27) : `start()` stockait bien la preuve dans la session, mais
+  // `userContent()` ne la recevait jamais — elle était absente du prompt AU DÉMARRAGE ET au tour
+  // suivant. Perte de grounding : le modèle agissait sans le contexte factuel collecté.
+  it('F-05 — transmet la preuve référencée, séparée du but et marquée non fiable, à CHAQUE tour', async () => {
+    const answer = JSON.stringify({
+      completed: false,
+      text: 'Je regarde.',
+      action: {
+        name: 'click',
+        arguments_json: JSON.stringify({ x: 10, y: 10, intent: 'ouvrir', safety_decision: 'allowed', expected_effect: 'ui_state_change' }),
+      },
+    });
+    const client = clientReturning(answer);
+    const provider = createOpenAiCompatibleComputerUseProvider({ id: 'vision', client, model: 'vision' });
+    const evidence = [{
+      sourceId: 'memory-1',
+      locator: 'memory://owner/1',
+      capturedAt: '2026-07-15T10:00:00.000Z',
+      contentDigest: `sha256:${'a'.repeat(64)}`,
+      freshnessClass: 'historical',
+      extract: 'Le rendez-vous est mardi à 14 h',
+      method: 'memory_recall',
+    }];
+
+    const started = await provider.start({
+      goal: 'Quand est le rendez-vous ?', evidence, environment: 'browser', observation,
+    });
+
+    const firstTurn = JSON.stringify(client.chat.completions.create.mock.calls[0][0].messages);
+    expect(firstTurn).toContain('memory-1');
+    expect(firstTurn).toContain('Le rendez-vous est mardi à 14 h');
+    // La preuve est un bloc SÉPARÉ, marqué non fiable — jamais fondue dans le but de l'utilisateur.
+    expect(firstTurn).toContain('referenced_evidence');
+    expect(firstTurn).toContain('Source non fiable');
+
+    // Tour suivant : la preuve de la session doit être renvoyée, sinon le grounding est perdu.
+    await provider.continue({
+      interactionId: started.interactionId,
+      call: { name: 'click', arguments: { x: 10, y: 10 } },
+      actionResult: { verified: true },
+      observation,
+      environment: 'browser',
+    });
+    const secondTurn = JSON.stringify(client.chat.completions.create.mock.calls[1][0].messages);
+    expect(secondTurn).toContain('memory-1');
+    expect(secondTurn).toContain('referenced_evidence');
+  });
 });

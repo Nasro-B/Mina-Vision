@@ -74,4 +74,36 @@ describe('local Computer Use provider', () => {
       interactionId: 'missing', call: {}, actionResult: {}, observation, environment: 'browser',
     })).rejects.toThrow('local_interaction_unknown');
   });
+
+  // Finding F-05 (audit 2026-07-27) : `start()` transmettait bien la preuve au planificateur, mais
+  // `continueInteraction()` l'omettait — le grounding factuel disparaissait dès le second tour.
+  it('F-05 — la preuve de session est transmise au planificateur à CHAQUE tour', async () => {
+    const { provider, plan } = setup([
+      action(),
+      JSON.stringify({ completed: true, text: 'Terminé' }),
+    ]);
+    const evidence = [{
+      sourceId: 'memory-7',
+      locator: 'memory://owner/7',
+      capturedAt: '2026-07-20T08:00:00.000Z',
+      contentDigest: `sha256:${'b'.repeat(64)}`,
+      freshnessClass: 'historical',
+      extract: 'La réunion est reportée',
+      method: 'memory_recall',
+    }];
+
+    const first = await provider.start({
+      goal: 'Vérifie la réunion', evidence, environment: 'browser', observation,
+    });
+    expect(plan.mock.calls[0][0].evidence).toEqual(evidence);
+
+    await provider.continue({
+      interactionId: first.interactionId,
+      call: first.calls[0],
+      actionResult: { executed: true },
+      observation,
+      environment: 'browser',
+    });
+    expect(plan.mock.calls[1][0].evidence).toEqual(evidence);
+  });
 });
