@@ -10,7 +10,7 @@
 
 ## Corrections apportées au rapport d'origine
 
-1. **Nombre de vulnérabilités npm : 13, pas 12.** Le « 12 » était le décompte du 2026-07-22 ; après le retour de `ws` en dépendance directe (canal `mina_app`), le ré-audit du 2026-07-24 donne **13 avis** (7 moderate, 6 high, 0 critical). Source : `LICENCES.fr.md §3`.
+1. **Nombre de vulnérabilités npm : 12** (5 high, 7 moderate, 0 critical), re-mesuré le 2026-07-27. Le chiffre est passé de 12 à 13 puis de nouveau à 12 : `ws` est redevenu dépendance directe, puis a été mis à jour hors de sa plage vulnérable. Source : `LICENCES.fr.md §3`.
 2. **La mention « strictement local et mono-utilisateur » est caduque.** Depuis le 2026-07-24, le dépôt est **public** (GitHub), l'**APK compagnon est publié** (release v0.1.0), et l'application est **multi-utilisateurs** (fenêtre de bienvenue + profils). Le modèle de sécurité reste correct (Nasro = unique propriétaire/autorité), mais « mono-utilisateur / non distribué » est faux — voir « Contexte de distribution ».
 
 ---
@@ -27,7 +27,7 @@ Les invariants sont **exécutables** : `tests/security-invariants.test.mjs` verr
 
 ## 2. Audit des dépendances (npm audit)
 
-**13 avis** (7 moderate, 6 high, 0 critical) au ré-audit du 2026-07-24. La majorité est **transitive ou sans correctif publié** ; décision par chemin d'atteignabilité réel (détail complet : `LICENCES.fr.md §3`).
+**12 avis** (7 moderate, 5 high, 0 critical) mesurés le 2026-07-27. La majorité est **transitive ou sans correctif publié** ; décision par chemin d'atteignabilité réel (détail complet : `LICENCES.fr.md §3`).
 
 | Paquet | Sévérité | Vulnérabilité | Chemin d'impact | Statut |
 | :--- | :--- | :--- | :--- | :--- |
