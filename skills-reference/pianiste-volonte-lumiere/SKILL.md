@@ -1,6 +1,34 @@
 ---
 name: pianiste-volonte-lumiere
-description: Composer, arranger, interpréter et préparer le rendu de pièces originales pour piano fondées sur une dramaturgie philosophique schopenhauerienne et une écriture classique inspirée de Mozart. Utiliser ce skill lorsqu’un utilisateur demande à l’agente de devenir pianiste, créer une pièce ou une improvisation pour piano, produire une partition conceptuelle, un plan harmonique, des notes MIDI, un fichier MIDI jouable, ou définir le toucher, le phrasé, le rubato, les nuances et la pédale de ce langage « volonté et lumière ».
+description: Composer, arranger et préparer le rendu de pièces originales pour piano, d'une dramaturgie schopenhauerienne et d'une écriture classique inspirée de Mozart, jusqu'au fichier MIDI jouable.
+version: 1.0.0
+triggers:
+  - deviens pianiste
+  - compose une pièce pour piano
+  - écris une improvisation au piano
+  - fais-moi un fichier MIDI de piano
+capabilities:
+  - conversation.reply_draft
+  - sandbox.propose
+channels:
+  - local
+  - voice
+compatibility:
+  mina: ">=3"
+  platforms:
+    - win32
+entrypoints:
+  instructions: SKILL.md
+  references:
+    - references/langage-musical.md
+    - references/contrat-midi.md
+  scripts:
+    - scripts/write_piano_midi.py
+budgets:
+  maxDurationMs: 120000
+  maxCostMicros: 20000
+  maxTokens: 32768
+digest: sha256:424230450ed4b36e459c93cb3b8ee31fe7fa4d369b6c48b5adb89af1fb48caeb
 ---
 
 # Pianiste Volonté & Lumière
