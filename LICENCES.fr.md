@@ -76,8 +76,9 @@ tout skill AGPL à l'installation (`skill_license_incompatible`).
 
 ## 3. Vulnérabilités npm audit — atteignabilité et décisions (2026-07-22, ré-audité 2026-07-24)
 
-13 avis (7 moderate, 6 high, 0 critical) — 12 au 2026-07-22, plus 1 apparu avec le retour de
-`ws` en dépendance directe (voir §2). La majorité reste **transitive ou sans correctif publié**
+12 avis (7 moderate, 5 high, 0 critical), mesurés le 2026-07-27 (`npm audit --json`). Le compte
+est passé de 12 à 13 puis de nouveau à 12 : `ws` est redevenu dépendance directe, puis a été mis
+à jour hors de sa plage vulnérable (voir §2). La majorité reste **transitive ou sans correctif publié**
 (`fixAvailable: false` sauf mention) ; `ws` fait exception : dépendance **directe**, correctif
 publié. Aucune promesse `npm audit fix` automatique — décision par chemin d'atteignabilité :
 
@@ -91,7 +92,7 @@ publié. Aucune promesse `npm audit fix` automatique — décision par chemin d'
 | ws « Uninitialized memory disclosure » (GHSA-58qx-3vcg-4xpx, moderate) + « Memory exhaustion DoS from tiny fragments » (GHSA-96hv-2xvq-fx4p, high), plage 8.0.0–8.20.1 | high | `src/devices/chat-server.mjs` — `WebSocketServer` réel du canal `mina_app`, reçoit des frames depuis un téléphone appairé (LAN/USB, jamais Internet ouvert) | **Mitigé le 2026-07-24** : `ws` mis à jour 8.19.0 → 8.21.1 (hors plage vulnérable), tests du serveur de chat verts après mise à jour |
 
 Re-vérification : `npm audit --json` à chaque vague de release (gate Wave 4) — rejoué le
-2026-07-24 pendant cet audit doc (13 avis, détail ci-dessus).
+2026-07-27 (12 avis : 5 high, 7 moderate — détail ci-dessus).
 
 ## 4. Régénération
 

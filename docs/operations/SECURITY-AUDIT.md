@@ -10,7 +10,7 @@
 
 ## Corrections applied to the original report
 
-1. **npm vulnerability count: 13, not 12.** "12" was the 2026-07-22 count; after `ws` returned as a direct dependency (the `mina_app` channel), the 2026-07-24 re-audit gives **13 advisories** (7 moderate, 6 high, 0 critical). Source: `LICENCES.md §3`.
+1. **npm vulnerability count: 12** (5 high, 7 moderate, 0 critical), re-measured on 2026-07-27. The figure moved 12 → 13 → 12: `ws` came back as a direct dependency, then was updated out of its vulnerable range. Source: `LICENCES.md §3`.
 2. **The "strictly local and single-user" statement is obsolete.** Since 2026-07-24 the repository is **public** (GitHub), the **companion APK is published** (release v0.1.0), and the application is **multi-user** (welcome window + profiles). The security model stands (the owner remains the sole authority), but "single-user / not distributed" is false — see "Distribution context".
 
 ---
@@ -27,7 +27,7 @@ The invariants are **executable**: `tests/security-invariants.test.mjs` locks **
 
 ## 2. Dependency audit (npm audit)
 
-**13 advisories** (7 moderate, 6 high, 0 critical) at the 2026-07-24 re-audit. Most are **transitive or without a published fix**; decisions are made by real reachability path (full detail: `LICENCES.md §3`).
+**12 advisories** (7 moderate, 5 high, 0 critical) measured on 2026-07-27. Most are **transitive or without a published fix**; decisions are made by real reachability path (full detail: `LICENCES.md §3`).
 
 | Package | Severity | Vulnerability | Impact path | Status |
 | :--- | :--- | :--- | :--- | :--- |

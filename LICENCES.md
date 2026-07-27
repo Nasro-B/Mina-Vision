@@ -76,8 +76,9 @@ at install time (`skill_license_incompatible`).
 
 ## 3. npm audit vulnerabilities — reachability and decisions (2026-07-22, re-audited 2026-07-24)
 
-13 advisories (7 moderate, 6 high, 0 critical) — 12 as of 2026-07-22, plus 1 that appeared with
-the return of `ws` as a direct dependency (see §2). Most remain **transitive or without a
+12 advisories (7 moderate, 5 high, 0 critical), measured on 2026-07-27 (`npm audit --json`).
+The count moved 12 → 13 → 12: `ws` came back as a direct dependency, then was updated out of its
+vulnerable range (see §2). Most remain **transitive or without a
 published fix** (`fixAvailable: false` unless noted); `ws` is the exception: a **direct**
 dependency with a published fix. No blanket `npm audit fix` promises — each decision follows
 the real reachability path:
@@ -92,7 +93,7 @@ the real reachability path:
 | ws "Uninitialized memory disclosure" (GHSA-58qx-3vcg-4xpx, moderate) + "Memory exhaustion DoS from tiny fragments" (GHSA-96hv-2xvq-fx4p, high), range 8.0.0–8.20.1 | high | `src/devices/chat-server.mjs` — the real `WebSocketServer` of the `mina_app` channel, receives frames from a paired phone (LAN/USB, never the open Internet) | **Mitigated on 2026-07-24**: `ws` updated 8.19.0 → 8.21.1 (out of the vulnerable range), chat server tests green after the update |
 
 Re-verification: `npm audit --json` at every release wave (Wave 4 gate) — replayed on
-2026-07-24 during this documentation audit (13 advisories, detail above).
+2026-07-27 (12 advisories: 5 high, 7 moderate — detail above).
 
 ## 4. Regenerating
 
