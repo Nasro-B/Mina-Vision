@@ -1,83 +1,83 @@
-# Audit avant publication GitHub — 2026-07-23
+> 🇬🇧 **English** · [🇫🇷 Français](AUDIT-PRE-PUBLICATION.fr.md)
 
-> Portée : les **903 fichiers réellement suivis par git** (ceux qui partiraient sur GitHub).
-> Méthode : scan par motifs de secrets et de données personnelles, puis vérification manuelle
-> de chaque alerte. Aucune alerte n'a été classée sans être ouverte.
+# Pre-publication GitHub audit — 2026-07-23
+
+> Scope: the **903 files actually tracked by git** (the ones that would land on GitHub).
+> Method: pattern scan for secrets and personal data, then manual verification of every alert.
+> No alert was classified without being opened.
 
 ## 1. Verdict
 
-**Aucun secret réel dans le dépôt.** Les quatre alertes de sévérité CRITIQUE/ÉLEVÉE sont des
-fixtures de test manifestement factices, vérifiées une par une :
+**No real secret in the repository.** The four CRITICAL/HIGH severity alerts are plainly fake
+test fixtures, verified one by one:
 
-| Alerte | Fichier | Valeur réelle trouvée | Verdict |
+| Alert | File | Actual value found | Verdict |
 |---|---|---|---|
-| Clé Google | `tests/code/code-review.test.mjs`, `code-verifier.test.mjs` | préfixe Google suivi de la suite `1234567890abcdef…` | Fixture (suite `1234567890abcdef…`) |
-| Clé OpenAI | `tests/secret-handling.test.mjs` | préfixe OpenAI suivi de `abcdef1234…` | Fixture |
-| Clé privée PEM | `tests/credential-document.test.mjs` | corps = littéralement `fixture` | Fixture |
-| JWT | `tests/secret-handling.test.mjs` | payload `{"sub":"1234567890"}` | Exemple public jwt.io |
+| Google key | `tests/code/code-review.test.mjs`, `code-verifier.test.mjs` | Google prefix followed by `1234567890abcdef…` | Fixture |
+| OpenAI key | `tests/secret-handling.test.mjs` | OpenAI prefix followed by `abcdef1234…` | Fixture |
+| PEM private key | `tests/credential-document.test.mjs` | body = literally `fixture` | Fixture |
+| JWT | `tests/secret-handling.test.mjs` | payload `{"sub":"1234567890"}` | Public jwt.io example |
 
-Ces fixtures sont **nécessaires** : elles prouvent que les détecteurs de secrets de Mina
-fonctionnent. Les retirer affaiblirait les tests de sécurité.
+These fixtures are **necessary**: they prove Mina's secret detectors work. Removing them would
+weaken the security tests.
 
-## 2. Fichiers sensibles — état du suivi git
+## 2. Sensitive files — git tracking state
 
-| Élément | État | Vérifié par |
+| Item | State | Verified by |
 |---|---|---|
-| `.env` | **ignoré** | `git check-ignore -v .env` → `.gitignore:1` |
-| `env/` (client_secret, service account) | **ignoré** | `git check-ignore -v env/` → `.gitignore:4` |
-| `.env.example` | suivi — **volontaire**, toutes les clés vides | lecture intégrale |
-| `android/app/google-services.json` | ignoré **avant** tout téléchargement | `.gitignore` |
-| Coffres, bases, journaux (`*.sqlite`, `*.db`, `logs/`) | ignorés | `.gitignore` |
-| Profils navigateur (`profiles/`) | ignorés | `.gitignore` |
+| `.env` | **ignored** | `git check-ignore -v .env` → `.gitignore:1` |
+| `env/` (client_secret, service account) | **ignored** | `git check-ignore -v env/` → `.gitignore:4` |
+| `.env.example` | tracked — **deliberate**, all keys empty | full read |
+| `android/app/google-services.json` | ignored **before** any download | `.gitignore` |
+| Vaults, databases, journals (`*.sqlite`, `*.db`, `logs/`) | ignored | `.gitignore` |
+| Browser profiles (`profiles/`) | ignored | `.gitignore` |
 
-## 3. Données personnelles retirées
+## 3. Personal data removed
 
-| Donnée | Où | Traitement |
+| Data | Where | Treatment |
 |---|---|---|
-| Serial matériel du Samsung | `tests/adb-mdns-peer.test.mjs` | remplacé par `FIXTURESERIAL01` |
-| Adresses e-mail personnelles | `scripts/connect-google-account.mjs` | lue depuis `MINA_GOOGLE_ACCOUNT`, plus aucune adresse en dur |
-| Adresses e-mail personnelles | `tests/google-account-connector.test.mjs` | `owner@example.com` |
-| Adresses e-mail personnelles | `docs/operations/GOOGLE-ACCOUNT.md` | `<votre-compte>@gmail.com` |
-| Nom d'utilisateur Windows | 5 fixtures de test | `C:\Users\Exemple` |
-| Chemins machine | `scripts/restore-old-memory-vault.mjs` | dérivés de `%APPDATA%` / `homedir()` |
+| Samsung hardware serial | `tests/adb-mdns-peer.test.mjs` | replaced with `FIXTURESERIAL01` |
+| Personal e-mail addresses | `scripts/connect-google-account.mjs` | read from `MINA_GOOGLE_ACCOUNT`, no hardcoded address left |
+| Personal e-mail addresses | `tests/google-account-connector.test.mjs` | `owner@example.com` |
+| Personal e-mail addresses | `docs/operations/GOOGLE-ACCOUNT.md` | `<your-account>@gmail.com` |
+| Windows username | 5 test fixtures | `C:\Users\Exemple` |
+| Machine paths | `scripts/restore-old-memory-vault.mjs` | derived from `%APPDATA%` / `homedir()` |
 
-## 4. Portabilité — bloquant corrigé
+## 4. Portability — blocking issue fixed
 
-Des chemins d'un disque secondaire (`G:\…`) étaient **en dur** dans le code actif : racines
-d'écriture de confiance et sandbox (`src/ui/main.mjs`), cache des modèles
-(`src/voice/local-voice-worker.mjs`). Sur une machine sans ce disque, l'application aurait
-échoué ou écrit hors de son espace.
+Paths from a secondary drive (`G:\…`) were **hardcoded** in active code: trusted write roots
+and sandbox (`src/ui/main.mjs`), model cache (`src/voice/local-voice-worker.mjs`). On a machine
+without that drive, the application would have failed or written outside its space.
 
-Corrigé par `src/system/storage-roots.mjs` : tout vit sous le `userData` de l'application par
-défaut ; `MINA_CACHE_ROOT`, `MINA_MODELS_ROOT`, `MINA_SANDBOX_ROOT`,
-`MINA_SANDBOX_RUNTIME_ROOT` permettent de déporter les caches lourds ;
-`MINA_TRUSTED_WRITE_ROOTS` déclare explicitement des racines d'écriture supplémentaires — une
-installation neuve n'hérite **jamais** des dossiers de confiance d'une autre.
+Fixed by `src/system/storage-roots.mjs`: everything lives under the application's `userData` by
+default; `MINA_CACHE_ROOT`, `MINA_MODELS_ROOT`, `MINA_SANDBOX_ROOT`,
+`MINA_SANDBOX_RUNTIME_ROOT` allow relocating heavy caches; `MINA_TRUSTED_WRITE_ROOTS`
+explicitly declares extra write roots — a fresh install **never** inherits another
+installation's trusted folders.
 
-## 5. Retirés de la publication (code mort)
+## 5. Removed from publication (dead code)
 
-`agent_vision_sourire.js` (prototype important `@google/generative-ai`, dépendance
-désinstallée le 2026-07-22 : le fichier ne pouvait plus s'exécuter), `debug_dom.js`,
-`diagnostic_scroll.js`, `modal_vision_app.py`. D'abord gitignorés (non suivis ni publiés), ils
-ont été **supprimés du projet le 2026-07-24** (sauvegardés hors dépôt) — ils polluaient la revue
-de Mina Code par des faux positifs. Depuis, l'indexeur de Mina Code respecte `.gitignore`, donc
-tout fichier ignoré est de toute façon exclu de l'analyse et de la revue.
+`agent_vision_sourire.js` (a prototype importing `@google/generative-ai`, a dependency
+uninstalled on 2026-07-22: the file could no longer run), `debug_dom.js`,
+`diagnostic_scroll.js`, `modal_vision_app.py`. First gitignored (untracked, unpublished), they
+were **deleted from the project on 2026-07-24** (backed up outside the repository) — they
+polluted Mina Code reviews with false positives. Since then, the Mina Code indexer honors
+`.gitignore`, so any ignored file is excluded from analysis and review anyway.
 
-## 6. Restes assumés (sans risque)
+## 6. Accepted leftovers (no risk)
 
-- Les **plans, spécifications et journal d'exécution** de `docs/superpowers/` sont désormais
-  EXCLUS de la publication (`.gitignore`) : documents de travail internes contenant des chemins
-  machine et l'historique détaillé du développement. Ils restent sur le disque local.
-- Adresses IP privées (`192.168.x.x`) dans des fixtures de test et dans `url-policy.mjs` : ce
-  sont précisément les plages que la politique anti-SSRF doit **refuser** ; elles n'exposent
-  aucun réseau réel.
+- The **plans, specifications and execution log** of `docs/superpowers/` are now EXCLUDED from
+  publication (`.gitignore`): internal working documents containing machine paths and the
+  detailed development history. They stay on the local disk.
+- Private IP addresses (`192.168.x.x`) in test fixtures and in `url-policy.mjs`: these are
+  precisely the ranges the anti-SSRF policy must **refuse**; they expose no real network.
 
-## 7. Rejouer cet audit
+## 7. Replaying this audit
 
 ```bash
 git ls-files | wc -l
 ```
 
-Le script d'audit vit dans l'espace de travail temporaire de la session ; sa logique est
-reproduite ci-dessus (motifs de clés API/PEM/JWT/AWS + motifs de données personnelles),
-appliquée uniquement à la sortie de `git ls-files`.
+The audit script lives in the session's temporary workspace; its logic is reproduced above
+(API key/PEM/JWT/AWS patterns + personal data patterns), applied only to the output of
+`git ls-files`.

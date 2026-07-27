@@ -1,41 +1,64 @@
-# Passerelle Android Huawei — Mina Vision
+> 🇬🇧 **English** · [🇫🇷 Français](ANDROID-HUAWEI.fr.md)
 
-Procédure d'appairage pas à pas : `docs/runbooks/huawei-pairing.md`. Ce document couvre le contexte opérationnel autour de cette procédure : permissions, transports, dépannage.
+# Android gateway — Mina Vision
 
-## Application unique
+This document covers the operational context around the phone gateway: permissions, transports,
+troubleshooting.
 
-`fr.mina.gateway` est l'unique application Android de Mina Vision — un seul appareil physique appairé (`src/devices/physical-device-registry.mjs` refuse une seconde identité tant que Nasro ne l'a pas approuvée localement). Elle porte SMS, Telegram, CameraX et les transports USB/LAN/Firebase ; il n'y a pas de seconde APK.
+## Single application
 
-## Permissions Android demandées
+`fr.mina.gateway` is the one and only Android application of Mina Vision — a single paired
+physical device (`src/devices/physical-device-registry.mjs` refuses a second identity until the
+owner approves it locally). It carries SMS, Telegram, CameraX and the USB/LAN/Firebase
+transports; there is no second APK.
 
-- **SMS** (lecture/réception) : lecture/brouillon/confirmation/envoi, avec option d'envoi automatique explicite. Un SMS entrant n'accorde jamais de capacité PC, fichiers, skills, sandbox ou domotique (`tests/integration/android-channel-policy.test.mjs`).
-- **Caméra** (CameraX) : flux capteur réel, distinct de l'ancien `startCamera()` (dépréciée — n'ouvrait qu'un intent photo).
-- **Réseau local** : transport LAN, activé uniquement après la procédure manuelle du runbook — jamais automatique au démarrage.
-- **Notifications/foreground service** : maintien du polling Telegram et du transport local en arrière-plan.
+## Android permissions requested
 
-Aucune permission Google/compte n'est utilisée comme autorisation Mina — l'identité Google Home reste un signal de fonctionnalité, jamais un canal d'authentification de l'agent.
+- **SMS** (read/receive): read/draft/confirm/send, with an explicit auto-send option. An
+  incoming SMS never grants any PC, files, skills, sandbox or smart-home capability
+  (`tests/integration/android-channel-policy.test.mjs`).
+- **Camera** (CameraX): a real sensor stream, distinct from the old `startCamera()`
+  (deprecated — it only opened a photo intent).
+- **Local network**: LAN transport, enabled only after the manual pairing procedure — never
+  automatic at startup.
+- **Notifications/foreground service**: keeps Telegram polling and the local transport alive in
+  the background.
 
-## Transports et ordre de priorité
+No Google/account permission is ever used as a Mina authorization — the Google Home identity
+remains a feature signal, never an agent authentication channel.
 
-USB → LAN → Firebase (`src/devices/android-transport-client.mjs`). Chaque transport est essayé dans cet ordre pour chaque envoi ; un échec marque l'endpoint indisponible et bascule immédiatement sur le suivant. Les envois dupliqués (accusé de réception perdu) sont dédupliqués par identifiant d'enveloppe — jamais livrés deux fois.
+## Transports and priority order
 
-## Telegram : ce que le bot ne peut pas garantir
+USB → LAN → Firebase (`src/devices/android-transport-client.mjs`). Each transport is tried in
+that order for every send; a failure marks the endpoint unavailable and falls through to the
+next immediately. Duplicate sends (lost acknowledgment) are deduplicated by envelope id — never
+delivered twice.
 
-- **Les bots Telegram ne sont pas E2EE.** Le contenu transite par l'infrastructure Telegram avant d'atteindre le téléphone puis Mina PC.
-- **Livré ≠ lu.** L'API Bot ne fournit aucun accusé de lecture fiable ; Mina ne prétend jamais qu'un message a été lu, seulement qu'il a été transmis à l'API.
-- Le token BotFather et les identifiants numériques des deux téléphones (Samsung propriétaire, Huawei passerelle) sont stockés uniquement dans Android Keystore côté téléphone — jamais dans Gradle, jamais dans un fichier de ce dépôt.
-- Par défaut, Telegram n'a accès qu'à la conversation et à la mémoire. Les capacités `mail.*`, `home.read`, `home.low_risk` ne sont accordées qu'après activation locale explicite depuis l'écran Mina PC.
+## Telegram: what the bot cannot guarantee
 
-## Dépannage courant
+- **Telegram bots are not E2EE.** Content transits Telegram's infrastructure before reaching
+  the phone and then the Mina PC.
+- **Delivered ≠ read.** The Bot API provides no reliable read receipt; Mina never claims a
+  message was read, only that it was handed to the API.
+- The BotFather token and the numeric identifiers of the two phones are stored only in the
+  phone's Android Keystore — never in Gradle, never in any file of this repository.
+- By default, Telegram has access only to conversation and memory. The `mail.*`, `home.read`,
+  `home.low_risk` capabilities are granted only after an explicit local activation from the
+  Mina PC screen.
 
-| Symptôme | Cause probable | Action |
+## Common troubleshooting
+
+| Symptom | Likely cause | Action |
 |---|---|---|
-| `windows_sandbox_feature_disabled` sans rapport avec Android | Sans rapport — voir RECOVERY.md | — |
-| `.\gradlew.bat` échoue avec un binding introuvable | JVM ≠ 17 | Vérifier `JAVA_HOME` pointe vers JDK 17 |
-| `verify-huawei.ps1` rapporte deux identités physiques | Second téléphone branché ou LAN mal filtré | Débrancher le second appareil, approuver localement si intentionnel |
-| Transport LAN indisponible après redémarrage du PC | Débogage TCP/IP Android désactivé au redémarrage du téléphone | Refaire l'étape 2 du runbook d'appairage (jamais automatique) |
-| Envoi Telegram jamais livré | Token révoqué ou bot bloqué par l'utilisateur | Vérifier le token dans BotFather, revérifier le chat_id |
+| `windows_sandbox_feature_disabled` unrelated to Android | Unrelated — see RECOVERY.md | — |
+| `.\gradlew.bat` fails with a missing binding | JVM ≠ 17 | Check `JAVA_HOME` points to JDK 17 |
+| Two physical identities reported | Second phone plugged in, or badly filtered LAN | Unplug the second device; approve locally if intentional |
+| LAN transport unavailable after a PC restart | Android TCP/IP debugging disabled by the phone reboot | Redo step 2 of the pairing procedure (never automatic) |
+| Telegram send never delivered | Token revoked or bot blocked by the user | Check the token in BotFather, re-check the chat_id |
 
-## Désinstallation
+## Uninstall
 
-Désinstaller l'APK depuis le téléphone (Paramètres Android → Applications → `fr.mina.gateway` → Désinstaller) retire immédiatement le token Telegram et les identifiants Android Keystore associés. Le PC ne conserve que l'identité `deviceId` signée dans `physical-device-registry.mjs` (en mémoire, jamais persistée entre redémarrages du processus) ; aucune action côté PC n'est nécessaire après une désinstallation côté téléphone.
+Uninstalling the APK from the phone (Android Settings → Apps → `fr.mina.gateway` → Uninstall)
+immediately removes the Telegram token and the associated Android Keystore credentials. The PC
+only keeps the signed `deviceId` identity in `physical-device-registry.mjs` (in memory, never
+persisted across process restarts); no PC-side action is needed after a phone-side uninstall.

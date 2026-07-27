@@ -1,49 +1,51 @@
-# Sécurité opérationnelle — Mina Vision
+> 🇬🇧 **English** · [🇫🇷 Français](SECURITY.fr.md)
 
-## Rotation des clés
+# Operational security — Mina Vision
 
-- **Coffre unique** : `src/crypto/keyring.mjs`. `ProviderSecretStore` (`src/security/provider-secret-store.mjs`) et les autres façades utilisent des domaines de clés séparés dans le même coffre — jamais un second fichier de clés.
-- La rotation est atomique (`src/crypto/keyring.mjs`) : nouvelle clé générée, re-chiffrement par lots des enregistrements existants, journal de progression, bascule finale, ancienne clé supprimée seulement après vérification complète. Une interruption en cours de rotation reprend au dernier lot confirmé — jamais de perte silencieuse.
-- Les clés API fournisseurs (`provider/<id>/api-key`) sont tournées indépendamment via l'écran Paramètres (`mina:settings:set-secret` / `mina:settings:revoke-secret`) — jamais en modifiant `.env` directement pour une valeur sensible.
+## Key rotation
 
-## Phrase de récupération
+- **Single vault**: `src/crypto/keyring.mjs`. `ProviderSecretStore` (`src/security/provider-secret-store.mjs`) and the other facades use separate key domains within the same vault — never a second key file.
+- Rotation is atomic (`src/crypto/keyring.mjs`): new key generated, existing records re-encrypted in batches, progress journal, final switch, old key deleted only after full verification. An interrupted rotation resumes at the last confirmed batch — never a silent loss.
+- Provider API keys (`provider/<id>/api-key`) are rotated independently through the Settings screen (`mina:settings:set-secret` / `mina:settings:revoke-secret`) — never by editing `.env` directly for a sensitive value.
 
-- Générée une seule fois à l'initialisation de la mémoire (BIP-39, 12 mots, liste anglaise officielle 2048 mots, normalisation NFKD).
-- Affichée **une seule fois** à l'écran (`elements.recoveryOutput`, `src/ui/renderer.js`) — vérifié structurellement par `tests/ui-security-contract.test.mjs` (`recoveryOutput.textContent` n'est assigné qu'à un seul endroit dans le fichier).
-- Jamais journalisée, jamais renvoyée par IPC après l'écran initial. Après cet écran, l'état exposé est seulement `recovery configured` / `not configured`.
-- Si perdue : aucune récupération possible côté Mina — la mémoire locale reste verrouillée définitivement pour ce coffre. Seule une restauration Firebase antérieure (si configurée) avec une **autre** phrase reste possible.
+## Recovery phrase
 
-## Oubli vérifiable
+- Generated exactly once at memory initialization (BIP-39, 12 words, official English 2048-word list, NFKD normalization).
+- Displayed **exactly once** on screen (`elements.recoveryOutput`, `src/ui/renderer.js`) — structurally verified by `tests/ui-security-contract.test.mjs` (`recoveryOutput.textContent` is assigned in a single place in the file).
+- Never journaled, never returned over IPC after the initial screen. Afterwards the exposed state is only `recovery configured` / `not configured`.
+- If lost: no recovery is possible on Mina's side — the local memory stays locked forever for that vault. Only an earlier Firebase restore (if configured) with a **different** phrase remains possible.
 
-- `src/memory/forget-service.mjs` : toute demande distante (Telegram `/forget`) ne produit qu'une **proposition** (`proposeForget`) — jamais une suppression directe.
-- La suppression réelle exige `confirmForget({ proposalId, confirmedLocally: true })` — le flag `confirmedLocally` doit être explicitement `true`, posé uniquement depuis l'écran local.
-- Un tombstone chiffré est créé pour chaque événement oublié ; une restauration ultérieure depuis une sauvegarde plus ancienne respecte le tombstone et ne fait jamais réapparaître l'élément (`src/backup/restore-service.mjs`, prouvé par `tests/integration/memory-backup-restore.test.mjs`).
+## Verifiable forgetting
 
-## Export diagnostic
+- `src/memory/forget-service.mjs`: any remote request (Telegram `/forget`) only ever produces a **proposal** (`proposeForget`) — never a direct deletion.
+- The actual deletion requires `confirmForget({ proposalId, confirmedLocally: true })` — the `confirmedLocally` flag must be explicitly `true`, set only from the local screen.
+- An encrypted tombstone is created for every forgotten event; a later restore from an older backup honors the tombstone and never resurrects the item (`src/backup/restore-service.mjs`, proven by `tests/integration/memory-backup-restore.test.mjs`).
 
-- `src/audit/export.mjs` : uniquement sur demande explicite (jamais automatique), archive zip bornée en taille (`audit_export_too_large` si dépassement), contenu strictement le rapport redacté de `src/audit/diagnostics.mjs` (types d'événements, compteurs, horodatages) — jamais le contenu (`payload`) des événements, jamais de mémoire ni de secret.
-- Le journal d'audit lui-même (`src/audit/audit-log.mjs`) est chiffré, chaîné par hash (séquence + hash de l'entrée précédente) et append-only. `verifyChain()` détecte une entrée manquante, une entrée altérée ou une rupture de chaîne. Limite connue et assumée : la seule chaîne de hash ne peut pas prouver l'absence de troncature en toute fin de journal sans un point d'ancrage externe — non implémenté dans ce plan.
+## Diagnostic export
 
-## Perte du téléphone
+- `src/audit/export.mjs`: only on explicit request (never automatic), a size-bounded zip archive (`audit_export_too_large` beyond the limit), whose content is strictly the redacted report from `src/audit/diagnostics.mjs` (event types, counters, timestamps) — never event contents (`payload`), never memory nor secrets.
+- The audit journal itself (`src/audit/audit-log.mjs`) is encrypted, hash-chained (sequence + previous entry hash) and append-only. `verifyChain()` detects a missing entry, a tampered entry or a chain break. Known and accepted limit: the hash chain alone cannot prove the absence of truncation at the very end of the journal without an external anchor — not implemented in this plan.
 
-1. Depuis l'écran local Mina Vision (jamais depuis le téléphone perdu), révoquer le token Telegram associé via BotFather (`/revoke` ou régénération du token) puis reposer le nouveau token dans Android Keystore du téléphone de remplacement.
-2. `src/devices/physical-device-registry.mjs` : le téléphone perdu reste dans le registre jusqu'à `markUnhealthy` explicite ou nouvel appairage — aucune capacité PC/domotique n'est accordée par la seule possession physique du téléphone (l'identité Telegram/SMS n'accorde jamais directement de capacité PC).
-3. Les secrets stockés dans Android Keystore du téléphone perdu (token Telegram, identifiants d'appairage) ne sont jamais synchronisés en clair vers Firebase ou le PC — leur exposition reste limitée au téléphone physique lui-même.
+## Lost phone
 
-## Compromission d'un token (Telegram, provider)
+1. From the local Mina Vision screen (never from the lost phone), revoke the associated Telegram token via BotFather (`/revoke` or token regeneration), then set the new token into the replacement phone's Android Keystore.
+2. `src/devices/physical-device-registry.mjs`: the lost phone stays in the registry until an explicit `markUnhealthy` or a new pairing — physical possession of the phone grants no PC/smart-home capability by itself (the Telegram/SMS identity never grants a PC capability directly).
+3. Secrets stored in the lost phone's Android Keystore (Telegram token, pairing credentials) are never synced in the clear to Firebase or the PC — their exposure stays limited to the physical phone itself.
 
-1. Révoquer immédiatement côté source (BotFather pour Telegram, dashboard du fournisseur pour une clé API).
-2. Reposer la nouvelle valeur via l'écran Paramètres (jamais copier-coller dans `.env`, jamais commit).
-3. Vérifier l'audit (`src/audit/diagnostics.mjs`) pour tout événement `send_accepted`/`capability_deny` suspect dans la fenêtre de compromission présumée.
-4. Une fuite de clé keyring elle-même (scénario le pire) invalide la garantie d'intégrité du journal d'audit (l'attaquant pourrait re-sceller des entrées) — `verifyChain()` détecterait toujours une rupture de séquence ou de hash sauf falsification totale et cohérente de la chaîne, hors périmètre de protection d'un système d'audit local seul.
+## Compromised token (Telegram, provider)
 
-## Panne Firebase
+1. Revoke immediately at the source (BotFather for Telegram, the provider dashboard for an API key).
+2. Set the new value through the Settings screen (never paste into `.env`, never commit).
+3. Check the audit (`src/audit/diagnostics.mjs`) for any suspicious `send_accepted`/`capability_deny` event within the presumed compromise window.
+4. A leak of the keyring key itself (worst case) voids the audit journal's integrity guarantee (the attacker could re-seal entries) — `verifyChain()` would still detect a sequence or hash break except under a total, consistent forgery of the chain, which is beyond what a purely local audit system can protect against.
 
-- Firebase est un **transport de secours chiffré uniquement** (`src/devices/firebase-transport.mjs`) — jamais un chemin obligatoire. `directAvailable()` doit retourner `false` avant tout `enqueue()` : si USB ou LAN fonctionne, Firebase est refusé (`firebase_direct_transport_available`), jamais utilisé comme raccourci.
-- Aucune capacité n'est accordée via Firebase — il stocke des enveloppes chiffrées, jamais de contenu utilisable directement (`FORBIDDEN_KIND` rejette explicitement `camera.*`, `face.*`, `email.body`, `secret.*`).
-- Panne totale de Firebase (indisponible, quota dépassé, projet supprimé) : USB et LAN continuent de fonctionner normalement, aucune dégradation de la fonction principale. Seul le mode de secours en cas de coupure simultanée USB+LAN devient indisponible.
+## Firebase outage
 
-## Restauration
+- Firebase is an **encrypted fallback transport only** (`src/devices/firebase-transport.mjs`) — never a mandatory path. `directAvailable()` must return `false` before any `enqueue()`: if USB or LAN works, Firebase is refused (`firebase_direct_transport_available`), never used as a shortcut.
+- No capability is ever granted via Firebase — it stores encrypted envelopes, never directly usable content (`FORBIDDEN_KIND` explicitly rejects `camera.*`, `face.*`, `email.body`, `secret.*`).
+- Total Firebase outage (unavailable, quota exceeded, project deleted): USB and LAN keep working normally, no degradation of the main function. Only the fallback for a simultaneous USB+LAN loss becomes unavailable.
 
-- `src/backup/restore-service.mjs` : restauration atomique dans une cible temporaire, jamais directement dans la base active. Une signature de manifeste invalide (mauvaise phrase de récupération) laisse la cible totalement inchangée.
-- Les tombstones plus récents que la sauvegarde restaurée sont appliqués **avant** la restauration effective — un élément oublié après la date de la sauvegarde ne réapparaît jamais.
+## Restore
+
+- `src/backup/restore-service.mjs`: atomic restore into a temporary target, never directly into the active database. An invalid manifest signature (wrong recovery phrase) leaves the target completely untouched.
+- Tombstones newer than the restored backup are applied **before** the effective restore — an item forgotten after the backup date never reappears.

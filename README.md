@@ -1,55 +1,58 @@
+> 🇬🇧 **English** · [🇫🇷 Français](README.fr.md)
+
 # Mina Vision
 
-**Agent vocal local qui pilote votre ordinateur.** Mina écoute, regarde l'écran, et agit : elle
-contrôle le navigateur, n'importe quelle application Windows, et un téléphone Android connecté
-en ADB. Tout tourne sur votre machine — mémoire chiffrée locale, modèles au choix, aucune
-dépendance à un service central.
+**A local voice agent that drives your computer.** Mina listens, watches the screen, and acts:
+she controls the browser, any Windows application, and an Android phone connected over ADB.
+Everything runs on your machine — locally encrypted memory, your choice of models, no dependency
+on any central service.
 
-> Créé par **Nasro Berkoun**, en collaboration avec **Sol** et **Fable**. Voir [LICENSE](LICENSE) : usage, étude et modification
-> libres ; le nom du produit et celui de son créateur sont protégés.
+> Created by **Nasro Berkoun**, in collaboration with **Sol** and **Fable**. See [LICENSE](LICENSE): free to use, study and modify;
+> the product name and its creator's name are protected.
 
 ---
 
-## Ce que Mina fait réellement
+## What Mina actually does
 
-| Domaine | Capacité |
+| Domain | Capability |
 |---|---|
-| **Voix** | Conversation temps réel, interruption immédiate (« stop »), mode pause, repli vocal local |
-| **Navigateur** | Missions pilotées à la voix : naviguer, chercher, cliquer, saisir, extraire |
-| **Bureau Windows** | Ouvre et pilote n'importe quelle application (souris, clavier, raccourcis) |
-| **Téléphone Android** | Caméra, SMS, commandes via ADB (USB ou Wi-Fi) |
-| **SMS sans internet** | Joindre Mina et recevoir ses réponses par SMS, sans aucune connexion internet : réseau cellulaire → passerelle (SIM) → PC en réseau local. Chaque réponse est confirmée sur le PC par défaut, une réponse par SMS, jamais d'actions sur le PC depuis un SMS |
-| **Mémoire** | Coffre chiffré local (argon2 + AEAD), recherche sémantique, phrase de récupération |
-| **Code** | Indexe et analyse son propre code : recherche, graphe d'appels, tests, revue de sécurité |
-| **Documents** | Génère de vrais PDF et Word ; met en quarantaine les documents reçus |
-| **Diagnostic** | Journal d'activité, erreurs techniques expliquées avec un remède concret |
+| **Voice** | Real-time conversation, instant interruption ("stop"), pause mode, local voice fallback |
+| **Browser** | Voice-driven missions: navigate, search, click, type, extract |
+| **Windows desktop** | Opens and drives any application (mouse, keyboard, shortcuts) |
+| **Android phone** | Camera, SMS, commands over ADB (USB or Wi-Fi) |
+| **SMS without internet** | Reach Mina and get her replies by SMS, with no internet connection at all: cellular network → gateway (SIM) → PC on the local network. Every reply is confirmed on the PC by default, one reply per SMS, and no PC actions can ever be triggered from an SMS |
+| **Memory** | Local encrypted vault (argon2 + AEAD), semantic search, recovery phrase |
+| **Code** | Indexes and analyzes its own code: search, call graph, tests, security review |
+| **Documents** | Generates real PDF and Word files; quarantines received documents |
+| **Diagnostics** | Activity journal, technical errors explained with a concrete remedy |
 
-Un principe traverse tout le projet : **l'affichage dit la vérité**. Un domaine qui ne marche
-pas s'affiche « indisponible » avec la dépendance exacte qui manque — jamais un état optimiste,
-jamais une réponse inventée.
+One principle runs through the whole project: **the display tells the truth**. A domain that
+does not work shows as "unavailable" with the exact missing dependency — never an optimistic
+state, never an invented answer.
 
-## Sécurité par construction
+## Security by construction
 
-- **Autorité unique des actions** : aucune action sur la machine n'est exécutée sans une
-  autorisation de session bornée dans le temps. Une action sensible exige une confirmation liée
-  cryptographiquement à l'action exacte, consommable une seule fois.
-- **Interdits durs** : gestionnaires de mots de passe, terminaux et outils de sécurité sont
-  refusés au niveau du code, quelle que soit la demande.
-- **Contenus externes non fiables** : un e-mail, une page web ou un message ne peut jamais
-  accorder une permission ni déclencher un outil.
-- **Journal confidentiel** : aucun texte de conversation n'est écrit en clair sur le disque ;
-  le contenu intégral est chiffré avec une clé dérivée du coffre.
-- **Anti-SSRF** : adresses privées, loopback et métadonnées cloud refusées en recherche web.
-- **Arrêt d'urgence** transversal : `Ctrl + Alt + Échap` coupe voix, missions et actions.
+- **Single authority over actions**: no action reaches the machine without a time-bounded
+  session grant. A sensitive action requires a confirmation cryptographically bound to that
+  exact action, consumable exactly once.
+- **Hard denials**: password managers, terminals and security tools are refused at the code
+  level, whatever the request.
+- **Untrusted external content**: an e-mail, a web page or a message can never grant a
+  permission nor trigger a tool.
+- **Confidential journal**: no conversation text is ever written to disk in the clear; the
+  full content is encrypted with a key derived from the vault.
+- **Anti-SSRF**: private addresses, loopback and cloud metadata endpoints are refused in web
+  research.
+- **Cross-cutting emergency stop**: `Ctrl + Alt + Esc` kills voice, missions and actions.
 
-## Prérequis
+## Requirements
 
 - **Windows 10/11**
 - **Node.js 22**
-- Facultatif : **ADB** pour le téléphone, **Windows Sandbox** pour l'exécution isolée,
-  **LM Studio** pour des modèles 100 % locaux
+- Optional: **ADB** for the phone, **Windows Sandbox** for isolated execution,
+  **LM Studio** for 100% local models
 
-## Installation
+## Install
 
 ```bash
 npm install
@@ -59,117 +62,118 @@ npm install
 cp .env.example .env
 ```
 
-Renseignez dans `.env` au moins une clé de fournisseur IA (Gemini, OpenRouter, DeepSeek…), puis
-confirmez que ces clés sont bien les vôtres et n'ont jamais été partagées :
+Set at least one AI provider key in `.env` (Gemini, OpenRouter, DeepSeek…), then confirm that
+these keys are truly yours and have never been shared:
 
 ```env
 MINA_KEYS_ROTATED=true
 ```
 
-Sans ce marqueur, l'interface démarre mais les fournisseurs IA restent volontairement bloqués.
+Without this marker the interface starts, but the AI providers stay deliberately blocked.
 
-## Lancer
+## Run
 
 ```bash
 npm start
 ```
 
-Au premier démarrage : **Config → Mémoire → Initialiser**, et **notez la phrase de récupération
-affichée une seule fois** — c'est le seul moyen de rouvrir le coffre si le chiffrement Windows
-change (migration de profil, réinstallation).
+On first start: **Config → Memory → Initialize**, and **write down the recovery phrase shown
+exactly once** — it is the only way to reopen the vault if Windows encryption changes (profile
+migration, reinstall).
 
-Pour démarrer Mina automatiquement avec Windows : **Config → Système Windows**.
+To start Mina automatically with Windows: **Config → Windows System**.
 
-Arrêt global : `Ctrl + Alt + Échap` ou le bouton **Arrêt d'urgence**.
+Global stop: `Ctrl + Alt + Esc` or the **Emergency stop** button.
 
-## Configuration avancée
+## Advanced configuration
 
-Toutes les données vivent par défaut sous le dossier utilisateur de l'application. Pour déporter
-les caches lourds sur un autre disque :
+By default all data lives under the application's user folder. To move heavy caches to another
+drive:
 
-| Variable | Effet |
+| Variable | Effect |
 |---|---|
-| `MINA_CACHE_ROOT` | Racine commune de tous les caches |
-| `MINA_MODELS_ROOT` | Modèles locaux (voix, embeddings) |
-| `MINA_SANDBOX_ROOT` | Espace de travail du bac à sable |
-| `MINA_TRUSTED_WRITE_ROOTS` | Dossiers supplémentaires où écrire sans confirmation (séparés par `;`) |
-| `MINA_APPROVED_READ_ROOTS` | Dossiers supplémentaires lisibles sans confirmation |
-| `MINA_SAMSUNG_ADB_SERIAL` | Second téléphone connecté en Wi-Fi |
+| `MINA_CACHE_ROOT` | Common root for all caches |
+| `MINA_MODELS_ROOT` | Local models (voice, embeddings) |
+| `MINA_SANDBOX_ROOT` | Sandbox workspace |
+| `MINA_TRUSTED_WRITE_ROOTS` | Extra folders writable without confirmation (separated by `;`) |
+| `MINA_APPROVED_READ_ROOTS` | Extra folders readable without confirmation |
+| `MINA_SAMSUNG_ADB_SERIAL` | Second phone kept connected over Wi-Fi |
 
-## Voix — l'essentiel
+## Voice — the essentials
 
-Activez **Live Stream**, puis parlez :
+Enable **Live Stream**, then talk:
 
-- « Mina, ouvre YouTube et cherche une recette »
-- **Couper sa parole** : « stop », « chut », « tais-toi », « silence »
-- **Silence total** : « mets-toi en pause » → elle ignore tout jusqu'à ce que vous disiez « Mina »
-- **Tout arrêter** : « Mina, arrête »
+- "Mina, open YouTube and search for a recipe"
+- **Cut her off**: "stop", "hush", "quiet", "silence"
+- **Total silence**: "put yourself on pause" → she ignores everything until you say "Mina"
+- **Stop everything**: "Mina, stop"
 
-Mina comprend des formulations qui ne figurent nulle part dans cette liste : la compréhension
-est dynamique, pas un lexique figé. Pendant qu'une mission tourne, une nouvelle instruction ne
-lance jamais une seconde mission concurrente — elle est transmise à la mission en cours.
+Mina understands phrasings that appear nowhere in this list: understanding is dynamic, not a
+fixed lexicon. While a mission is running, a new instruction never launches a second concurrent
+mission — it is handed to the mission already in progress.
 
-## Téléphone Android
+## Android phone
 
-1. Activez les options développeur sur le téléphone.
-2. **Wi-Fi (Android 11+)** : activez le *débogage sans fil* — Mina le détecte alors sans câble
-   via mDNS et s'y connecte. **USB** : branchez, déverrouillez et acceptez l'empreinte RSA ADB.
-   *(Android 10 comme le Huawei : une première activation du débogage Wi-Fi via USB reste
-   nécessaire — la plateforme ne l'expose pas autrement.)*
-3. Dans Mina : **Détecter le téléphone** (cherche USB **et** Wi-Fi), puis **Ouvrir la caméra**.
+1. Enable developer options on the phone.
+2. **Wi-Fi (Android 11+)**: enable *wireless debugging* — Mina then detects it without a cable
+   via mDNS and connects to it. **USB**: plug in, unlock, and accept the ADB RSA fingerprint.
+   *(Android 10, like the Huawei: a first activation of Wi-Fi debugging over USB is still
+   required — the platform does not expose it any other way.)*
+3. In Mina: **Detect phone** (searches USB **and** Wi-Fi), then **Open camera**.
 
-Un second appareil peut rester connecté en Wi-Fi (`MINA_SAMSUNG_ADB_SERIAL`). Mina retrouve sa
-dernière adresse connue si l'annonce réseau reste muette, toujours avec vérification d'identité
-avant reconnexion.
+A second device can stay connected over Wi-Fi (`MINA_SAMSUNG_ADB_SERIAL`). Mina falls back to
+its last known address if the network announcement stays silent, always with identity
+verification before reconnecting.
 
-## Application Mina sur téléphone
+## Mina app on your phone
 
-Une application Android (`android/`) permet de converser avec Mina depuis un téléphone appairé,
-en chiffrement de bout en bout.
+An Android application (`android/`) lets you talk with Mina from a paired phone, end-to-end
+encrypted.
 
-**📥 Télécharger l'application** : [**Mina Vision.apk** (dernière version)](https://github.com/Nassreallah-B/Mina-Vision/releases/latest) — ou directement [`Mina.Vision.apk` v0.1.0](https://github.com/Nassreallah-B/Mina-Vision/releases/download/v0.1.0/Mina.Vision.apk). Android 10+, signé clé debug (sideload : autoriser les sources inconnues). Guide pas à pas : [docs/operations/INSTALLER-MINA-TELEPHONE.md](docs/operations/INSTALLER-MINA-TELEPHONE.md).
+**📥 Download the app**: [**Mina Vision.apk** (latest release)](https://github.com/Nassreallah-B/Mina-Vision/releases/latest) — or directly [`Mina.Vision.apk` v0.1.0](https://github.com/Nassreallah-B/Mina-Vision/releases/download/v0.1.0/Mina.Vision.apk). Android 10+, debug-key signed (sideload: allow unknown sources). Step-by-step guide: [docs/operations/INSTALLER-MINA-TELEPHONE.md](docs/operations/INSTALLER-MINA-TELEPHONE.md).
 
-Reconstruire depuis les sources :
+Rebuild from source:
 
 ```bash
-cd android && ./gradlew assembleDebug        # ou ./gradlew packageMinaApk → build/dist/Mina Vision.apk
+cd android && ./gradlew assembleDebug        # or ./gradlew packageMinaApk → build/dist/Mina Vision.apk
 ```
 
-Le binaire reste hors dépôt (`*.apk` gitignoré) ; il est distribué via les [releases GitHub](https://github.com/Nassreallah-B/Mina-Vision/releases).
+The binary stays out of the repository (`*.apk` is gitignored); it is distributed through
+[GitHub releases](https://github.com/Nassreallah-B/Mina-Vision/releases).
 
-**Appairage.** Sur le PC : onglet *Configuration & mémoire* › *Système Windows* › **Ouvrir
-l'appairage** — un code à 6 chiffres s'affiche, valable 5 minutes et une seule fois. Sur le
-téléphone : saisir l'adresse du PC et ce code.
+**Pairing.** On the PC: *Configuration & memory* tab › *Windows System* › **Open pairing** — a
+6-digit code appears, valid for 5 minutes and single-use. On the phone: enter the PC address and
+that code.
 
-**Ce que le protocole garantit.**
+**What the protocol guarantees.**
 
-- Le téléphone ne stocke que du **texte chiffré** ; le clair n'existe qu'en mémoire vive.
-- La clé de conversation est livrée enveloppée par une clé dérivée en **ECDH P-256** : aucun
-  secret ne transite à l'appairage, et un observateur du réseau ne peut pas la reconstituer.
-- Chaque message est **signé** ; la signature est vérifiée **avant** tout déchiffrement.
-- Les clés de conversation dérivent du coffre de la mémoire : **mémoire verrouillée, canal
-  fermé**, annoncé comme tel plutôt que silencieusement inerte.
-- **PC éteint** : le message reste dans une file durable sur le téléphone et part au retour du
-  PC. Rien n'est perdu, et aucun substitut ne répond à la place de Mina.
-- Un message livré deux fois (retransmission) ne produit qu'**une seule** réponse.
-- **Révoquer** un appareil ouvre une nouvelle époque de clé : il ne lit plus les messages
-  suivants (on ne prétend pas effacer ce qu'il a déjà lu).
+- The phone stores **ciphertext only**; plaintext exists only in RAM.
+- The conversation key is delivered wrapped with a key derived via **ECDH P-256**: no secret
+  travels during pairing, and a network observer cannot reconstruct it.
+- Every message is **signed**; the signature is verified **before** any decryption.
+- Conversation keys derive from the memory vault: **vault locked, channel closed** — announced
+  as such rather than silently inert.
+- **PC off**: the message stays in a durable queue on the phone and is sent when the PC comes
+  back. Nothing is lost, and no stand-in ever answers in Mina's place.
+- A message delivered twice (retransmission) produces exactly **one** reply.
+- **Revoking** a device opens a new key epoch: it can no longer read subsequent messages (no
+  pretense of erasing what it already read).
 
-**Deux chemins, une seule réponse.** Le chemin normal est le lien direct sur le réseau local.
-Quand le téléphone n'est pas sur ce réseau (4G, Wi-Fi étranger), le message passe par un relais
-Firestore. Le relais transporte **exactement la même enveloppe chiffrée et signée** : Firebase ne
-voit jamais de clair et ne peut rien injecter, puisque la signature est vérifiée avant tout
-déchiffrement. Un message arrivé par les deux chemins ne reçoit qu'**une** réponse — les deux
-partagent le même registre d'événements traités.
+**Two paths, one reply.** The normal path is the direct link on the local network. When the
+phone is not on that network (4G, foreign Wi-Fi), the message goes through a Firestore relay.
+The relay carries **exactly the same encrypted and signed envelope**: Firebase never sees
+plaintext and cannot inject anything, since the signature is verified before any decryption. A
+message that arrives via both paths gets only **one** reply — both share the same ledger of
+processed events.
 
-Le relais est optionnel : sans `google-services.json`, le canal reste strictement local et
-l'onglet Système l'annonce, au lieu de laisser croire à un secours inexistant. Les règles
-Firestore publiées sont dans [`firebase/firestore.rules`](firebase/firestore.rules) — elles
-limitent l'abus (forme, taille, append-only) mais ne **sont pas** la sécurité du canal, qui tient
-au chiffrement et à la signature.
+The relay is optional: without `google-services.json`, the channel stays strictly local and the
+System tab says so, instead of implying a fallback that does not exist. The published Firestore
+rules live in [`firebase/firestore.rules`](firebase/firestore.rules) — they limit abuse (shape,
+size, append-only) but are **not** the channel's security, which rests on encryption and
+signatures.
 
-Réglages : `MINA_CHAT_PORT` (8771 par défaut), `MINA_CHAT_HOST` (`0.0.0.0`),
-`MINA_GOOGLE_SERVICES` (chemin du `google-services.json`, sinon `env/google-services.json`).
+Settings: `MINA_CHAT_PORT` (8771 by default), `MINA_CHAT_HOST` (`0.0.0.0`),
+`MINA_GOOGLE_SERVICES` (path to `google-services.json`, else `env/google-services.json`).
 
 ## Tests
 
@@ -177,8 +181,8 @@ Réglages : `MINA_CHAT_PORT` (8771 par défaut), `MINA_CHAT_HOST` (`0.0.0.0`),
 npm test
 ```
 
-Exécute la suite unitaire **puis** les tests d'intégration — « vert » ne peut pas mentir par
-omission. Boucle rapide pendant le développement :
+Runs the unit suite **then** the integration tests — "green" cannot lie by omission. Fast loop
+during development:
 
 ```bash
 npm run test:unit
@@ -186,47 +190,47 @@ npm run test:unit
 
 ## Documentation
 
-| Ressource | Contenu |
+| Resource | Contents |
 |---|---|
-| Guide intégré (bouton ⚙️ dans l'app) | Capacités, commandes vocales, limites |
-| [Releases GitHub](https://github.com/Nassreallah-B/Mina-Vision/releases) | Versions publiées et téléchargement de l'APK |
-| [MINA.md](MINA.md) | Constitution : règles de sécurité et canaux autorisés |
-| [docs/operations/INSTALLATION.md](docs/operations/INSTALLATION.md) | Installation pas à pas |
-| [docs/guides/httpsms.md](docs/guides/httpsms.md) | Passerelle SMS httpSMS (cloud ou auto-hébergé) |
-| [docs/guides/lm-studio.md](docs/guides/lm-studio.md) | Modèles locaux (texte, vision, embeddings) via LM Studio |
-| [docs/guides/sandbox-runtimes.md](docs/guides/sandbox-runtimes.md) | Débloquer le bac à sable Windows (runtimes Python/Node/PowerShell) |
-| [docs/guides/face-model.md](docs/guides/face-model.md) | Reconnaissance faciale locale : provisionner un modèle ONNX |
-| [docs/operations/TELEGRAM.md](docs/operations/TELEGRAM.md) | Canal Telegram (conversation et commandes) |
-| [docs/operations/FIREBASE.md](docs/operations/FIREBASE.md) | Sauvegarde chiffrée et relais Firebase |
-| [docs/operations/ANDROID-HUAWEI.md](docs/operations/ANDROID-HUAWEI.md) | Téléphone Android : appairage, caméra, SMS |
-| [docs/operations/INSTALLER-MINA-TELEPHONE.md](docs/operations/INSTALLER-MINA-TELEPHONE.md) | Installer l'APK sur un téléphone (utilisateur final, sideload) |
-| [docs/operations/RECOVERY.md](docs/operations/RECOVERY.md) | Récupération du coffre mémoire |
-| [docs/operations/SECURITY.md](docs/operations/SECURITY.md) | Modèle de sécurité et invariants |
-| [LICENCES.md](LICENCES.md) | Licences des dépendances et décisions |
-| [docs/operations/AUDIT-PRE-PUBLICATION.md](docs/operations/AUDIT-PRE-PUBLICATION.md) | Audit de confidentialité du dépôt |
-| [docs/operations/SECURITY-AUDIT.md](docs/operations/SECURITY-AUDIT.md) | Rapport d'audit de sécurité (menaces, crypto, sandbox, dépendances) |
+| Built-in guide (⚙️ button in the app) | Capabilities, voice commands, limits |
+| [GitHub releases](https://github.com/Nassreallah-B/Mina-Vision/releases) | Published versions and APK download |
+| [MINA.md](MINA.md) | Constitution: security rules and authorized channels |
+| [docs/operations/INSTALLATION.md](docs/operations/INSTALLATION.md) | Step-by-step installation |
+| [docs/guides/httpsms.md](docs/guides/httpsms.md) | httpSMS gateway (cloud or self-hosted) |
+| [docs/guides/lm-studio.md](docs/guides/lm-studio.md) | Local models (text, vision, embeddings) via LM Studio |
+| [docs/guides/sandbox-runtimes.md](docs/guides/sandbox-runtimes.md) | Unlock the Windows Sandbox (Python/Node/PowerShell runtimes) |
+| [docs/guides/face-model.md](docs/guides/face-model.md) | Local face recognition: provisioning an ONNX model |
+| [docs/operations/TELEGRAM.md](docs/operations/TELEGRAM.md) | Telegram channel (conversation and commands) |
+| [docs/operations/FIREBASE.md](docs/operations/FIREBASE.md) | Encrypted backup and Firebase relay |
+| [docs/operations/ANDROID-HUAWEI.md](docs/operations/ANDROID-HUAWEI.md) | Android phone: pairing, camera, SMS |
+| [docs/operations/INSTALLER-MINA-TELEPHONE.md](docs/operations/INSTALLER-MINA-TELEPHONE.md) | Install the APK on a phone (end user, sideload) |
+| [docs/operations/RECOVERY.md](docs/operations/RECOVERY.md) | Memory vault recovery |
+| [docs/operations/SECURITY.md](docs/operations/SECURITY.md) | Security model and invariants |
+| [LICENCES.md](LICENCES.md) | Dependency licenses and decisions |
+| [docs/operations/AUDIT-PRE-PUBLICATION.md](docs/operations/AUDIT-PRE-PUBLICATION.md) | Repository privacy audit |
+| [docs/operations/SECURITY-AUDIT.md](docs/operations/SECURITY-AUDIT.md) | Security audit report (threats, crypto, sandbox, dependencies) |
 
-## État du projet
+## Project status
 
-Mina Vision est un projet réel, utilisé quotidiennement par son auteur, avec une suite de tests
-étendue et un principe de vérification systématique contre la réalité. Certains domaines sont
-livrés et prouvés, d'autres sont volontairement publiés comme « indisponibles » tant qu'une
-dépendance manque — **Config → Capacités** affiche l'état exact de chacun.
+Mina Vision is a real project, used daily by its author, with an extensive test suite and a
+principle of systematic verification against reality. Some domains are shipped and proven,
+others are deliberately published as "unavailable" while a dependency is missing —
+**Config → Capabilities** shows the exact state of each one.
 
-Le profil Chrome de Mina est séparé du profil personnel. Les captures d'écran restent en
-mémoire ; les applications sensibles sont bloquées, y compris au lancement.
+Mina's Chrome profile is separated from the personal profile. Screenshots stay in memory;
+sensitive applications are blocked, including at launch.
 
-## Contribuer
+## Contributing
 
-Les contributions sont bienvenues. Deux règles non négociables issues de la licence : le nom du
-projet et celui de son créateur restent intacts, et aucune contribution ne doit affaiblir les
-garde-fous de sécurité décrits plus haut.
+Contributions are welcome. Two non-negotiable rules from the license: the project name and its
+creator's name stay intact, and no contribution may weaken the security guardrails described
+above.
 
-## Licence
+## License
 
-Licence source disponible — voir [LICENSE](LICENSE). Usage, étude, modification et
-redistribution autorisés ; **les noms « Mina », « Mina Vision » et « Nasro Berkoun » sont
-protégés** et ne peuvent être retirés, remplacés ni détournés. Une œuvre dérivée publiée doit
-porter un nom distinct et créditer « Basé sur Mina Vision, créé par Nasro Berkoun, en collaboration avec Sol et Fable ».
+Source-available license — see [LICENSE](LICENSE). Use, study, modification and redistribution
+allowed; **the names "Mina", "Mina Vision" and "Nasro Berkoun" are protected** and may not be
+removed, replaced or misused. A published derivative work must carry a distinct name and credit
+"Based on Mina Vision, created by Nasro Berkoun, in collaboration with Sol and Fable".
 
-Réclamations et service client : mina.vision.ai@gmail.com
+Claims and customer service: mina.vision.ai@gmail.com
