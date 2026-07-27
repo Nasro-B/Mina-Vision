@@ -1712,6 +1712,17 @@ const startGeminiVoice = async () => {
         })).catch(() => {});
         return;
       }
+      // 2e chemin d'écho : le modèle entend l'AUDIO des haut-parleurs et peut décider seul un
+      // outil « mission » depuis la propre phrase de Mina — sans passer par la couche transcript
+      // (déjà gardée). Si l'argument recouvre sa parole récente, l'intent ouvre-navigateur est
+      // refusé au modèle au lieu d'être transmis au renderer.
+      const BROWSER_INTENTS = new Set(['lancer_mission', 'piloter_page', 'jouer_musique']);
+      const intentText = String(call.args?.objectif ?? call.args?.commande ?? call.args?.titre ?? '');
+      if (BROWSER_INTENTS.has(call.name) && voiceEchoGuard.isEcho(intentText)) {
+        void activityJournal?.append('voice_echo_dropped', { chars: intentText.length, engine: 'gemini_tool', intent: call.name });
+        voice?.sendToolResponse({ id: call.id, name: call.name, response: { result: 'echo_ignore' } }).catch(() => {});
+        return;
+      }
       send('mina:voice-intent', { name: call.name, args: call.args });
       voice?.sendToolResponse({ id: call.id, name: call.name, response: { result: 'transmis' } }).catch(() => {});
     },

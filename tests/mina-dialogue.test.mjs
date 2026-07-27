@@ -478,7 +478,9 @@ describe('createMinaDialogue: direct web answer — « trouve-moi un article » 
   ])('turns "%s" into a web_search intent with the extracted topic', (transcript, topic) => {
     const result = fresh().interpret(transcript, {});
     expect(result.action).toEqual({ type: 'web_search', query: topic });
-    expect(result.reply).toContain('web');
+    // Réplique écho-inerte (« en ligne », jamais « web/cherche ») : l'ancienne « Je cherche sur le
+    // web » revenait en écho micro et se re-routait en mission navigateur (cas réel 2026-07-25).
+    expect(result.reply).toContain('en ligne');
   });
 
   it('asks for the topic instead of firing an empty search', () => {

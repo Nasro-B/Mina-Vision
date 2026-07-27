@@ -218,8 +218,11 @@ export function createMinaDialogue({
         if (!webTopic) {
           return result(`Sur quel sujet, ${ownerLabel} ?`, null, { camera: wasAwaitingCamera, music: wasAwaitingMusic });
         }
+        // ⚠️ Réplique volontairement SANS verbe mission ni mot surface : « Je cherche sur le
+        // web » revenait en écho micro et se re-routait elle-même en mission navigateur
+        // (verbe « cherche » + surface « web »). Contrat : tests/spoken-lines-echo-safe.test.mjs.
         return result(
-          `Je cherche sur le web, ${ownerLabel}.`,
+          `Je regarde ça en ligne, ${ownerLabel}.`,
           { type: 'web_search', query: webTopic },
           { camera: wasAwaitingCamera, music: wasAwaitingMusic },
         );
@@ -258,8 +261,10 @@ export function createMinaDialogue({
         return result(`Je ferme le navigateur, ${ownerLabel}.`, { type: 'close_browser', reason: 'explicit' }, { camera: wasAwaitingCamera, music: false });
       }
       if (hasAny(normalized, CONNECT_GOOGLE_BROWSER_PATTERNS)) {
+        // ⚠️ Sans « ouvre/Chrome/Google » : l'ancienne réplique, revenue en écho, matchait
+        // elle-même une mission (verbe « ouvre » + surfaces « chrome/google »).
         return result(
-          'J’ouvre un Chrome normal pour la connexion Google. Connectez-vous puis fermez cette fenêtre : je réutiliserai la session.',
+          'Une fenêtre de connexion apparaît : identifiez-vous, puis fermez-la — je réutiliserai la session.',
           { type: 'connect_google_browser' },
           { camera: wasAwaitingCamera, music: false },
         );
