@@ -48,7 +48,12 @@ describe('code-verifier', () => {
   });
 
   it('secret INTRODUIT refusé, secret préexistant toléré (pas de faux positif de legacy)', async () => {
-    const secretLine = "const key = 'AIzaSyA1234567890abcdefghijklmnopqrstuv';";
+    // Fixture FAUSSE assemblée à l'exécution (finding F-12 de l'audit 2026-07-27) : écrite en un
+    // seul littéral, elle déclenchait une alerte GitHub Secret Scanning « Google API Key » sur du
+    // code de test. Le détecteur sous test voit exactement la même chaîne — la couverture est
+    // intacte — mais aucun littéral de forme secrète ne subsiste dans le source.
+    const fakeGoogleKey = ['AIza', 'SyA1234567890', 'abcdefghijklmnopqrstuv'].join('');
+    const secretLine = `const key = '${fakeGoogleKey}';`;
     const introduced = buildVerifier({ 'config.mjs': secretLine });
     const bad = await introduced.verify({ files: ['config.mjs'], beforeState: { 'config.mjs': 'const key = null;' } });
     expect(bad.ok).toBe(false);
