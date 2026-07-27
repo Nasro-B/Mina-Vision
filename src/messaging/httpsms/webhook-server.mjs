@@ -10,6 +10,13 @@ import { normalizeInboundWebhook } from './contracts.mjs';
 export function createHttpsmsWebhookServer({
   secret,
   onInboundMessage,
+  // F-06 — file durable optionnelle : quand elle est fournie, le message authentifié y est écrit
+  // AVANT tout traitement, pour survivre à une panne du traitement (mémoire, disque, coffre
+  // verrouillé). Sans elle, le comportement historique est conservé, mais l'échec est SIGNALÉ.
+  persistInbound = null,
+  // F-06 — tout échec de traitement passe ici : plus jamais un `catch` vide. L'appelant journalise
+  // (journal technique) et peut rejouer depuis la file durable.
+  onProcessingError = null,
   host = '127.0.0.1',
   port = 0,
   path = '/webhooks/httpsms',
@@ -73,11 +80,37 @@ export function createHttpsmsWebhookServer({
 
     // Authentic request accepted (202) even for a delivery-status event (message === null) or a
     // downstream failure: httpSMS only needs to know the webhook itself is healthy, so it never
-    // retry-storms. A real memory-write failure is handled internally, not by rejecting httpSMS.
+    // retry-storms. MAIS un échec n'est plus jamais silencieux (F-06) : il est soit rejouable
+    // depuis la file durable, soit signalé, soit les deux.
     if (message) {
+      let persisted = false;
+      if (typeof persistInbound === 'function') {
+        try {
+          await persistInbound(message);
+          persisted = true;
+        } catch (error) {
+          // Rien n'a été gardé : acquitter 202 ici serait mentir au fournisseur et perdre le SMS.
+          // On demande explicitement une nouvelle tentative.
+          onProcessingError?.({
+            stage: 'persist',
+            messageId: message.id ?? null,
+            persisted: false,
+            error: String(error?.message ?? error).slice(0, 500),
+          });
+          response.writeHead(503).end();
+          return;
+        }
+      }
       try {
         await onInboundMessage(message);
-      } catch { /* swallowed on purpose — see comment above */ }
+      } catch (error) {
+        onProcessingError?.({
+          stage: 'process',
+          messageId: message.id ?? null,
+          persisted,
+          error: String(error?.message ?? error).slice(0, 500),
+        });
+      }
     }
     response.writeHead(202).end();
   };

@@ -17,6 +17,9 @@ async function startServer(overrides = {}) {
     secret: SECRET, host: '127.0.0.1', port: 0, onInboundMessage,
     now: overrides.now ?? (() => 1_000_000),
     path: overrides.path ?? '/webhooks/httpsms',
+    // F-06 : file durable et rapport d'échec, absents par défaut (comportement historique).
+    ...(overrides.persistInbound ? { persistInbound: overrides.persistInbound } : {}),
+    ...(overrides.onProcessingError ? { onProcessingError: overrides.onProcessingError } : {}),
   });
   const { port } = await server.start();
   return { onInboundMessage, port };
@@ -121,6 +124,50 @@ describe('createHttpsmsWebhookServer', () => {
     // broken and hammer it — we accept it and handle the failure internally.
     expect(response.status).toBe(202);
     expect(onInboundMessage).toHaveBeenCalledOnce();
+  });
+
+  // Finding F-06 (audit 2026-07-27) : l'échec du callback était avalé par un `catch` vide, puis
+  // acquitté 202. Aucune file durable, aucun retry, aucun log : le fournisseur croyait le message
+  // accepté alors que Mina ne l'avait pas mémorisé — perte silencieuse.
+  it('F-06 — un échec de traitement est SIGNALÉ (plus jamais avalé en silence)', async () => {
+    const onInboundMessage = vi.fn(async () => { throw new Error('memory_write_failed'); });
+    const onProcessingError = vi.fn();
+    const { port } = await startServer({ onInboundMessage, onProcessingError });
+
+    const response = await post(port, { rawBody: inboundBody });
+
+    expect(response.status).toBe(202); // toujours pas de retry-storm
+    expect(onProcessingError).toHaveBeenCalledOnce();
+    const [report] = onProcessingError.mock.calls[0];
+    expect(report.error).toContain('memory_write_failed');
+    expect(report.messageId).toBe('sms-in-1');
+    expect(report.persisted).toBe(false); // aucune file durable configurée : c'est dit franchement
+  });
+
+  it('F-06 — la file durable reçoit le message AVANT le traitement, et l\'échec y reste rejouable', async () => {
+    const order = [];
+    const persistInbound = vi.fn(async () => { order.push('persist'); });
+    const onInboundMessage = vi.fn(async () => { order.push('process'); throw new Error('memory_write_failed'); });
+    const onProcessingError = vi.fn();
+    const { port } = await startServer({ persistInbound, onInboundMessage, onProcessingError });
+
+    const response = await post(port, { rawBody: inboundBody });
+
+    expect(order).toEqual(['persist', 'process']); // durable d'abord, traitement ensuite
+    expect(response.status).toBe(202);
+    expect(onProcessingError.mock.calls[0][0].persisted).toBe(true); // rejouable depuis la file
+  });
+
+  it('F-06 — si la file durable elle-même échoue, on N\'acquitte PAS (httpSMS doit réessayer)', async () => {
+    const persistInbound = vi.fn(async () => { throw new Error('inbox_write_failed'); });
+    const onInboundMessage = vi.fn();
+    const { port } = await startServer({ persistInbound, onInboundMessage });
+
+    const response = await post(port, { rawBody: inboundBody });
+
+    // Acquitter 202 sans rien avoir gardé serait un mensonge : le message serait perdu.
+    expect(response.status).toBe(503);
+    expect(onInboundMessage).not.toHaveBeenCalled();
   });
 
   it('start() returns the actually-bound port and stop() closes cleanly (idempotent)', async () => {
