@@ -4,8 +4,19 @@
 
 **Agent vocal local qui pilote votre ordinateur.** Mina écoute, regarde l'écran, et agit : elle
 contrôle le navigateur, n'importe quelle application Windows, et un téléphone Android connecté
-en ADB. Tout tourne sur votre machine — mémoire chiffrée locale, modèles au choix, aucune
-dépendance à un service central.
+en ADB.
+
+**Locale par conception, honnête sur le cloud.** Deux choses à ne pas confondre :
+
+- **Vos données restent sur votre machine.** Mémoire et journal sont dans un coffre chiffré
+  localement (argon2 + AEAD) ; rien ne sort de la machine sans une confirmation que vous donnez.
+- **L'inférence est l'endroit où le cloud peut intervenir.** Elle peut être **100 % locale** via
+  [LM Studio](https://lmstudio.ai) si vous l'activez ; sinon Mina appelle un **fournisseur cloud
+  gouverné** (Gemini, OpenRouter, Groq et d'autres) via une chaîne de repli. C'est le comportement
+  par défaut, et cela veut dire que le texte d'une demande envoyée pour raisonnement quitte bien
+  la machine — vers le fournisseur choisi, jamais vers un serveur Mina, qui n'existe pas.
+
+Donc : données 100 % locales, toujours ; inférence 100 % locale seulement si vous lancez LM Studio.
 
 > Créé par **Nasro Berkoun**, en collaboration avec **Sol** et **Fable**. Voir [LICENSE](LICENSE) : usage, étude et modification
 > libres ; le nom du produit et celui de son créateur sont protégés.
