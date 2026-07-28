@@ -140,7 +140,7 @@ verification before reconnecting.
 An Android application (`android/`) lets you talk with Mina from a paired phone, end-to-end
 encrypted.
 
-**📥 Download the app**: [**Mina Vision.apk** (latest release)](https://github.com/Nassreallah-B/Mina-Vision/releases/latest) — or directly [`Mina.Vision.apk` v0.1.0](https://github.com/Nassreallah-B/Mina-Vision/releases/download/v0.1.0/Mina.Vision.apk). Android 10+, debug-key signed (sideload: allow unknown sources). Step-by-step guide: [docs/operations/INSTALLER-MINA-TELEPHONE.md](docs/operations/INSTALLER-MINA-TELEPHONE.md).
+**📥 Download the app**: [**Mina Vision.apk** (latest release)](https://github.com/Nasro-B/Mina-Vision/releases/latest) — or directly [`Mina.Vision.apk` v0.1.0](https://github.com/Nasro-B/Mina-Vision/releases/download/v0.1.0/Mina.Vision.apk). Android 10+, debug-key signed (sideload: allow unknown sources). Step-by-step guide: [docs/operations/INSTALLER-MINA-TELEPHONE.md](docs/operations/INSTALLER-MINA-TELEPHONE.md).
 
 Rebuild from source:
 
@@ -149,7 +149,7 @@ cd android && ./gradlew assembleDebug        # or ./gradlew packageMinaApk → b
 ```
 
 The binary stays out of the repository (`*.apk` is gitignored); it is distributed through
-[GitHub releases](https://github.com/Nassreallah-B/Mina-Vision/releases).
+[GitHub releases](https://github.com/Nasro-B/Mina-Vision/releases).
 
 **Pairing.** On the PC: *Configuration & memory* tab › *Windows System* › **Open pairing** — a
 6-digit code appears, valid for 5 minutes and single-use. On the phone: enter the PC address and
@@ -203,7 +203,7 @@ npm run test:unit
 | Resource | Contents |
 |---|---|
 | Built-in guide (⚙️ button in the app) | Capabilities, voice commands, limits |
-| [GitHub releases](https://github.com/Nassreallah-B/Mina-Vision/releases) | Published versions and APK download |
+| [GitHub releases](https://github.com/Nasro-B/Mina-Vision/releases) | Published versions and APK download |
 | [MINA.md](MINA.md) | Constitution: security rules and authorized channels |
 | [docs/operations/INSTALLATION.md](docs/operations/INSTALLATION.md) | Step-by-step installation |
 | [docs/guides/httpsms.md](docs/guides/httpsms.md) | httpSMS gateway (cloud or self-hosted) |

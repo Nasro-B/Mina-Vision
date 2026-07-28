@@ -140,7 +140,7 @@ avant reconnexion.
 Une application Android (`android/`) permet de converser avec Mina depuis un téléphone appairé,
 en chiffrement de bout en bout.
 
-**📥 Télécharger l'application** : [**Mina Vision.apk** (dernière version)](https://github.com/Nassreallah-B/Mina-Vision/releases/latest) — ou directement [`Mina.Vision.apk` v0.1.0](https://github.com/Nassreallah-B/Mina-Vision/releases/download/v0.1.0/Mina.Vision.apk). Android 10+, signé clé debug (sideload : autoriser les sources inconnues). Guide pas à pas : [docs/operations/INSTALLER-MINA-TELEPHONE.fr.md](docs/operations/INSTALLER-MINA-TELEPHONE.fr.md).
+**📥 Télécharger l'application** : [**Mina Vision.apk** (dernière version)](https://github.com/Nasro-B/Mina-Vision/releases/latest) — ou directement [`Mina.Vision.apk` v0.1.0](https://github.com/Nasro-B/Mina-Vision/releases/download/v0.1.0/Mina.Vision.apk). Android 10+, signé clé debug (sideload : autoriser les sources inconnues). Guide pas à pas : [docs/operations/INSTALLER-MINA-TELEPHONE.fr.md](docs/operations/INSTALLER-MINA-TELEPHONE.fr.md).
 
 Reconstruire depuis les sources :
 
@@ -148,7 +148,7 @@ Reconstruire depuis les sources :
 cd android && ./gradlew assembleDebug        # ou ./gradlew packageMinaApk → build/dist/Mina Vision.apk
 ```
 
-Le binaire reste hors dépôt (`*.apk` gitignoré) ; il est distribué via les [releases GitHub](https://github.com/Nassreallah-B/Mina-Vision/releases).
+Le binaire reste hors dépôt (`*.apk` gitignoré) ; il est distribué via les [releases GitHub](https://github.com/Nasro-B/Mina-Vision/releases).
 
 **Appairage.** Sur le PC : onglet *Configuration & mémoire* › *Système Windows* › **Ouvrir
 l'appairage** — un code à 6 chiffres s'affiche, valable 5 minutes et une seule fois. Sur le
@@ -202,7 +202,7 @@ npm run test:unit
 | Ressource | Contenu |
 |---|---|
 | Guide intégré (bouton ⚙️ dans l'app) | Capacités, commandes vocales, limites |
-| [Releases GitHub](https://github.com/Nassreallah-B/Mina-Vision/releases) | Versions publiées et téléchargement de l'APK |
+| [Releases GitHub](https://github.com/Nasro-B/Mina-Vision/releases) | Versions publiées et téléchargement de l'APK |
 | [MINA.md](MINA.md) | Constitution : règles de sécurité et canaux autorisés |
 | [docs/operations/INSTALLATION.fr.md](docs/operations/INSTALLATION.fr.md) | Installation pas à pas |
 | [docs/guides/httpsms.fr.md](docs/guides/httpsms.fr.md) | Passerelle SMS httpSMS (cloud ou auto-hébergé) |
