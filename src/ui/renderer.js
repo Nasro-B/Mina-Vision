@@ -10,7 +10,7 @@ import {
 import { assessFrameQuality, decideLensFlip, frameStatsFromGrayscale } from '../perception/frame-quality.mjs';
 import {
   cloudzirPaletteColors, createBargeInDetector, createCloudzirPalettePreference,
-  createVoiceAnimationPreference, createVoicePresence, isPlaybackSuppressed, isShieldActive,
+  createVoiceAnimationPreference, createVoicePresence, isPlaybackSuppressed, isReadbackShieldHolding,
   nextCloudzirPalette, normalizeVoiceLevel, readbackShieldDuration,
 } from './voice-presence.mjs';
 
@@ -225,6 +225,10 @@ let lastVoiceAudioAt = 0;
 // outils » → mute → « et voilà »). Le barge-in réel reste : le détecteur local coupe la lecture
 // sur une voix soutenue (~400 ms au-dessus de l'écho résiduel).
 let readbackShieldUntil = 0;
+// Instant où le bouclier a été armé (début du tour [DIS]). Sert à savoir si l'audio de CE tour a
+// déjà commencé (lastVoiceAudioAt > readbackArmedAt) : tant qu'il n'a pas commencé, on garde le micro
+// muet ; une fois commencé, on ne rouvre qu'à la vraie fin, jamais sur un creux passager de la file.
+let readbackArmedAt = 0;
 const bargeInDetector = createBargeInDetector();
 
 const say = async (text) => {
@@ -232,7 +236,8 @@ const say = async (text) => {
   lastReadbackText = text;
   readbackRetryUsed = false;
   playbackSuppressedAt = 0; // a new line to speak re-opens playback immediately after any earlier cut
-  readbackShieldUntil = Date.now() + readbackShieldDuration(text);
+  readbackArmedAt = Date.now();
+  readbackShieldUntil = readbackArmedAt + readbackShieldDuration(text);
   bargeInDetector.reset();
   try {
     const result = await api.sayVoice(text);
@@ -474,7 +479,10 @@ const startVoiceCapture = async () => {
   processor.onaudioprocess = (event) => {
     const samples = event.inputBuffer.getChannelData(0);
     voicePresence.setLevel(samples);
-    if (isShieldActive({ shieldUntil: readbackShieldUntil, now: Date.now() })) {
+    if (isReadbackShieldHolding({
+      shieldUntil: readbackShieldUntil, now: Date.now(), armedAt: readbackArmedAt,
+      queuedSources: scheduledVoiceSources.size, lastAudioAt: lastVoiceAudioAt,
+    })) {
       // Lecture en cours : rien ne part au serveur (zéro écho = zéro coupure serveur)…
       if (!bargeInDetector.push(normalizeVoiceLevel(samples))) return;
       // …sauf si le propriétaire parle VRAIMENT : voix soutenue → on coupe la lecture et on
@@ -535,10 +543,12 @@ const playPcm24 = async (payload) => {
   source.onended = () => {
     scheduledVoiceSources.delete(source);
     if (scheduledVoiceSources.size === 0 && voiceCapture) {
+      // Animation au repos. On NE coupe PLUS le bouclier micro ici : un creux passager de la file
+      // (jitter IPC/réseau au milieu d'un long brief) vidait le Set une fraction de seconde, rouvrait
+      // le micro, l'écho tuait la génération côté serveur et le modèle enchaînait « et voilà » en
+      // croyant avoir déjà tout dit. isReadbackShieldHolding rouvre le micro sur le VRAI silence
+      // (file vide ET dernier chunk ≥ tailMs) — jamais sourde plus longtemps que la parole réelle.
       voicePresence.dispatch({ type: 'playback_finished' });
-      // Lecture réellement terminée : le bouclier estimé ne doit JAMAIS rendre Mina sourde plus
-      // longtemps que la vraie voix — 800 ms de marge pour la queue d'écho, puis micro rouvert.
-      readbackShieldUntil = Math.min(readbackShieldUntil, Date.now() + 800);
     }
   };
   // Coussin anti-gigue (voir computeVoiceStartTime) : 150 ms au départ d'une salve, recalage

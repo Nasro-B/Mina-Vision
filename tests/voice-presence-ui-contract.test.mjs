@@ -76,13 +76,19 @@ describe('Mina Vision voice presence UI contract', () => {
   it('shields the mic feed during deterministic readbacks while keeping REAL barge-in local', () => {
     const renderer = readFileSync(new URL('../src/ui/renderer.js', import.meta.url), 'utf8');
 
-    // say() arms the shield sized to the text; the mic pump drops server sends while active.
-    expect(renderer).toMatch(/readbackShieldUntil = Date\.now\(\) \+ readbackShieldDuration\(text\)/u);
-    expect(renderer).toMatch(/isShieldActive\(\{ shieldUntil: readbackShieldUntil, now: Date\.now\(\) \}\)/u);
+    // say() arms the shield sized to the text AND stamps the arming instant, so the pump can tell
+    // "audio of THIS turn hasn't started yet" from "the turn is really over".
+    expect(renderer).toMatch(/readbackArmedAt = Date\.now\(\)/u);
+    expect(renderer).toMatch(/readbackShieldUntil = readbackArmedAt \+ readbackShieldDuration\(text\)/u);
+    // The mic pump holds on the REAL voice flow (armedAt + queued sources + last chunk), not on the
+    // estimated deadline alone — so a mid-brief queue underrun no longer reopens the mic.
+    expect(renderer).toMatch(/isReadbackShieldHolding\(\{[\s\S]{0,240}armedAt: readbackArmedAt[\s\S]{0,120}queuedSources: scheduledVoiceSources\.size[\s\S]{0,120}lastAudioAt: lastVoiceAudioAt/u);
     // Real sustained speech pierces the shield, stops playback, and the SAME chunk is forwarded.
     expect(renderer).toMatch(/bargeInDetector\.push\(normalizeVoiceLevel\(samples\)\)/u);
-    // Deafness guards: real end of playback lowers the shield; any cut clears it outright.
-    expect(renderer).toMatch(/readbackShieldUntil = Math\.min\(readbackShieldUntil, Date\.now\(\) \+ 800\)/u);
+    // The BUG this fixed must not creep back: a transient queue drain must NEVER lower the shield —
+    // that reopened the mic mid-brief, the echo killed generation, and the model said « et voilà ».
+    expect(renderer).not.toMatch(/readbackShieldUntil = Math\.min/u);
+    // Any real cut still clears the shield outright.
     expect(renderer).toMatch(/const stopVoicePlayback = \(\) => \{[\s\S]{0,200}readbackShieldUntil = 0/u);
   });
 });
