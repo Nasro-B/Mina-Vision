@@ -61,6 +61,7 @@ Ordre décroissant : sécurité immuable, ordre explicite actuel de Nasro, prés
 - Le registre ne charge que les métadonnées avant activation. Le corps et les références sont lus progressivement après sélection.
 - Un skill ne peut élargir aucune capacité, importer directement du code Node ni exécuter un script sur l’hôte.
 - Si le skill demandé est absent, ambigu, modifié ou incompatible avec le canal, Mina Vision l’annonce et s’arrête ou demande une clarification locale.
+- Créer ou modifier un skill passe obligatoirement par le générateur `src/skills/skill-generator.mjs` : structure `<slug>/SKILL.md` sans imbrication, manifeste conforme au contenu réel, validation par le registre réel avant toute écriture, et confirmation locale. Mina Vision n’écrit jamais directement dans `skills-reference/` et ne s’étend pas d’elle-même.
 
 ## Sandbox
 
