@@ -1,10 +1,10 @@
 import path from 'node:path';
 import { createHash, createPublicKey, hkdfSync, randomUUID } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { access, appendFile, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, safeStorage, screen, session, Tray } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, safeStorage, screen, session, Tray } from 'electron';
 import { loadConfig, redactConfig } from '../config.mjs';
 import { createMinaOrchestrator } from '../core/orchestrator.mjs';
 import { createMinaRuntime } from '../core/mina-runtime.mjs';
@@ -116,6 +116,8 @@ import {
 import { createRuntimeCapabilityCatalog } from '../runtime/capability-catalog.mjs';
 import { composeGovernanceDomains } from '../core/compose-governance-domains.mjs';
 import { registerMinaIpc } from './ipc/register-ipc.mjs';
+import { buildCrashScreenHtml, shouldShowCrashScreen } from '../boot/crash-screen.mjs';
+import { bootFault } from '../boot/boot-fault.mjs';
 import { createRoutineRegistry } from '../routines/routine-registry.mjs';
 import { createDailyBriefingService } from '../personal/daily-briefing-service.mjs';
 import { applyPersonalGraphMigrations, createGraphRepository } from '../graph/graph-repository.mjs';
@@ -503,15 +505,45 @@ const send = (channel, payload) => {
   sendRaw(channel, payload);
 };
 
+// Écran de crash de dernier recours (T1.3 du plan de durcissement). Le pire cas, celui qui laissait
+// Mina en processus fantôme : une exception survient AVANT `createWindow()`, donc rien à l'écran.
+// Ce filet n'ouvre une fenêtre minimale QUE si aucune fenêtre principale n'existe déjà — sinon
+// l'incident est déjà visible côté renderer, et un second écran serait du bruit.
+let crashWindow = null;
+const CRASH_PRELOAD = path.join(UI_DIR, 'crash-preload.cjs');
+// Les deux seuls gestes de l'écran de crash, enregistrés une fois (héritent du wrapper journal
+// ci-dessus) : copier le rapport, relancer. Aucun autre privilège n'est exposé à cette fenêtre.
+ipcMain.handle('mina:crash:copy', (_event, text) => { clipboard.writeText(String(text ?? '')); return true; });
+ipcMain.handle('mina:crash:relaunch', () => { app.relaunch(); app.exit(0); });
+const openCrashScreen = (error, step = null) => {
+  try {
+    const hasVisibleWindow = Boolean(mainWindow && !mainWindow.isDestroyed?.());
+    if (!shouldShowCrashScreen({ hasVisibleWindow })) return;
+    if (crashWindow && !crashWindow.isDestroyed?.()) return; // un seul écran de crash à la fois
+    const file = path.join(app.getPath('userData'), 'mina-crash-screen.html');
+    writeFileSync(file, buildCrashScreenHtml({ error, step }), 'utf8');
+    crashWindow = new BrowserWindow({
+      width: 720, height: 520, title: 'Mina Vision — Échec au démarrage',
+      backgroundColor: '#14161a', show: true,
+      webPreferences: { preload: CRASH_PRELOAD, contextIsolation: true, nodeIntegration: false, sandbox: true },
+    });
+    crashWindow.removeMenu();
+    crashWindow.on('closed', () => { crashWindow = null; });
+    void crashWindow.loadFile(file);
+  } catch { /* le filet de sécurité ne relance JAMAIS une exception : il ne peut qu'aider, pas nuire */ }
+};
+
 // Garde-fous de dernier recours : un crash non rattrapé est CONSIGNÉ (journal technique +
 // journal persistant) au lieu de tuer le process en silence — l'app est fail-soft partout,
-// survivre en le disant vaut mieux que mourir muette.
+// survivre en le disant vaut mieux que mourir muette. Depuis T1.3, si aucune fenêtre n'existe,
+// un écran de crash minimal s'ouvre en plus : plus jamais de processus vivant sans rien à l'écran.
 process.on('uncaughtException', (error) => {
   technicalLog.record({
     severity: 'error', scope: 'process', code: 'uncaught_exception',
     message: String(error?.stack ?? error).slice(0, 300),
   });
   void activityJournal?.append('crash', { code: 'uncaught_exception', message: String(error?.message ?? error).slice(0, 200) });
+  if (app.isReady()) openCrashScreen(error);
 });
 process.on('unhandledRejection', (reason) => {
   technicalLog.record({
@@ -519,6 +551,7 @@ process.on('unhandledRejection', (reason) => {
     message: String(reason?.stack ?? reason).slice(0, 300),
   });
   void activityJournal?.append('crash', { code: 'unhandled_rejection', message: String(reason?.message ?? reason).slice(0, 200) });
+  if (app.isReady()) openCrashScreen(reason);
 });
 
 const currentConfig = () => loadConfig(process.env);
@@ -2286,6 +2319,12 @@ const createWindow = async () => {
 };
 
 app.whenReady().then(async () => {
+  // Point d'injection de faute (T1.1) : en test, `MINA_BOOT_FAULT=boot:start` force un throw ici,
+  // au tout début du démarrage — le pire moment, avant toute fenêtre. En production la variable est
+  // absente et l'appel ne coûte rien. Ce throw devient un unhandledRejection (la chaîne n'a pas de
+  // .catch), donc le filet T1.3 doit ouvrir l'écran de crash : c'est la preuve que « le boot ne
+  // meurt jamais en silence » est vérifiable, pas seulement affirmé.
+  bootFault('boot:start');
   // Self-model persistant : chargé avant tout — il survit aux redémarrages et n'est alimenté que
   // par les événements réels traversant send().
   selfModel = createSelfModel({
