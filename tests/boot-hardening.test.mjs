@@ -75,6 +75,29 @@ describe('boot-supervisor — T1.2', () => {
     supervisor.register(sub('a', () => {}));
     await expect(supervisor.startAll()).resolves.toMatchObject({ ok: true });
   });
+
+  it('run() exécute un domaine immédiatement, isolé, et respecte l\'ordre inline', async () => {
+    const order = [];
+    const capabilities = [];
+    const supervisor = createBootSupervisor({ onCapability: (c) => capabilities.push(c) });
+    // Cas réel : trois domaines enchaînés, le deuxième échoue — les deux autres tournent quand même
+    // et l'ordre d'écriture est respecté (contrairement à startAll qui suppose l'indépendance).
+    await supervisor.run(sub('avant', () => { order.push('avant'); }));
+    const casse = await supervisor.run(sub('mail', () => { throw new Error('mail_ko'); }));
+    await supervisor.run(sub('apres', () => { order.push('apres'); }));
+    expect(order).toEqual(['avant', 'apres']);
+    expect(casse.state).toBe(BOOT_STATES.unavailable);
+    expect(casse.reason).toBe('mail_ko');
+    expect(capabilities).toContainEqual({ id: 'mail', status: 'unavailable', reason: 'mail_ko' });
+    expect(supervisor.ok()).toBe(true); // aucun critique en échec
+  });
+
+  it('run() sur un domaine CRITIQUE en échec bascule ok() à faux', async () => {
+    const supervisor = createBootSupervisor();
+    await supervisor.run(sub('memory', () => { throw new Error('coffre_ko'); }, { critical: true }));
+    expect(supervisor.get('memory').state).toBe(BOOT_STATES.failed);
+    expect(supervisor.ok()).toBe(false);
+  });
 });
 
 describe('boot-fault — T1.1', () => {
