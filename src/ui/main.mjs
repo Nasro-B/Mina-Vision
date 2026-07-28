@@ -88,9 +88,6 @@ import { createTelegramMailCommands } from '../messaging/telegram-mail-commands.
 import { createTelegramCommandRouter } from '../messaging/telegram-command-router.mjs';
 import { createUtteranceAggregator } from '../voice/utterance-aggregator.mjs';
 import { createEchoGuard } from '../voice/echo-guard.mjs';
-import { createWakeWindow } from '../voice/wake-window.mjs';
-import { detectWakePhrase } from '../voice/wake-phrases.mjs';
-import { shouldRefuseVoiceAction } from '../voice/voice-action-gate.mjs';
 import { createGroqWebAnswer, createWebAnswerChain, createWebAnswerService } from '../research/web-answer.mjs';
 import { createLocalVoiceClient } from '../voice/local-voice-client.mjs';
 import { createDeepgramStt } from '../voice/deepgram-stt.mjs';
@@ -457,23 +454,9 @@ const speechGate = createSpeechGate();
 // Mode PAUSE : silence TOTAL garanti par le code — plus d'audio, plus d'outils, plus de routage,
 // voix ambiantes ignorées — jusqu'à ce que le NOM soit prononcé (« Mina », « reprends Mina »).
 const pauseGate = createPauseGate();
-// Fenêtre d'éveil pour les ACTIONS (T3.1). La conversation vocale reste libre, mais une action à
-// effet réel (lancer une mission, piloter la page, jouer, générer, exécuter un skill, écrire un
-// e-mail…) n'est autorisée que si « Mina » a été prononcé dans les ~30 dernières secondes. Sans ça,
-// « ouvre youtube » lancé à côté du micro déclenchait une mission ; désormais il faut ADRESSER Mina.
-const voiceActionWake = createWakeWindow();
-// Marque l'éveil dès qu'un texte contient le mot d'éveil. Appelé sur chaque FRAGMENT (pas seulement
-// sur l'énoncé agrégé) : dans Gemini Live, le modèle peut décider un outil « mission » depuis l'audio
-// AVANT que l'énoncé complet ne traverse l'agrégateur — détecter « Mina » au plus tôt évite de
-// refuser à tort une commande légitime « Mina, ouvre YouTube ».
-const markWakeIfPresent = (text) => {
-  if (typeof text === 'string' && detectWakePhrase(text).activated) voiceActionWake.markWake();
-};
-
 // Mots de contrôle vocaux (pause / reprise / stop) — passage OBLIGATOIRE avant tout routage.
 // Retourne true si l'énoncé est consommé (silence de pause ou transition d'état).
 const handleVoiceControlWords = (utterance) => {
-  markWakeIfPresent(utterance);
   if (pauseGate.isPaused()) {
     if (detectResumeCommand(utterance)) {
       pauseGate.resume();
@@ -1504,7 +1487,7 @@ const voiceEchoGuard = createEchoGuard();
 
 const buildUtteranceRoute = (engine) => {
   const router = createVoiceCommandRouter({
-    onWake: (phrase) => { voiceActionWake.markWake(); send('mina:voice-wake', phrase); },
+    onWake: (phrase) => send('mina:voice-wake', phrase),
     onCommand: (command) => send('mina:voice-command', command),
     onStop: () => { void stopEverything(); },
   });
@@ -1642,23 +1625,11 @@ const startGeminiVoice = async () => {
         voice?.sendToolResponse({ id: call.id, name: call.name, response: { result: 'mina_en_pause' } }).catch(() => {});
         return;
       }
-      // Éveil obligatoire pour les ACTIONS (T3.1). Dans Gemini Live, le modèle entend TOUT et peut
-      // décider seul un outil « mission » depuis une phrase ambiante — sans mot d'éveil. On refuse
-      // fail-closed : tout outil à EFFET RÉEL exige que « Mina » ait été prononcé récemment ; seuls
-      // les outils de LECTURE et la config anodine sont exemptés (donc un outil futur est gardé par
-      // défaut). La conversation, elle, n'appelle aucun outil et reste entièrement libre.
-      // Liste d'exemption + décision extraites et TESTÉES dans `voice-action-gate.mjs` (fail-closed :
-      // un outil non classé est gardé par défaut). Pas de consume() : le plan veut une FENÊTRE de
-      // temps, pas un usage unique — « Mina, ouvre YouTube et cherche une recette » enchaîne plusieurs
-      // outils sur un seul éveil ; c'est la fenêtre de 30 s qui borne la rafale.
-      if (shouldRefuseVoiceAction(call.name, voiceActionWake.isActionAllowed())) {
-        void activityJournal?.append('voice_action_wake_required', { intent: call.name });
-        voice?.sendToolResponse({
-          id: call.id, name: call.name,
-          response: { result: 'eveil_requis', note: 'action ignorée : dis « Mina » juste avant de demander une action' },
-        }).catch(() => {});
-        return;
-      }
+      // NB : pas de verrou d'« éveil obligatoire pour les actions » ici. Décision Nasro du 2026-07-28
+      // (au micro) : une commande vocale directe comme « ouvre youtube » DOIT lancer la mission sans
+      // exiger de redire « Mina » d'abord — c'est l'expérience voulue. La défense reste la garde
+      // anti-écho ci-dessous (le modèle ne relance pas sa propre parole) + le broker (autorité des
+      // actions) + l'arrêt d'urgence. La fenêtre d'éveil a été retirée à sa demande.
       if (call.name === 'voir_camera') {
         void analyzeLiveCamera(call.args?.question)
           .then((result) => voice?.sendToolResponse({
