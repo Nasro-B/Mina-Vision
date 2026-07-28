@@ -4,8 +4,18 @@
 
 **A local voice agent that drives your computer.** Mina listens, watches the screen, and acts:
 she controls the browser, any Windows application, and an Android phone connected over ADB.
-Everything runs on your machine — locally encrypted memory, your choice of models, no dependency
-on any central service.
+
+**Local by design, honest about the cloud.** Two things must not be confused:
+
+- **Your data stays on your machine.** Memory and journal are stored in a locally encrypted
+  vault (argon2 + AEAD); nothing leaves the machine without a confirmation you give.
+- **Inference is where the cloud may be used.** It can run **fully local** through
+  [LM Studio](https://lmstudio.ai) when you enable it; otherwise Mina calls a **governed cloud
+  provider** (Gemini, OpenRouter, Groq and others) over a fallback chain. This is the default,
+  and it means the text of a request you send for reasoning does leave the machine — to the
+  chosen provider, never to any Mina server, which does not exist.
+
+So: 100% local data, always; 100% local inference only if you run LM Studio.
 
 > Created by **Nasro Berkoun**, in collaboration with **Sol** and **Fable**. See [LICENSE](LICENSE): free to use, study and modify;
 > the product name and its creator's name are protected.
