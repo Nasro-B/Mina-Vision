@@ -122,6 +122,29 @@ export function isShieldActive({ shieldUntil, now } = {}) {
   return Number.isFinite(shieldUntil) && shieldUntil > 0 && now < shieldUntil;
 }
 
+// Après la fin RÉELLE de la parole, on laisse ce délai avant de rouvrir le micro : le temps que la
+// queue d'écho des haut-parleurs retombe. Couvre aussi un creux passager entre deux chunks d'un long
+// brief (jitter IPC/réseau) — bien plus court que ce délai, donc jamais pris pour une vraie fin.
+export const READBACK_SHIELD_TAIL_MS = 900;
+
+// Le bouclier micro tient tant que la voix de Mina COULE réellement — pas seulement pendant la borne
+// estimée. Trois phases : (1) avant le premier chunk du tour (`lastAudioAt <= armedAt`), on mute en
+// attendant que la lecture démarre ; (2) pendant la salve (file non vide OU dernier chunk < tailMs),
+// on tient — un creux passager de la file au milieu d'un long brief ne rouvre PLUS le micro ; (3) à
+// la fin réelle (file vide ET dernier chunk ≥ tailMs), on rouvre. Sans la phase (2), le brief long
+// « que sais-tu faire » se faisait tuer par son propre écho pendant un creux de file, et le modèle
+// enchaînait une clôture (« et voilà ») en croyant avoir déjà tout énoncé. Sans la borne estimée en
+// garde-fou (isShieldActive), un silence anormal laisserait le micro muet indéfiniment.
+export function isReadbackShieldHolding({
+  shieldUntil, now, armedAt = 0, queuedSources = 0, lastAudioAt = 0, tailMs = READBACK_SHIELD_TAIL_MS,
+} = {}) {
+  if (!isShieldActive({ shieldUntil, now })) return false;
+  const audioStarted = Number.isFinite(lastAudioAt) && lastAudioAt > (Number.isFinite(armedAt) ? armedAt : 0);
+  if (!audioStarted) return true; // lecture pas encore commencée : on garde le micro muet
+  if (queuedSources > 0) return true; // audio en cours de rendu
+  return (now - lastAudioAt) < tailMs; // vient de jouer : tient sur un creux, rouvre à la vraie fin
+}
+
 // Vraie prise de parole = énergie SOUTENUE nettement au-dessus de l'écho résiduel post-AEC.
 // L'écho retombe entre les syllabes ; une voix proche tient le niveau — d'où le critère de durée.
 export function createBargeInDetector({ threshold = 0.09, sustainMs = 350, frameMs = 85 } = {}) {

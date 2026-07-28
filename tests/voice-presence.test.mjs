@@ -198,3 +198,53 @@ describe('readback shield — la lecture longue ne peut plus être tuée par son
     expect(detector.push(0.2)).toBe(false); // le reset repart de zéro
   });
 });
+
+describe('isReadbackShieldHolding — le brief long tient sur un creux de file, rouvre à la vraie fin', () => {
+  const armedAt = 1_000;
+  const shieldUntil = 46_000; // armedAt + 45 s (borne d'un très long brief)
+
+  it('tient (micro muet) AVANT le premier chunk du tour, même si un ancien chunk traîne', async () => {
+    const { isReadbackShieldHolding } = await import('../src/ui/voice-presence.mjs');
+    // lastAudioAt d'un tour PRÉCÉDENT (≤ armedAt) : l'audio de CE tour n'a pas commencé → on attend.
+    expect(isReadbackShieldHolding({ shieldUntil, now: 1_200, armedAt, queuedSources: 0, lastAudioAt: 500 })).toBe(true);
+    expect(isReadbackShieldHolding({ shieldUntil, now: 1_200, armedAt, queuedSources: 0, lastAudioAt: 0 })).toBe(true);
+  });
+
+  it('tient pendant que l’audio joue (file non vide)', async () => {
+    const { isReadbackShieldHolding } = await import('../src/ui/voice-presence.mjs');
+    expect(isReadbackShieldHolding({ shieldUntil, now: 5_000, armedAt, queuedSources: 2, lastAudioAt: 4_980 })).toBe(true);
+  });
+
+  it('LE FIX : un creux passager de la file (dernier chunk < tailMs) ne rouvre PAS le micro', async () => {
+    const { isReadbackShieldHolding } = await import('../src/ui/voice-presence.mjs');
+    // File momentanément vide au milieu du brief, mais un chunk a joué il y a 200 ms → on tient.
+    // Sans ça : micro rouvert → écho → génération tuée → modèle enchaîne « et voilà » (bug Nasro).
+    expect(isReadbackShieldHolding({ shieldUntil, now: 5_000, armedAt, queuedSources: 0, lastAudioAt: 4_800 })).toBe(true);
+  });
+
+  it('rouvre le micro à la VRAIE fin (file vide ET dernier chunk ≥ tailMs)', async () => {
+    const { isReadbackShieldHolding } = await import('../src/ui/voice-presence.mjs');
+    expect(isReadbackShieldHolding({ shieldUntil, now: 6_000, armedAt, queuedSources: 0, lastAudioAt: 5_000 })).toBe(false);
+  });
+
+  it('ne rend JAMAIS Mina sourde plus longtemps que sa parole réelle (borne estimée trop large)', async () => {
+    const { isReadbackShieldHolding } = await import('../src/ui/voice-presence.mjs');
+    // Brief estimé à 45 s mais réponse réellement courte : dernier chunk à 2 000, on est à 3 000
+    // (≥ tailMs après) → micro rouvert bien avant la borne estimée, comme l’ancien plancher 800 ms.
+    expect(isReadbackShieldHolding({ shieldUntil, now: 3_000, armedAt, queuedSources: 0, lastAudioAt: 2_000 })).toBe(false);
+  });
+
+  it('respecte la borne estimée comme garde-fou dur (silence anormal ≠ micro muet éternel)', async () => {
+    const { isReadbackShieldHolding } = await import('../src/ui/voice-presence.mjs');
+    // Passé shieldUntil, plus jamais actif même si un chunk vient de « jouer ».
+    expect(isReadbackShieldHolding({ shieldUntil, now: 46_000, armedAt, queuedSources: 5, lastAudioAt: 45_999 })).toBe(false);
+  });
+
+  it('honore la frontière exacte du tail (creux court tient, tail dépassé rouvre)', async () => {
+    const { isReadbackShieldHolding, READBACK_SHIELD_TAIL_MS } = await import('../src/ui/voice-presence.mjs');
+    expect(READBACK_SHIELD_TAIL_MS).toBeGreaterThan(0);
+    const lastAudioAt = 5_000;
+    expect(isReadbackShieldHolding({ shieldUntil, now: lastAudioAt + READBACK_SHIELD_TAIL_MS - 1, armedAt, queuedSources: 0, lastAudioAt })).toBe(true);
+    expect(isReadbackShieldHolding({ shieldUntil, now: lastAudioAt + READBACK_SHIELD_TAIL_MS, armedAt, queuedSources: 0, lastAudioAt })).toBe(false);
+  });
+});
