@@ -1,6 +1,7 @@
 import { applyEnvironmentSelection, computeVoiceStartTime, formatGroundingLabel } from './controller.mjs';
 import { createMinaDialogue, SELF_KNOWLEDGE_FALLBACK } from '../personality/mina-dialogue.mjs';
 import { composeCapabilityBrief } from '../core/capability-brief.mjs';
+import { describeCircle } from '../core/domain-circles.mjs';
 import { composeJournalBrief } from '../diagnostics/journal-brief.mjs';
 import {
   contactRow, homeDeviceRow, mailAccountRow, mailMessageRow, personalityRow,
@@ -2193,6 +2194,21 @@ const renderCapabilities = (entries) => {
       : entry.status === 'degraded' ? 'badge warning' : 'badge blocked';
     badge.textContent = CAPABILITY_LABELS[entry.status] ?? entry.status;
     item.append(name, ' ', badge);
+    // Cercle de maturité (T0.2) : à côté de l'état runtime, on montre si le domaine est cœur,
+    // maintenu ou expérimental. Un domaine gelé porte un badge d'avertissement explicite pour
+    // que « expérimental — non vérifié en usage réel » soit lisible, pas déduit.
+    const circle = describeCircle(entry.id);
+    const circleBadge = document.createElement('span');
+    circleBadge.className = circle.experimental ? 'badge warning' : 'badge muted';
+    circleBadge.textContent = circle.label;
+    circleBadge.title = circle.note;
+    item.append(' ', circleBadge);
+    if (circle.experimental) {
+      const warn = document.createElement('span');
+      warn.className = 'muted';
+      warn.textContent = ` — ${circle.note}`;
+      item.append(warn);
+    }
     if (entry.reason) {
       const reason = document.createElement('span');
       reason.className = 'muted';
