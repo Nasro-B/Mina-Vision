@@ -2325,6 +2325,16 @@ app.whenReady().then(async () => {
   // .catch), donc le filet T1.3 doit ouvrir l'écran de crash : c'est la preuve que « le boot ne
   // meurt jamais en silence » est vérifiable, pas seulement affirmé.
   bootFault('boot:start');
+  // FENÊTRE D'ABORD (T1.1) : la BrowserWindow est créée et charge index.html AVANT toute init de
+  // domaine. Le pire défaut du projet était l'inverse — `createWindow()` en dernier, donc un throw
+  // pendant l'init tuait la fenêtre. Désormais l'UI est là immédiatement (état vide, gardé côté
+  // renderer), l'init des domaines suit, et `mina:boot:ready` déclenche le vrai remplissage. Un
+  // échec d'init n'efface plus la fenêtre : il est signalé par `mina:boot:error`.
+  await createWindow();
+  // Deuxième point d'injection (T1.1) : `MINA_BOOT_FAULT=boot:domains` force un throw ICI, APRÈS la
+  // fenêtre — pour prouver le cas nouveau : la fenêtre RESTE ouverte et affiche « Démarrage
+  // incomplet » (via `mina:boot:error`), au lieu de disparaître comme avant.
+  bootFault('boot:domains');
   // Self-model persistant : chargé avant tout — il survit aux redémarrages et n'est alimenté que
   // par les événements réels traversant send().
   selfModel = createSelfModel({
@@ -3336,7 +3346,20 @@ app.whenReady().then(async () => {
     message: String(error?.message ?? error).slice(0, 200),
   }));
   globalShortcut.register('CommandOrControl+Alt+Escape', () => { void stopEverything(); });
-  await createWindow();
+  // Init des domaines terminée : la fenêtre (déjà ouverte) reçoit le signal de remplir ses données
+  // réelles et de trancher l'accueil. C'est le pendant de FENÊTRE D'ABORD ci-dessus.
+  send('mina:event', { type: 'boot_ready' });
+}).catch((error) => {
+  // Un throw pendant l'init des domaines n'atteint plus « aucune fenêtre » : la fenêtre est déjà là
+  // (T1.1). On consigne, et on le dit à l'UI plutôt que de laisser un tableau de bord muet. Si par
+  // exception aucune fenêtre n'existe (createWindow lui-même a échoué), le filet T1.3 prend le relais.
+  technicalLog.record({
+    severity: 'error', scope: 'boot', code: 'boot_init_failed',
+    message: String(error?.stack ?? error).slice(0, 300),
+  });
+  void activityJournal?.append('crash', { code: 'boot_init_failed', message: String(error?.message ?? error).slice(0, 200) });
+  send('mina:event', { type: 'boot_error', reason: String(error?.message ?? error).slice(0, 200) });
+  if (!(mainWindow && !mainWindow.isDestroyed?.())) openCrashScreen(error, 'init');
 });
 
 // En mode zone de notification, fermer la fenêtre ne quitte PAS : on ne quitte que sur un arrêt
