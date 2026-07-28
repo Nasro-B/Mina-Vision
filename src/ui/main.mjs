@@ -90,6 +90,7 @@ import { createUtteranceAggregator } from '../voice/utterance-aggregator.mjs';
 import { createEchoGuard } from '../voice/echo-guard.mjs';
 import { createWakeWindow } from '../voice/wake-window.mjs';
 import { detectWakePhrase } from '../voice/wake-phrases.mjs';
+import { shouldRefuseVoiceAction } from '../voice/voice-action-gate.mjs';
 import { createGroqWebAnswer, createWebAnswerChain, createWebAnswerService } from '../research/web-answer.mjs';
 import { createLocalVoiceClient } from '../voice/local-voice-client.mjs';
 import { createDeepgramStt } from '../voice/deepgram-stt.mjs';
@@ -1646,12 +1647,11 @@ const startGeminiVoice = async () => {
       // fail-closed : tout outil à EFFET RÉEL exige que « Mina » ait été prononcé récemment ; seuls
       // les outils de LECTURE et la config anodine sont exemptés (donc un outil futur est gardé par
       // défaut). La conversation, elle, n'appelle aucun outil et reste entièrement libre.
-      const WAKE_EXEMPT_TOOLS = new Set([
-        'voir_camera', 'lire_erreurs_techniques', 'lire_journal', 'chercher_dans_le_code',
-        'statut_git_du_projet', 'analyser_le_code', 'revue_du_code', 'lancer_les_tests_du_projet',
-        'recherche_web', 'chercher_contact', 'theme', 'selectionner_environnement',
-      ]);
-      if (!WAKE_EXEMPT_TOOLS.has(call.name) && !voiceActionWake.isActionAllowed()) {
+      // Liste d'exemption + décision extraites et TESTÉES dans `voice-action-gate.mjs` (fail-closed :
+      // un outil non classé est gardé par défaut). Pas de consume() : le plan veut une FENÊTRE de
+      // temps, pas un usage unique — « Mina, ouvre YouTube et cherche une recette » enchaîne plusieurs
+      // outils sur un seul éveil ; c'est la fenêtre de 30 s qui borne la rafale.
+      if (shouldRefuseVoiceAction(call.name, voiceActionWake.isActionAllowed())) {
         void activityJournal?.append('voice_action_wake_required', { intent: call.name });
         voice?.sendToolResponse({
           id: call.id, name: call.name,
@@ -1659,10 +1659,6 @@ const startGeminiVoice = async () => {
         }).catch(() => {});
         return;
       }
-      // Pas de consume() : le plan veut une FENÊTRE de temps, pas un usage unique — « Mina, ouvre
-      // YouTube et cherche une recette » peut enchaîner plusieurs outils sur un seul éveil. C'est la
-      // fenêtre de 30 s qui borne la rafale : passé ce délai sans nouveau « Mina », les actions
-      // redemandent l'éveil.
       if (call.name === 'voir_camera') {
         void analyzeLiveCamera(call.args?.question)
           .then((result) => voice?.sendToolResponse({
