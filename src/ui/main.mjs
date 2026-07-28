@@ -461,7 +461,7 @@ const handleVoiceControlWords = (utterance) => {
     if (detectResumeCommand(utterance)) {
       pauseGate.resume();
       send('mina:event', { type: 'voice_resumed' });
-      void getLocalVoice().speak('Je suis là, mon créateur.').catch(() => {});
+      void getLocalVoice().speak('Je suis là, Patron.').catch(() => {});
     }
     // En pause, TOUT énoncé est consommé : aucune commande, aucun dialogue, aucune mémoire.
     return true;
