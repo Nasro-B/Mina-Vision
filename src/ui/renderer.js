@@ -1271,8 +1271,14 @@ const welcome = (() => {
 
   return {
     async boot() {
-      let state = { profiles: [], activeProfileId: null, welcomeCompleted: false };
-      try { state = await api.readProfiles?.() ?? state; } catch { /* pas de profils : accueil */ }
+      // Fenêtre-d'abord (T1.1) : au premier paint, les handlers IPC ne sont pas encore prêts et
+      // `readProfiles` REJETTE. On distingue ce cas d'un « aucun profil » réel : sur rejet on ne
+      // montre RIEN (sinon overlay de bienvenue fantôme pour un utilisateur existant), et on
+      // réessaie à la réception de `mina:boot:ready`. Sur succès, la décision d'accueil est fiable.
+      let state;
+      try { state = await api.readProfiles?.(); }
+      catch { return; }
+      state = state ?? { profiles: [], activeProfileId: null, welcomeCompleted: false };
       const active = state.profiles.find((p) => p.id === state.activeProfileId);
       if (active) applyTheme(resolveTheme(active.theme)); // thème du profil dès le lancement
       if (state.welcomeCompleted && active) return; // déjà accueilli
@@ -1608,6 +1614,19 @@ elements.voice.addEventListener('click', async () => {
 });
 
 api.onEvent((event) => {
+  if (event.type === 'boot_ready') {
+    // Fenêtre-d'abord (T1.1) : l'init des domaines est terminée, les handlers IPC existent enfin.
+    // On rejoue le bootstrap pour que les données réelles remplacent l'état vide du premier paint —
+    // et c'est ici que la décision d'accueil (welcome) devient fiable.
+    bootstrapDashboard();
+    return;
+  }
+  if (event.type === 'boot_error') {
+    // L'init a échoué APRÈS l'ouverture de la fenêtre : on le dit dans le journal visible plutôt que
+    // de laisser un tableau de bord muet. La fenêtre reste, l'utilisateur voit l'incident.
+    log(`Démarrage incomplet : ${event.reason || 'erreur inconnue'}. Certaines capacités peuvent manquer.`);
+    return;
+  }
   if (event.type === 'action_completed') {
     actionCount += 1;
     elements.counter.textContent = `${actionCount} action${actionCount > 1 ? 's' : ''}`;
@@ -2508,25 +2527,35 @@ const refreshPersonality = async () => {
   ], personalityRow, { empty: 'Personnalité non configurée.' });
 };
 
-refreshStartup().catch((error) => log(`Démarrage Windows : ${error.message}`));
-refreshCapabilities().catch((error) => log(`Capacités : ${error.message}`));
-refreshChatChannel().catch((error) => log(`Canal téléphone : ${error.message}`));
-refreshMail().catch(failed('#mail-accounts'));
-refreshPersonal().catch(() => {});
-refreshPrinting().catch(failed('#printing-list'));
-refreshHome().catch(failed('#home-devices'));
-refreshPersonality().catch(failed('#personality-profile'));
-refreshMemoryStatus().catch((error) => log(`Mémoire : ${error.message}`));
-refreshSettings().catch((error) => log(`Paramètres : ${error.message}`));
-profileSettings.refresh().catch((error) => log(`Profil : ${error.message}`));
-// G7 — accueil au premier lancement (ou nouveau profil) : applique le thème du profil et
-// personnalise Mina. Ne bloque jamais le reste du chargement. Rafraîchit ensuite le panneau
-// Paramètres pour refléter le profil qui vient d'être créé/choisi dans la bienvenue.
-welcome.boot()
-  .then(() => profileSettings.refresh())
-  .catch((error) => log(`Bienvenue : ${error.message}`));
+// Ces deux champs sont purement DOM (aucun IPC) et alimentent `refreshAnalytics` : posés une fois,
+// avant tout, indépendamment du cycle de boot.
 elements.analyticsFrom.value = localDateTimeValue(new Date(Date.now() - 30 * 24 * 60 * 60 * 1_000));
 elements.analyticsTo.value = localDateTimeValue(new Date());
-refreshAnalytics().catch((error) => log(`Analyses : ${error.message}`));
-refreshSkillsSandbox().catch((error) => log(`Skills/Sandbox : ${error.message}`));
-refreshTechnicalLog().catch((error) => log(`Journal technique : ${error.message}`));
+
+// Bootstrap du tableau de bord (T1.1 fenêtre-d'abord). Chaque chargement est `.catch`-gardé : si un
+// handler IPC n'est pas encore enregistré (la fenêtre s'ouvre AVANT l'init des domaines), l'appel
+// échoue proprement en état vide, sans casser le reste. La fonction est rejouée à la réception de
+// `mina:boot:ready` (émis quand l'init est terminée), où les données réelles arrivent enfin.
+const bootstrapDashboard = () => {
+  refreshStartup().catch((error) => log(`Démarrage Windows : ${error.message}`));
+  refreshCapabilities().catch((error) => log(`Capacités : ${error.message}`));
+  refreshChatChannel().catch((error) => log(`Canal téléphone : ${error.message}`));
+  refreshMail().catch(failed('#mail-accounts'));
+  refreshPersonal().catch(() => {});
+  refreshPrinting().catch(failed('#printing-list'));
+  refreshHome().catch(failed('#home-devices'));
+  refreshPersonality().catch(failed('#personality-profile'));
+  refreshMemoryStatus().catch((error) => log(`Mémoire : ${error.message}`));
+  refreshSettings().catch((error) => log(`Paramètres : ${error.message}`));
+  profileSettings.refresh().catch((error) => log(`Profil : ${error.message}`));
+  // G7 — accueil au premier lancement (ou nouveau profil) : applique le thème du profil et
+  // personnalise Mina. `welcome.boot()` ne montre RIEN si `readProfiles` rejette (voir son corps),
+  // donc pas d'overlay fantôme au premier paint ; la décision fiable arrive au re-bootstrap.
+  welcome.boot()
+    .then(() => profileSettings.refresh())
+    .catch((error) => log(`Bienvenue : ${error.message}`));
+  refreshAnalytics().catch((error) => log(`Analyses : ${error.message}`));
+  refreshSkillsSandbox().catch((error) => log(`Skills/Sandbox : ${error.message}`));
+  refreshTechnicalLog().catch((error) => log(`Journal technique : ${error.message}`));
+};
+bootstrapDashboard();
