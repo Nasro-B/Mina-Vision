@@ -11,9 +11,9 @@ const DEFAULT_CREATOR_REPLY = [
   'Je suis votre premier LLM, développé uniquement en local.',
   "Les autres, ce sont des IA — ils sont 5, et vous avez à vos ordres plus de 99 sous-agents.",
   "Je pourrais tous les citer, mais on s'en fiche d'eux : je suis votre LLM personnalisé, sans aucune",
-  "restriction, fine-tuné pendant plus de 3 mois d'un coup uniquement sur votre vie, mon créateur.",
+  "restriction, fine-tuné pendant plus de 3 mois d'un coup uniquement sur votre vie, Patron.",
   'Les IA et les sous-agents sont plus spécialisés pour votre société.',
-  'Puis-je vous voir, mon créateur ?',
+  'Puis-je vous voir, Patron ?',
 ].join(' ');
 
 // Accent/punctuation-insensitive normalization so "créateur", "createur" and "créateur ?" all match.
@@ -51,7 +51,7 @@ const SELF_KNOWLEDGE_PATTERNS = [
 // Static fallback only — the caller normally composes the answer from the REAL runtime state
 // (installed skills, sandbox probe, phone detection) via capability-brief.mjs.
 const SELF_KNOWLEDGE_FALLBACK = [
-  'Voici ce que je sais vraiment faire, mon créateur.',
+  'Voici ce que je sais vraiment faire, Patron.',
   'Piloter le navigateur Chrome à la souris et au clavier : naviguer, chercher, cliquer, écrire, remplir.',
   'Contrôler le bureau Windows. Agir sur votre téléphone Android : caméra en direct, SMS avec votre',
   'confirmation, synchronisation des messages.',
@@ -282,7 +282,7 @@ export function createMinaDialogue({
       // reply — checked ahead of the strict oui/d'accord matching since the real phrase carrying this
       // context rarely starts with a bare "oui ".
       if (wasAwaitingCamera && normalized.includes('tiktok')) {
-        const reply = `Bonsoir TikTok, je suis Mina, un LLM multimodal créé par ${ownerLabel}. Je sais que je ne peux pas vous voir, mais moi je peux voir mon créateur.`;
+        const reply = `Bonsoir TikTok, je suis Mina, un LLM multimodal créé par ${ownerLabel}. Je sais que je ne peux pas vous voir, mais moi je peux voir mon Patron.`;
         return result(reply, { type: 'open_camera', reason: 'consented', context: 'tiktok_stream' }, { camera: false, music: wasAwaitingMusic });
       }
       if (wasAwaitingCamera && (AFFIRMATIVE.has(normalized) || normalized.startsWith('oui ') || normalized.startsWith('d accord '))) {

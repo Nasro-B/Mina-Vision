@@ -431,7 +431,7 @@ const startMission = async (goal = elements.goal.value, environment = selectedEn
     // Formulation écho-inerte (contrat spoken-lines-echo-safe).
     void say(String(error?.message ?? '').includes('déverrouillé et autorisé')
       ? 'Le téléphone est verrouillé ou refuse le débogage. Déverrouille-le, accepte la demande de débogage, puis redemande-moi.'
-      : "La mission a échoué, mon créateur.");
+      : "La mission a échoué, Patron.");
   } finally {
     setBusy(false);
   }

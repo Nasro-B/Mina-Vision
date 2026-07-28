@@ -79,7 +79,7 @@ export function composeCapabilityBrief(snapshot = {}) {
     Object.entries(INTEGRATION_LABELS).map(([key, descriptor]) => [descriptor, snapshot[key]]),
   );
   return [
-    'Voici ce que je sais vraiment faire, mon créateur.',
+    'Voici ce que je sais vraiment faire, Patron.',
     ...CORE_LINES,
     skillsSentence(snapshot.skills),
     bundledSkillsSentence(snapshot.bundledSkills),
