@@ -81,11 +81,35 @@ export function createBootSupervisor({ onProgress = () => {}, onCapability = () 
     });
   }
 
+  // Exécute UN sous-système immédiatement, isolé. Pour le cas séquentiel inline (l'init réelle de
+  // main.mjs enchaîne des domaines qui posent des variables partagées entre eux) : register()/
+  // startAll() suppose des sous-systèmes indépendants et différés, ce qui n'est pas le cas ici.
+  // `run()` garde la même garantie — un throw ne se propage jamais, il devient `unavailable`
+  // (ou `failed` si critique) et le catalogue est notifié — mais respecte l'ordre d'écriture du
+  // code appelant. La promesse résout toujours ; elle rend le résultat du sous-système.
+  async function run(subsystem) {
+    const valid = validateSubsystem(subsystem, seen);
+    seen.add(valid.id);
+    subsystems.push(valid);
+    const startedAt = Number(clock());
+    try {
+      await valid.start();
+      note({ id: valid.id, circle: valid.circle, critical: valid.critical, state: STATES.started, reason: null, startedAt });
+    } catch (error) {
+      const reason = reasonOf(error);
+      const state = valid.critical ? STATES.failed : STATES.unavailable;
+      note({ id: valid.id, circle: valid.circle, critical: valid.critical, state, reason, startedAt });
+    }
+    return results.get(valid.id);
+  }
+
   return Object.freeze({
     register,
     startAll,
+    run,
     get: (id) => results.get(id) ?? null,
     list: () => Object.freeze([...results.values()]),
+    ok: () => [...results.values()].every((entry) => entry.state !== STATES.failed),
     STATES,
   });
 }

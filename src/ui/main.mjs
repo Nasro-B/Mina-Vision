@@ -118,6 +118,8 @@ import { composeGovernanceDomains } from '../core/compose-governance-domains.mjs
 import { registerMinaIpc } from './ipc/register-ipc.mjs';
 import { buildCrashScreenHtml, shouldShowCrashScreen } from '../boot/crash-screen.mjs';
 import { bootFault } from '../boot/boot-fault.mjs';
+import { createBootSupervisor } from '../boot/boot-supervisor.mjs';
+import { circleOf } from '../core/domain-circles.mjs';
 import { createRoutineRegistry } from '../routines/routine-registry.mjs';
 import { createDailyBriefingService } from '../personal/daily-briefing-service.mjs';
 import { applyPersonalGraphMigrations, createGraphRepository } from '../graph/graph-repository.mjs';
@@ -3038,9 +3040,22 @@ app.whenReady().then(async () => {
     } catch { /* le catalogue ne casse jamais le boot */ }
   };
 
+  // Supervision par domaine (T1.2). Chaque domaine composé passe par `bootSupervisor.run` : un throw
+  // n'interrompt jamais les domaines suivants — il devient `unavailable` avec sa raison nommée, et
+  // l'événement `domain_degraded` part vers l'UI, exactement comme le faisaient les try/catch inline
+  // qu'il remplace. Le corps garde la main sur son état de SUCCÈS (available vs degraded selon ses
+  // dépendances). L'isolement est ainsi UNIFORME et centralisé, au lieu d'être recopié par domaine.
+  const bootSupervisor = createBootSupervisor({
+    onCapability: ({ id, status, reason }) => {
+      reportCapability(id, status, reason);
+      if (status === 'unavailable') send('mina:event', { type: 'domain_degraded', domain: id, reason });
+    },
+  });
+  const superviseDomain = (id, start) => bootSupervisor.run({ id, circle: circleOf(id), start });
+
   // Task 11 — domaine personnel : briefing du jour + routines + graphe personnel (composition
   // réelle ; les services Google restent optionnels — sections absentes si non connectés, honnête).
-  try {
+  await superviseDomain('personal', async () => {
     const routineRegistry = createRoutineRegistry({
       repository: createJsonRepository({ filename: path.join(app.getPath('userData'), 'mina-personal-routines.sqlite'), table: 'routines', nativeBinding }),
       clock: Date.now,
@@ -3063,14 +3078,14 @@ app.whenReady().then(async () => {
       }),
     };
     reportCapability('personal', googleCalendarService ? 'available' : 'degraded', googleCalendarService ? null : 'google_personnel_non_connecte');
-  } catch (error) {
-    reportCapability('personal', 'unavailable', String(error?.message ?? error).slice(0, 200));
-    send('mina:event', { type: 'domain_degraded', domain: 'personal', reason: String(error?.message ?? error).slice(0, 200) });
-  }
+  });
 
   // Task 12 — documents : réception en quarantaine + impression réelle ; les services sans
   // implémentation runtime (conversion sandbox, formulaires, téléchargement) restent absents.
-  try {
+  await superviseDomain('documents', async () => {
+    // Point de faute par domaine (T1.2) : `MINA_BOOT_FAULT=domain:documents` fait échouer CE domaine
+    // pour prouver que les suivants s'initialisent quand même et que l'app reste prête.
+    bootFault('domain:documents');
     const documentIntake = createDocumentIntake({
       quarantineStore: createDocumentQuarantineStore({
         filesystem: { writeFile, readFile, mkdir, rm },
@@ -3092,14 +3107,11 @@ app.whenReady().then(async () => {
       registerPrinting: false,
     };
     reportCapability('documents', 'available');
-  } catch (error) {
-    reportCapability('documents', 'unavailable', String(error?.message ?? error).slice(0, 200));
-    send('mina:event', { type: 'domain_degraded', domain: 'documents', reason: String(error?.message ?? error).slice(0, 200) });
-  }
+  });
 
   // Task 13 — personnalité : service réel scellé par le coffre (dégradé tant que le coffre
   // n'est pas ouvrable). Aucune élévation : proposer ne mutera jamais sans confirmation locale.
-  try {
+  await superviseDomain('personality', async () => {
     const personalityService = createPersonalityService({
       keyring,
       configRepository: createJsonRepository({ filename: path.join(app.getPath('userData'), 'mina-personality.sqlite'), table: 'personality', nativeBinding }),
@@ -3107,9 +3119,7 @@ app.whenReady().then(async () => {
     });
     personalityController = createPersonalityController({ personalityService });
     reportCapability('personality', 'available');
-  } catch (error) {
-    reportCapability('personality', 'unavailable', String(error?.message ?? error).slice(0, 200));
-  }
+  });
 
   // Tasks 10/13 — domaines de gouvernance composés avec leurs VRAIS fournisseurs (registre
   // invocable + estimateur de budget + classificateur de divulgation + politique réseau + garde
