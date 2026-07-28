@@ -371,7 +371,18 @@ app.on('second-instance', () => {
 });
 
 const sendRaw = (channel, payload) => {
-  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+  // Robustesse au shutdown (bug trouvé par le smoke boot T2.2) : pendant la fermeture, la
+  // BrowserWindow peut n'être pas encore `isDestroyed()` alors que son `webContents` l'est déjà —
+  // un envoi tardif (journal technique, événement d'init en vol) levait alors « Object has been
+  // destroyed ». Pire : ce throw remontait DANS les handlers uncaughtException/unhandledRejection
+  // qui rappellent le journal → sendRaw → re-throw → crash fatal. On vérifie les DEUX niveaux et on
+  // enveloppe : un envoi vers une fenêtre morte ne doit JAMAIS tuer le process.
+  try {
+    const contents = mainWindow?.webContents;
+    if (mainWindow && !mainWindow.isDestroyed() && contents && !contents.isDestroyed()) {
+      contents.send(channel, payload);
+    }
+  } catch { /* fenêtre en cours de destruction : envoi ignoré, jamais fatal */ }
 };
 // Same raw entries feed two views: technicalLog is the append-only recent-history list already
 // wired everywhere; errorAggregator collapses the SAME stream by signature so a flaky dependency
@@ -2317,7 +2328,14 @@ const createWindow = async () => {
     if (url !== mainWindow.webContents.getURL()) event.preventDefault();
   });
   await loadAndShowWindow(mainWindow, path.join(UI_DIR, 'index.html'));
-  if (SMOKE_MODE) setTimeout(() => { isQuitting = true; app.quit(); }, 1_200);
+  if (SMOKE_MODE) {
+    // Marqueur de smoke boot (T2.2) : imprimé UNIQUEMENT ici, après le chargement réussi de la
+    // fenêtre PRINCIPALE (index.html). Le smoke exige ce marqueur, pas seulement une sortie 0 —
+    // sinon un boot où la fenêtre principale meurt (écran de crash, ou zombie) sortirait aussi 0 et
+    // passerait à tort. Sa présence prouve que le vrai tableau de bord s'est ouvert.
+    process.stdout.write('MINA_SMOKE_WINDOW_OK\n');
+    setTimeout(() => { isQuitting = true; app.quit(); }, 1_200);
+  }
 };
 
 app.whenReady().then(async () => {
