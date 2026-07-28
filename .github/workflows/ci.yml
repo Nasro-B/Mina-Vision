@@ -53,6 +53,12 @@ jobs:
       - name: Suite complète (unitaire + intégration)
         run: npm test
 
+      # Smoke boot (T2.2) : lance la VRAIE app Electron et exige l'ouverture de la fenêtre
+      # principale. C'est ce qui rend « CI vert » = « Mina démarre » — l'invariant que la Vague 1
+      # garantit et que ce test protège de toute régression future.
+      - name: Smoke boot (l'app démarre vraiment)
+        run: npm run test:smoke
+
       - name: Audit des dépendances (informatif, ne bloque pas la fusion)
         run: npm audit --audit-level=critical
         continue-on-error: true

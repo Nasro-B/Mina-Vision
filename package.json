@@ -22,7 +22,8 @@
     "start:local-only": "powershell -NoProfile -File scripts/start-mina.ps1 -Mode LocalOnly -Offline",
     "connect:google": "electron scripts/connect-google-account.mjs",
     "test:unit": "vitest run --exclude tests/integration/** --maxWorkers=2",
-    "test:smoke": "node tests/smoke/boot-smoke.mjs"
+    "test:smoke": "node tests/smoke/boot-smoke.mjs",
+    "test:release": "npm run test && npm run test:smoke"
   },
   "keywords": [],
   "author": "Nasro Berkoun",
