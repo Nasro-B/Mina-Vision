@@ -33,7 +33,12 @@ async function bootRenderer({ profilesWhenReady }) {
     setActiveProfile: (id) => ({ id, name: 'X', theme: 'system' }),
     probeMemory: () => ({ state: 'ready' }),
     memoryStatus: () => ({ locked: true, initialized: true }),
-    status: () => ({ ok: false }),
+    // Comme le vrai handler `mina:status` : absent tant que l'init n'a pas enregistré les IPC ; une
+    // fois prêt, renvoie un état sain (clés renouvelées → applyStatusFromHealth cache le panneau).
+    status: () => {
+      if (!state.ready) throw new Error("No handler registered for 'mina:status'");
+      return { ok: true, config: { credentialsRotated: true, dryRun: true } };
+    },
     readJournal: () => [],
   };
   const api = new Proxy({}, {
@@ -99,5 +104,19 @@ describe('fenêtre-d\'abord — bienvenue non fantôme (T1.1)', () => {
     await flush();
     // boot_ready : readProfiles résout (aucun profil) → l'accueil s'affiche, cette fois à raison.
     expect(overlayVisible(), 'premier lancement réel : accueil affiché après boot_ready').toBe(true);
+  });
+
+  it('« Accès IA verrouillé » ne s\'affiche PAS quand mina:status rejette au 1er paint (régression T1.1)', async () => {
+    // Reproduction exacte du bug signalé : `mina:status` n'est pas encore enregistré au premier
+    // paint (fenêtre-d'abord) → l'ancien code affichait le panneau de verrouillage avec « No handler
+    // registered for mina:status ». Le panneau doit rester caché tant que boot_ready n'a pas eu lieu.
+    const env = await bootRenderer({ profilesWhenReady: { profiles: [], activeProfileId: null, welcomeCompleted: false } });
+    const lockPanel = document.querySelector('#lock-panel');
+    expect(lockPanel, '#lock-panel présent').not.toBeNull();
+    expect(lockPanel.hidden, 'pas de verrouillage tant que le boot n\'est pas prêt').toBe(true);
+    env.fireBootReady();
+    await flush();
+    // boot_ready : status résout ok → toujours pas de verrouillage.
+    expect(lockPanel.hidden, 'statut OK après boot_ready : pas de verrouillage').toBe(true);
   });
 });

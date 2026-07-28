@@ -1613,11 +1613,17 @@ elements.voice.addEventListener('click', async () => {
   }
 });
 
+// Fenêtre-d'abord (T1.1) : faux tant que l'init des domaines n'a pas émis `mina:boot:ready`. Avant
+// ça, un appel IPC qui échoue signifie « handler pas encore enregistré », PAS une panne — l'UI ne
+// doit donc pas alarmer (ni panneau de verrouillage, ni erreur brute) durant cette fenêtre.
+let bootReady = false;
 api.onEvent((event) => {
   if (event.type === 'boot_ready') {
     // Fenêtre-d'abord (T1.1) : l'init des domaines est terminée, les handlers IPC existent enfin.
-    // On rejoue le bootstrap pour que les données réelles remplacent l'état vide du premier paint —
-    // et c'est ici que la décision d'accueil (welcome) devient fiable.
+    // On marque le boot prêt (les échecs d'IPC ne sont plus « pas encore prêt » mais de vrais
+    // problèmes) et on rejoue le bootstrap pour que les données réelles remplacent l'état vide du
+    // premier paint — et c'est ici que la décision d'accueil (welcome) devient fiable.
+    bootReady = true;
     bootstrapDashboard();
     return;
   }
@@ -1962,10 +1968,16 @@ api.onVoiceDropPlayback?.(() => {
   stopVoicePlayback();
 });
 
-api.status().then((status) => {
+// Statut « Accès IA » — rejoué au premier paint ET à `mina:boot:ready` (via bootstrapDashboard).
+// Avant boot_ready, un échec = handler `mina:status` pas encore enregistré (fenêtre-d'abord) : on
+// reste silencieux, le vrai statut arrivera. APRÈS boot_ready, un échec est un vrai problème de
+// configuration → panneau de verrouillage. Sans cette garde, l'app affichait « Accès IA verrouillé /
+// No handler registered for mina:status » au démarrage (régression fenêtre-d'abord).
+const refreshAiStatus = () => api.status().then((status) => {
   applyStatusFromHealth(status);
   if (status.ok) elements.dentalMode.textContent = status.config.dryRun ? "Aperçu, rien n'est modifié" : 'Sélection avec confirmation';
 }).catch((error) => {
+  if (!bootReady) return;
   setStatus('Configuration invalide', 'blocked');
   elements.lockPanel.hidden = false;
   elements.lockText.textContent = error.message;
@@ -2370,7 +2382,10 @@ document.querySelector('#capabilities-refresh')?.addEventListener('click', () =>
 // Panneaux de domaine : e-mail, organisation personnelle, impression, maison, personnalité.
 // Chaque domaine dit la VÉRITÉ — un domaine non composé affiche « indisponible » avec sa
 // raison plutôt qu'une liste vide qui laisserait croire à un état sain.
-const failed = (target) => (error) => renderUnavailable(target, String(error?.message ?? error).slice(0, 160));
+// Avant `mina:boot:ready`, un échec IPC = handler pas encore enregistré (fenêtre-d'abord) : le
+// panneau affiche « Démarrage… », jamais l'erreur brute « No handler registered for … ». Après
+// boot_ready, c'est une vraie panne → on montre la raison réelle.
+const failed = (target) => (error) => renderUnavailable(target, bootReady ? String(error?.message ?? error).slice(0, 160) : 'Démarrage…');
 
 const refreshMail = async () => {
   const accounts = await api.listMailAccounts();
@@ -2536,26 +2551,35 @@ elements.analyticsTo.value = localDateTimeValue(new Date());
 // handler IPC n'est pas encore enregistré (la fenêtre s'ouvre AVANT l'init des domaines), l'appel
 // échoue proprement en état vide, sans casser le reste. La fonction est rejouée à la réception de
 // `mina:boot:ready` (émis quand l'init est terminée), où les données réelles arrivent enfin.
+// Journalise un échec de bootstrap SEULEMENT après `mina:boot:ready` : avant, un rejet = handler pas
+// encore prêt (fenêtre-d'abord), pas une panne — inutile d'inonder le journal de « No handler
+// registered for … » qui disparaîtront au re-bootstrap.
+const bootLog = (label) => (error) => { if (bootReady) log(`${label} : ${error?.message ?? error}`); };
 const bootstrapDashboard = () => {
-  refreshStartup().catch((error) => log(`Démarrage Windows : ${error.message}`));
-  refreshCapabilities().catch((error) => log(`Capacités : ${error.message}`));
-  refreshChatChannel().catch((error) => log(`Canal téléphone : ${error.message}`));
+  refreshAiStatus();
+  refreshStartup().catch(bootLog('Démarrage Windows'));
+  refreshCapabilities().catch(bootLog('Capacités'));
+  refreshChatChannel().catch(bootLog('Canal téléphone'));
   refreshMail().catch(failed('#mail-accounts'));
   refreshPersonal().catch(() => {});
   refreshPrinting().catch(failed('#printing-list'));
   refreshHome().catch(failed('#home-devices'));
   refreshPersonality().catch(failed('#personality-profile'));
-  refreshMemoryStatus().catch((error) => log(`Mémoire : ${error.message}`));
-  refreshSettings().catch((error) => log(`Paramètres : ${error.message}`));
-  profileSettings.refresh().catch((error) => log(`Profil : ${error.message}`));
+  refreshMemoryStatus().catch(bootLog('Mémoire'));
+  refreshSettings().catch(bootLog('Paramètres'));
+  profileSettings.refresh().catch(bootLog('Profil'));
   // G7 — accueil au premier lancement (ou nouveau profil) : applique le thème du profil et
   // personnalise Mina. `welcome.boot()` ne montre RIEN si `readProfiles` rejette (voir son corps),
   // donc pas d'overlay fantôme au premier paint ; la décision fiable arrive au re-bootstrap.
   welcome.boot()
     .then(() => profileSettings.refresh())
-    .catch((error) => log(`Bienvenue : ${error.message}`));
-  refreshAnalytics().catch((error) => log(`Analyses : ${error.message}`));
-  refreshSkillsSandbox().catch((error) => log(`Skills/Sandbox : ${error.message}`));
-  refreshTechnicalLog().catch((error) => log(`Journal technique : ${error.message}`));
+    .catch(bootLog('Bienvenue'));
+  refreshAnalytics().catch(bootLog('Analyses'));
+  refreshSkillsSandbox().catch(bootLog('Skills/Sandbox'));
+  refreshTechnicalLog().catch(bootLog('Journal technique'));
 };
+// Lancé une 1re fois au paint (dégradation propre : sous fenêtre-d'abord les handlers ne sont pas
+// prêts, chaque appel échoue en silence via son .catch et son panneau affiche « Démarrage… »), puis
+// REJOUÉ à `mina:boot:ready` où les vraies données arrivent. `failed()` ci-dessous n'affiche l'erreur
+// brute qu'APRÈS boot_ready — avant, un échec = « pas encore prêt », pas une panne.
 bootstrapDashboard();
