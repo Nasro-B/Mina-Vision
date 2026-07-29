@@ -37,15 +37,23 @@ const CREATOR_PATTERNS = [
 
 // Honest, fixed self-description: only what is actually wired TODAY, with the not-yet list said
 // out loud — Mina claiming skills she doesn't have is exactly the hallucination this layer kills.
+// Élargi (2026-07-29, bug live Nasro : « tout de suite… voilà » SANS lire la liste). La couche
+// DÉTERMINISTE doit se déclencher pour toute formulation naturelle — sinon on dépend du modèle vocal
+// qui n'émet pas toujours l'outil decrire_capacites et improvise une clôture creuse. Couvre « tu
+// peux faire quoi », « dis-moi tes outils », « c'est quoi tes fonctions », « montre-moi tes
+// compétences »… Testé : 18 formulations MATCH, 0 faux positif (« tu peux faire un café », « que
+// sais-tu de la météo », « liste mes rendez-vous » ne matchent pas). Sur-déclencher est bénin (une
+// description honnête) ; sous-déclencher = le bug de Nasro.
+const CAP_NOUN = '(?:outils|competences|capacites|capacite|fonctions|fonctionnalites|skills|plugins)';
 const SELF_KNOWLEDGE_PATTERNS = [
-  /qu (est ce que tu|est ce que vous) sais? faire/u,
-  /que sais (tu|vous) faire/u,
-  /quels? sont (tes|vos) (outils|competences|capacites|skills|plugins)/u,
-  /quelles? sont (tes|vos) (outils|competences|capacites|skills|plugins)/u,
-  /liste (tes|vos|moi tes) (outils|competences|capacites|skills|plugins)/u,
-  /tu as quels? (outils|competences|capacites|skills|plugins)/u,
-  /c est quoi (tes|vos) (outils|competences|capacites|skills|plugins)/u,
-  /(tes|vos) (outils|competences|capacites|skills|plugins) c est quoi/u,
+  /qu (est ce que|est ce qu) (tu|vous|on) (sais|sait|peux|peut|pouvez) faire/u,
+  /que (sais|sait|peux|peut|pouvez) (tu|vous) faire/u,
+  /(tu|vous|t) (sais|sait|savez|peux|peut|pouvez) faire quoi/u,
+  new RegExp(`(dis|dit|montre|liste|enumere|cite|donne|presente|explique) (moi |nous |)(ce que (tu|vous) (sais|sait|savez|peux|peut|pouvez) faire|(tes|vos|les) ${CAP_NOUN})`, 'u'),
+  new RegExp(`(quels|quelles|quel|quelle) sont (tes|vos|les) ${CAP_NOUN}`, 'u'),
+  new RegExp(`(tu as|t as|vous avez) (quels|quelles|quoi comme) ${CAP_NOUN}`, 'u'),
+  new RegExp(`c est quoi (tes|vos|les) ${CAP_NOUN}`, 'u'),
+  new RegExp(`(tes|vos) ${CAP_NOUN} c est quoi`, 'u'),
 ];
 
 // Static fallback only — the caller normally composes the answer from the REAL runtime state

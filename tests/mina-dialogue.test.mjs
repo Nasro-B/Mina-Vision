@@ -388,11 +388,37 @@ describe('createMinaDialogue: self-knowledge (tools, skills, capabilities)', () 
     'liste tes capacités',
     'tu as quels skills',
     "c'est quoi tes plugins",
+    // Élargi 2026-07-29 (bug live Nasro : « tout de suite… voilà » SANS lire la liste car la
+    // formulation ratait les patterns). Ces tournures naturelles DOIVENT déclencher la lecture.
+    'tu peux faire quoi',
+    "qu'est-ce que tu peux faire",
+    'tu sais faire quoi',
+    'dis-moi ce que tu sais faire',
+    'montre-moi tes outils',
+    'montre-moi tes compétences',
+    "c'est quoi tes fonctions",
+    'quelles sont tes fonctions',
+    'énumère tes compétences',
+    'cite tes capacités',
+    "t'as quoi comme outils",
+    'présente tes outils',
   ])('turns "%s" into a describe_capabilities action (the caller composes the answer from REAL state)', (transcript) => {
     const dialogue = fresh();
     const result = dialogue.interpret(transcript, {});
     expect(result.action).toEqual({ type: 'describe_capabilities' });
     expect(result.reply).toBeNull();
+  });
+
+  // Anti-sur-déclenchement : une demande d'ACTION ou une question de CONNAISSANCE contenant
+  // « faire », « tes », « liste » ne doit pas être confondue avec « décris tes capacités ».
+  it.each([
+    'tu peux faire un café',
+    'que sais-tu de la météo',
+    'montre-moi la météo',
+    'liste mes rendez-vous',
+    'donne-moi la météo',
+  ])('does NOT treat "%s" as a self-knowledge question', (transcript) => {
+    expect(fresh().interpret(transcript, {}).action?.type).not.toBe('describe_capabilities');
   });
 
   it('self-knowledge is a side answer: it never consumes a pending camera consent', () => {
