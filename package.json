@@ -23,6 +23,7 @@
     "connect:google": "electron scripts/connect-google-account.mjs",
     "test:unit": "vitest run --exclude tests/integration/** --maxWorkers=2 --no-file-parallelism",
     "test:smoke": "node tests/smoke/boot-smoke.mjs",
+    "test:publication": "vitest run tests/publication-schema.test.mjs tests/publication-service.test.mjs tests/asset-policy.test.mjs tests/asset-store.test.mjs tests/illustration-generator.test.mjs tests/pdf-generator.test.mjs tests/docx-generator.test.mjs tests/presentation-schema.test.mjs tests/presentation-template-registry.test.mjs tests/pptx-generator.test.mjs tests/xlsx-generator.test.mjs tests/text-generators.test.mjs tests/libreoffice-converter.test.mjs tests/integration/publication-pipeline.test.mjs",
     "test:release": "npm run verify:release",
     "verify:release": "node scripts/verify-release.mjs"
   },
