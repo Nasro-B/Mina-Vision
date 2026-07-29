@@ -1,7 +1,7 @@
-// Génère toutes les icônes de Mina Vision à partir de assets/Logo/Mina Vision-logo.png :
+// Génère toutes les icônes de Mina Vision à partir de assets/Logo/Mina Vision3.png :
 //   - Windows : PNG 256 (icône de fenêtre/barre des tâches) + .ico multi-tailles (raccourci bureau) ;
 //   - Android : mipmaps ic_launcher / ic_launcher_round aux 5 densités.
-// Source unique de vérité pour le logo — relancer après toute mise à jour du PNG source.
+// Source unique de vérité pour le logo (app + Mina + lanceurs) — relancer après toute mise à jour.
 
 import sharp from 'sharp';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SOURCE = join(ROOT, 'assets', 'Logo', 'Mina Vision-logo.png');
+const SOURCE = join(ROOT, 'assets', 'Logo', 'Mina Vision3.png');
 
 const pngAt = (size) => sharp(SOURCE)
   .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
