@@ -46,6 +46,15 @@ import { createJobWorkspaceManager } from '../sandbox/job-workspace.mjs';
 import { createSandboxRunner } from '../sandbox/sandbox-runner.mjs';
 import { createCodeServices } from '../code/code-services.mjs';
 import { createDocumentGenerator } from '../documents/document-generator.mjs';
+import PptxGenJS from 'pptxgenjs';
+import { generatePdf } from '../publication/pdf-generator.mjs';
+import { generateDocx } from '../publication/docx-generator.mjs';
+import { generateXlsx } from '../publication/xlsx-generator.mjs';
+import { generateText } from '../publication/text-generators.mjs';
+import { createPresentationGenerator } from '../publication/pptx-generator.mjs';
+import { createPresentationTemplateRegistry } from '../publication/presentation-template-registry.mjs';
+import { createPublicationService } from '../publication/publication-service.mjs';
+import { registerPublicationIpc } from '../publication/publication-ipc.mjs';
 import { analyzeEntries } from '../diagnostics/error-analyst.mjs';
 import {
   createPauseGate,
@@ -503,6 +512,28 @@ const getDocumentGenerator = () => {
     fs: { writeFile, mkdir, access },
   });
   return documentGeneratorInstance;
+};
+// Domaine Publication (PDF/DOCX/PPTX/XLSX/MD/HTML/CSV/JSON) — sortie dans Documents/Mina Vision/
+// Publications, écriture ATOMIQUE, jamais d'écrasement, reçu hashé. 100 % local, aucun fournisseur IA
+// sur le chemin sans IA. Paresseux : construit au premier usage (zéro coût au boot).
+let publicationServiceInstance = null;
+const getPublicationService = () => {
+  publicationServiceInstance ??= createPublicationService({
+    generators: {
+      pdf: generatePdf,
+      docx: generateDocx,
+      xlsx: generateXlsx,
+      text: generateText,
+      pptx: createPresentationGenerator({ pptxFactory: () => new PptxGenJS() }),
+    },
+    filesystem: { writeFile, rename, mkdir, access },
+    hash: (buffer) => createHash('sha256').update(buffer).digest('hex'),
+    baseDir: path.join(app.getPath('documents'), 'Mina Vision', 'Publications'),
+    randomId: randomUUID,
+    clock: () => new Date(),
+    onEvent: (event) => void activityJournal?.append('publication', event),
+  });
+  return publicationServiceInstance;
 };
 // Énoncés finaux et intentions — le transcript fragmenté et l'audio binaire restent hors journal.
 const JOURNALED_CHANNELS = new Set(['mina:voice-wake', 'mina:voice-command', 'mina:voice-dialogue', 'mina:voice-intent']);
@@ -2053,6 +2084,15 @@ const registerIpc = () => {
     ipcMain,
     buildServices: getCodeServices,
     onEvent: (event) => void activityJournal?.append('code_ipc_error', event),
+  });
+  // Domaine Publication : génération locale déterministe des 8 formats. Import d'assets et conversion
+  // LibreOffice ne sont pas câblés ici → l'IPC renvoie honnêtement « indisponible » plutôt que de
+  // simuler. La destination absolue/distante est déjà refusée par le schéma.
+  registerPublicationIpc({
+    ipcMain,
+    buildService: getPublicationService,
+    listTemplates: () => createPresentationTemplateRegistry().list(),
+    onEvent: (event) => void activityJournal?.append('publication_ipc', event),
   });
   ipcMain.handle('mina:local-tts', async (_event, payload) => {
     if (pauseGate.isPaused()) return { spoken: false, reason: 'paused' };

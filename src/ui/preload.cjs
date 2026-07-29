@@ -94,6 +94,15 @@ function createPreloadApi(ipcRenderer) {
     healthSnapshot: () => ipcRenderer.invoke('mina:health:snapshot'),
     getDailyBriefing: (request) => ipcRenderer.invoke('mina:personal:briefing', request),
     getEmergencyStatus: () => ipcRenderer.invoke('mina:emergency:status'),
+    // Domaine Publication : génération locale des 8 formats (PDF/DOCX/PPTX/XLSX/MD/HTML/CSV/JSON).
+    // Aucune primitive fs n'est exposée — cinq méthodes validées côté processus principal seulement.
+    publication: Object.freeze({
+      templates: () => ipcRenderer.invoke('mina:publication:templates'),
+      importAsset: (request) => ipcRenderer.invoke('mina:publication:assets:import', request),
+      preview: (request) => ipcRenderer.invoke('mina:publication:preview', request),
+      publish: (request) => ipcRenderer.invoke('mina:publication:publish', request),
+      convert: (request) => ipcRenderer.invoke('mina:publication:convert', request),
+    }),
     // Read-only: publisher approval, connector activation and personality patch confirmation are
     // never exposed to the renderer (they stay main-process/local, per the plan's Global Constraint).
     listConnectors: () => ipcRenderer.invoke('mina:connectors:list'),
