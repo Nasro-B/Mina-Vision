@@ -2593,3 +2593,69 @@ const bootstrapDashboard = () => {
 // REJOUÉ à `mina:boot:ready` où les vraies données arrivent. `failed()` ci-dessous n'affiche l'erreur
 // brute qu'APRÈS boot_ready — avant, un échec = « pas encore prêt », pas une panne.
 bootstrapDashboard();
+
+// Panneau Publications : génère localement les 8 formats via window.mina.publication (chemin sans IA).
+// Le contenu libre devient des blocs (« ## » section, « - » puce, sinon paragraphe) ; pptx/xlsx/csv
+// reçoivent une structure minimale (slide de puces / feuille / tableau) à partir des mêmes lignes.
+const publicationEls = {
+  format: document.querySelector('#publication-format'),
+  title: document.querySelector('#publication-title-input'),
+  content: document.querySelector('#publication-content'),
+  generate: document.querySelector('#publication-generate'),
+  result: document.querySelector('#publication-result'),
+};
+
+function contentToBlocks(text) {
+  const blocks = [];
+  for (const raw of String(text ?? '').split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const heading = line.match(/^(#{1,3})\s+(.+)$/u);
+    if (heading) { blocks.push({ kind: 'heading', text: heading[2], level: heading[1].length }); continue; }
+    if (/^[-*]\s+/u.test(line)) {
+      const item = line.replace(/^[-*]\s+/u, '');
+      const last = blocks[blocks.length - 1];
+      if (last && last.kind === 'bullets') last.items.push(item);
+      else blocks.push({ kind: 'bullets', items: [item] });
+      continue;
+    }
+    blocks.push({ kind: 'paragraph', text: line });
+  }
+  return blocks;
+}
+
+function buildPublicationRequest(format, title, content) {
+  const lines = String(content ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
+  if (format === 'pptx') {
+    return { format, title, slides: [{ kind: 'cover', title: title || 'Présentation' }, { kind: 'bullets', title: 'Contenu', bullets: lines }] };
+  }
+  if (format === 'xlsx') {
+    return { format, title, sheets: [{ name: 'Feuille 1', rows: lines.map((line) => line.split(';').map((cell) => cell.trim())) }] };
+  }
+  if (format === 'csv') {
+    return { format, title, blocks: [{ kind: 'table', rows: lines.map((line) => line.split(';').map((cell) => cell.trim())) }] };
+  }
+  return { format, title, blocks: contentToBlocks(content) };
+}
+
+if (publicationEls.generate && api?.publication?.publish) {
+  publicationEls.generate.addEventListener('click', async () => {
+    const format = publicationEls.format.value;
+    const title = publicationEls.title.value.trim();
+    publicationEls.result.textContent = 'Génération locale en cours…';
+    publicationEls.generate.disabled = true;
+    try {
+      const response = await api.publication.publish(buildPublicationRequest(format, title, publicationEls.content.value));
+      if (response?.ok) {
+        publicationEls.result.textContent = `Créé : ${response.receipt.filePath} (${response.receipt.bytes} octets).`;
+        log(`Publication ${format} créée : ${response.receipt.filePath}`);
+      } else {
+        publicationEls.result.textContent = `Échec : ${response?.error ?? 'inconnu'}.`;
+      }
+    } catch (error) {
+      publicationEls.result.textContent = `Erreur : ${error.message}`;
+    } finally {
+      publicationEls.generate.disabled = false;
+    }
+  });
+}

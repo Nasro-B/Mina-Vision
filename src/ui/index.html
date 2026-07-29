@@ -647,6 +647,37 @@
         </div>
       </section>
 
+      <section class="memory-panel publication-panel" aria-labelledby="publication-title">
+        <div class="activity-head">
+          <div><p class="eyebrow">Publications</p><h2 id="publication-title">Générer un document — sans IA</h2></div>
+        </div>
+        <div class="publication-form">
+          <label class="publication-field">Format
+            <select id="publication-format">
+              <option value="pdf">PDF</option>
+              <option value="docx">Word (DOCX)</option>
+              <option value="pptx">PowerPoint (PPTX)</option>
+              <option value="xlsx">Excel (XLSX)</option>
+              <option value="md">Markdown</option>
+              <option value="html">HTML</option>
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+            </select>
+          </label>
+          <label class="publication-field">Titre
+            <input id="publication-title-input" type="text" maxlength="120" placeholder="Bilan 2026" autocomplete="off">
+          </label>
+          <label class="publication-field">Contenu
+            <textarea id="publication-content" rows="6" placeholder="Un paragraphe par ligne. « ## Titre » = section, « - » = puce. Pour XLSX/CSV : colonnes séparées par « ; »."></textarea>
+          </label>
+          <div class="publication-actions">
+            <button class="primary-button" id="publication-generate" type="button">Générer sans IA</button>
+          </div>
+          <p class="sandbox-remediation">100&nbsp;% local. Sortie horodatée dans <code>Documents/Mina Vision/Publications</code>, jamais d’écrasement. Aucun appel à un fournisseur IA.</p>
+          <div id="publication-result" class="analytics-summary" aria-live="polite"></div>
+        </div>
+      </section>
+
       <section class="memory-panel" aria-labelledby="documents-title">
         <div class="activity-head">
           <div><p class="eyebrow">Documents &amp; urgence</p><h2 id="documents-title">Quarantaine et mode urgence</h2></div>

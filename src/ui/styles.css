@@ -779,3 +779,16 @@ kbd { padding: 2px 5px; border: 1px solid var(--line); border-bottom-width: 2px;
    On force [hidden] à cacher, scopé à la fenêtre de bienvenue uniquement. */
 .welcome-overlay[hidden],
 .welcome-overlay [hidden] { display: none !important; }
+
+/* Panneau Publications — génération locale des 8 formats (thème-agnostique, hérite des couleurs). */
+.publication-form { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.publication-field { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; font-weight: 600; }
+.publication-field select,
+.publication-field input,
+.publication-field textarea {
+  font: inherit; font-weight: 400; color: inherit; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35); background: rgba(148, 163, 184, 0.08);
+}
+.publication-field textarea { resize: vertical; min-height: 92px; line-height: 1.5; }
+.publication-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+#publication-result:not(:empty) { margin-top: 4px; font-size: 0.85rem; opacity: 0.95; }
