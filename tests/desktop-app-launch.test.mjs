@@ -52,7 +52,12 @@ describe('normalizeAction — launch_app desktop', () => {
 });
 
 describe('classifyAction — garde des apps sensibles au lancement', () => {
-  it.each(['powershell', 'CMD.exe', 'Terminal', '1Password', 'KeePassXC', 'Windows Security'])(
+  it.each([
+    'powershell', 'CMD.exe', 'Terminal', '1Password', 'KeePassXC', 'Windows Security',
+    // Trous comblés (prouvés live) : pwsh = PowerShell 7 (shell moderne, distinct de « powershell ») ;
+    // gestionnaires de mots de passe grand public absents de la liste d'origine ; regedit = système.
+    'pwsh', 'pwsh.exe', 'LastPass', 'Dashlane', 'NordPass', 'Proton Pass', 'Enpass', 'RoboForm', 'regedit',
+  ])(
     'bloque le lancement de « %s »',
     (app) => {
       const decision = classifyAction({ name: 'launch_app', app });
@@ -60,8 +65,10 @@ describe('classifyAction — garde des apps sensibles au lancement', () => {
     },
   );
 
-  it('autorise les apps ordinaires (Paint, Word, navigateur)', () => {
-    for (const app of ['mspaint', 'winword', 'chrome', 'notepad']) {
+  it('autorise les apps ordinaires SANS sur-bloquer (Proton Mail ≠ Proton Pass, compass ≠ enpass)', () => {
+    // Garde anti-sur-blocage : les noms distinctifs ne doivent pas capturer une app légitime dont
+    // le nom CONTIENT un fragment (« proton mail/vpn/drive » restent autorisés ; seul « pass » bloque).
+    for (const app of ['mspaint', 'winword', 'chrome', 'notepad', 'Proton Mail', 'Proton VPN', 'compass']) {
       expect(classifyAction({ name: 'launch_app', app }).decision).toBe('allow');
     }
   });
