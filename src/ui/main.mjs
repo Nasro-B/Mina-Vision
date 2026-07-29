@@ -1170,18 +1170,25 @@ const runDentalMission = async ({ maxItems = 100 } = {}) => {
 // (honnête — l'état change lentement) pendant que la sonde continue en fond et met à jour le cache.
 let capabilitySnapshotCache = null;
 const capabilitySnapshot = async () => {
-  const fresh = capabilitySnapshotFresh().then((snapshot) => {
+  // Rafraîchit TOUJOURS en arrière-plan, mais sert le cache INSTANTANÉMENT dès qu'il existe. Une
+  // réponse vocale (« que sais-tu faire ») ne doit JAMAIS attendre une sonde lente : la sonde
+  // téléphone (getPhoneBridge().detect → ADB) traîne plusieurs secondes quand le tél est hors ligne,
+  // et l'ancienne version re-courait cette sonde à CHAQUE appel (race 3 s) même avec un cache chaud.
+  // Ce délai de ~3 s laissait le modèle vocal improviser une clôture (« voilà ») AVANT même que le
+  // brief [DIS] soit envoyé — bug live « elle ne dit pas ses outils » (Nasro, tél offline).
+  const refresh = capabilitySnapshotFresh().then((snapshot) => {
     capabilitySnapshotCache = snapshot;
     return snapshot;
   });
+  refresh.catch(() => {});
+  if (capabilitySnapshotCache) return capabilitySnapshotCache;
+  // Démarrage à froid (aucun cache encore) : on attend brièvement, puis un défaut sûr plutôt que
+  // de bloquer indéfiniment sur une sonde lente.
   const budget = new Promise((resolve) => {
     const timer = setTimeout(() => resolve(null), 3_000);
     timer.unref?.();
   });
-  const winner = await Promise.race([fresh, budget]);
-  if (winner) return winner;
-  void fresh.catch(() => {});
-  return capabilitySnapshotCache ?? {
+  return (await Promise.race([refresh, budget])) ?? capabilitySnapshotCache ?? {
     skills: [],
     bundledSkills: [],
     sandbox: { available: false, reason: 'probe_lente' },
