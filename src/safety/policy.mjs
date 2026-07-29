@@ -12,7 +12,11 @@ const CONFIRM_ACTIONS = new Set([
   'run_downloaded_software',
 ]);
 
-const BLOCKED_APPS = /1password|bitwarden|keepass|sécurité windows|windows security|defender|antivirus|terminal|powershell|command prompt|cmd\.exe/i;
+// Interdits au premier plan ET au lancement : gestionnaires de mots de passe, terminaux/shells et
+// outils de sécurité/système. Chaque nom est DISTINCTIF pour ne pas sur-bloquer une app légitime
+// (« proton pass » bloqué mais « proton mail » autorisé ; « pwsh » = PowerShell 7, distinct de
+// « powershell », sinon le shell moderne passait au travers de la garde — trou réel comblé).
+const BLOCKED_APPS = /1password|bitwarden|keepass|lastpass|dashlane|nordpass|proton\s?pass|enpass|roboform|sécurité windows|windows security|defender|antivirus|regedit|terminal|powershell|pwsh|command prompt|cmd\.exe/i;
 const SENSITIVE_INTENT = /imprim|print|t[ée]l[ée]charg|download|envoy|send\b|achet|purchase|supprim|delete/iu;
 const BLOCKED_CAPABILITIES = /^(system\.terminal|credentials\.|security\.windows|computer\.(terminal|password_manager))/i;
 
