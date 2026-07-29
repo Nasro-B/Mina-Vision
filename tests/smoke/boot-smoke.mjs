@@ -24,11 +24,13 @@ import { dirname, resolve } from 'node:path';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const electronBinary = createRequire(import.meta.url)('electron');
+const lockHolder = join(ROOT, 'tests', 'smoke', 'profile-lock-holder.mjs');
 const BOOT_LIMIT_MS = 45_000; // large : premier démarrage à froid (modules natifs, migrations).
+const LOCK_HOLDER_LIMIT_MS = 15_000;
 const selfTestFault = process.env.MINA_SMOKE_SELFTEST === 'fault';
 
-function launch(userDataDir) {
-  const env = { ...process.env };
+function launch(userDataDir, extraEnv = {}) {
+  const env = { ...process.env, ...extraEnv };
   // Auto-test : casser volontairement le boot pour prouver que le smoke devient ROUGE.
   if (selfTestFault) env.MINA_BOOT_FAULT = 'boot:start';
   else delete env.MINA_BOOT_FAULT;
@@ -52,9 +54,57 @@ function launch(userDataDir) {
   });
 }
 
+function holdNamedProfileLock(namedUserData) {
+  const child = spawn(electronBinary, [lockHolder, `${'--mina-lock-holder-user-data='}${namedUserData}`], {
+    cwd: ROOT, env: process.env, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stderr = '';
+  let stdout = '';
+
+  return new Promise((resolvePromise) => {
+    let settled = false;
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolvePromise(result);
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      settle({ child, ready: false, stdout, stderr, timedOut: true });
+    }, LOCK_HOLDER_LIMIT_MS);
+    child.stdout.on('data', (chunk) => {
+      stdout += String(chunk);
+      if (stdout.includes('MINA_SMOKE_LOCK_HELD')) settle({ child, ready: true, stdout, stderr, timedOut: false });
+    });
+    child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+    child.on('exit', (code) => settle({ child, ready: false, code, stdout, stderr, timedOut: false }));
+  });
+}
+
+async function stopLockHolder(child) {
+  if (!child || child.exitCode !== null) return;
+  await new Promise((resolvePromise) => {
+    child.once('exit', resolvePromise);
+    child.kill('SIGKILL');
+  });
+}
+
+const appDataDir = await mkdtemp(join(tmpdir(), 'mina-smoke-app-data-'));
 const userDataDir = await mkdtemp(join(tmpdir(), 'mina-smoke-'));
+let lockHolderProcess = null;
 try {
-  const result = await launch(userDataDir);
+  const lock = await holdNamedProfileLock(join(appDataDir, 'Mina Vision'));
+  if (!lock.ready) {
+    console.error(`SMOKE ÉCHOUÉ : le titulaire du verrou de profil n'est pas prêt (${lock.timedOut ? 'timeout' : `sortie ${lock.code}`}).\n${lock.stderr.slice(-800)}`);
+    process.exitCode = 1;
+  } else {
+    lockHolderProcess = lock.child;
+  }
+
+  const result = lockHolderProcess
+    ? await launch(userDataDir, { APPDATA: appDataDir })
+    : { timedOut: false, code: null, stdout: '', stderr: '' };
   const fatal = /FATAL|ERR_MODULE_NOT_FOUND|Cannot find module|SyntaxError/u.test(result.stderr);
   // La VRAIE preuve du boot : la fenêtre PRINCIPALE (index.html) a chargé et imprimé son marqueur.
   // Une sortie 0 seule ne suffit pas — un boot dégradé en écran de crash sort aussi 0.
@@ -84,5 +134,7 @@ try {
     console.log('SMOKE OK : Mina ouvre sa fenêtre principale (marqueur reçu) et se ferme proprement (sortie 0).');
   }
 } finally {
+  await stopLockHolder(lockHolderProcess);
   await rm(userDataDir, { recursive: true, force: true });
+  await rm(appDataDir, { recursive: true, force: true });
 }

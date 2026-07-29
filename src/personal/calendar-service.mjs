@@ -4,6 +4,12 @@ function fieldsEqual(a, b, fields) {
   return fields.every((field) => a[field] === b[field]);
 }
 
+function requireProviderCapability(provider, capability) {
+  if (!Array.isArray(provider?.capabilities) || !provider.capabilities.includes(capability)) {
+    throw new Error(`personal_action_unsupported_by_provider:${capability}`);
+  }
+}
+
 export function createCalendarService({
   hub, repository, capabilityBroker, actionVerifier, confirmationService, clock,
 } = {}) {
@@ -66,10 +72,17 @@ export function createCalendarService({
     async commitProposal(proposalId) {
       const proposal = proposals.get(proposalId);
       if (!proposal) throw new Error('proposal_not_found');
-      proposals.delete(proposalId);
 
       const providerId = proposal.type === 'create' ? proposal.input.providerId : (await repository.get(proposal.eventId)).providerId;
       const provider = hub.adapter(providerId);
+      if (proposal.type === 'create') {
+        requireProviderCapability(provider, 'createEvent');
+        requireProviderCapability(provider, 'getEvent');
+      } else {
+        requireProviderCapability(provider, 'updateEvent');
+        requireProviderCapability(provider, 'getEvent');
+      }
+      proposals.delete(proposalId);
 
       await capabilityBroker.authorize({ capability: 'personal.calendar', effect: proposal.type === 'create' ? 'write' : 'write' });
       await requireConfirmation(proposal.type === 'create' ? 'Créer un événement calendrier' : 'Modifier un événement calendrier');
@@ -101,6 +114,7 @@ export function createCalendarService({
       const current = await repository.get(eventId);
       if (!current) throw new Error('calendar_event_not_found');
       const provider = hub.adapter(current.providerId);
+      requireProviderCapability(provider, 'cancelEvent');
       await capabilityBroker.authorize({ capability: 'personal.calendar', effect: 'write' });
       await requireConfirmation('Annuler un événement calendrier');
       await provider.cancelEvent(eventId);

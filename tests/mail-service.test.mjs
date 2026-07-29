@@ -5,6 +5,7 @@ import { createMailService } from '../src/mail/mail-service.mjs';
 function fakeAdapter(overrides = {}) {
   return {
     id: 'personal-imap',
+    capabilities: Object.freeze(['createDraft', 'send', 'reply', 'forward', 'move', 'label', 'archive', 'markRead', 'markSpam', 'unsubscribe', 'trash']),
     createDraft: vi.fn(async () => ({ draftId: 'd1' })),
     send: vi.fn(async () => ({ state: 'accepted_by_provider', providerMessageId: 'm1' })),
     reply: vi.fn(async () => ({ state: 'accepted_by_provider', providerMessageId: 'm2' })),
@@ -12,6 +13,7 @@ function fakeAdapter(overrides = {}) {
     move: vi.fn(async () => ({ state: 'accepted_by_provider' })),
     label: vi.fn(async () => ({ state: 'accepted_by_provider' })),
     archive: vi.fn(async () => ({ state: 'accepted_by_provider' })),
+    markRead: vi.fn(async () => ({ state: 'state_confirmed' })),
     markSpam: vi.fn(async () => ({ state: 'accepted_by_provider' })),
     unsubscribe: vi.fn(async () => ({ state: 'accepted_by_provider' })),
     trash: vi.fn(async () => ({ state: 'accepted_by_provider' })),
@@ -88,7 +90,7 @@ describe('mail service: mode 3 still enforces absolute denials', () => {
 
 describe('mail service: every action type routes to its adapter method', () => {
   it.each([
-    ['label', 'label'], ['move', 'move'], ['archive', 'archive'], ['mark_spam', 'markSpam'],
+    ['label', 'label'], ['move', 'move'], ['archive', 'archive'], ['mark_read', 'markRead'], ['mark_spam', 'markSpam'],
     ['unsubscribe', 'unsubscribe'], ['trash', 'trash'], ['forward', 'forward'],
   ])('commits a %s proposal through the matching adapter method', async (action, methodName) => {
     const { service, adapter } = harness({ defaultMode: 3, rules: [{ scope: 'account', match: 'personal-imap', mode: 3 }] });
@@ -101,6 +103,16 @@ describe('mail service: every action type routes to its adapter method', () => {
     const { service } = harness({ defaultMode: 3, adapters: fakeAdapter({ unsubscribe: undefined }) });
     const proposal = await service.propose({ accountId: 'personal-imap', action: 'unsubscribe', targets: TARGETS, content: {}, revision: 'r1' });
     await expect(service.commit({ proposalId: proposal.proposalId })).rejects.toThrow('mail_action_unsupported_by_provider:unsubscribe');
+  });
+
+  it('rejects an undeclared provider action while proposing, before a confirmation or a provider call', async () => {
+    const adapter = fakeAdapter({ capabilities: Object.freeze(['createDraft', 'send']) });
+    const { service, confirmLocal } = harness({ defaultMode: 3, adapters: adapter });
+
+    await expect(service.propose({ accountId: 'personal-imap', action: 'unsubscribe', targets: TARGETS, content: {}, revision: 'r1' }))
+      .rejects.toThrow('mail_action_unsupported_by_provider:unsubscribe');
+    expect(confirmLocal).not.toHaveBeenCalled();
+    expect(adapter.unsubscribe).not.toHaveBeenCalled();
   });
 });
 

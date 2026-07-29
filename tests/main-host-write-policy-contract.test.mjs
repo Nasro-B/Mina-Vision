@@ -27,9 +27,9 @@ describe('main host write policy contract', () => {
     for (const root of roots) {
       await walk(fileURLToPath(new URL(`../${root}`, import.meta.url)));
     }
+    const contents = await Promise.all(files.map(async (file) => ({ file, content: await readFile(file, 'utf8') })));
     const offenders = [];
-    for (const file of files) {
-      const content = await readFile(file, 'utf8');
+    for (const { file, content } of contents) {
       for (const needle of forbidden) {
         if (content.includes(`G:\\\\Serveurs\\\\${needle}`) || content.includes(`G:\\Serveurs\\${needle}`)) {
           offenders.push(`${file} → ${needle}`);

@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
+function requireProviderCapability(provider, capability) {
+  if (!Array.isArray(provider?.capabilities) || !provider.capabilities.includes(capability)) {
+    throw new Error(`personal_action_unsupported_by_provider:${capability}`);
+  }
+}
+
 export function createTaskService({ repository, hub, capabilityBroker, clock } = {}) {
   if (!repository?.get || !repository?.put) throw new TypeError('task_service_repository_required');
   if (!hub?.adapter) throw new TypeError('task_service_hub_required');
@@ -15,6 +21,11 @@ export function createTaskService({ repository, hub, capabilityBroker, clock } =
     return task;
   }
 
+  async function authorizeProviderWrite(task) {
+    const decision = await capabilityBroker.authorize({ capability: 'personal.tasks', effect: 'write', resource: task.sourceRef });
+    if (decision.decision !== 'allow') throw new Error(decision.reason ?? 'capability_denied');
+  }
+
   return Object.freeze({
     async propose({ title, sourceRef = null, dueAt = null, providerId = null }) {
       if (typeof title !== 'string' || title.trim().length === 0) throw new TypeError('task_title_required');
@@ -27,10 +38,9 @@ export function createTaskService({ repository, hub, capabilityBroker, clock } =
     async activate(taskId) {
       const task = await requireTask(taskId);
       if (task.status !== 'proposed') throw new Error('task_not_proposed');
-      const decision = await capabilityBroker.authorize({ capability: 'personal.tasks', effect: 'write', resource: task.sourceRef });
-      if (decision.decision !== 'allow') throw new Error(decision.reason ?? 'capability_denied');
-
       const provider = hub.adapter(task.providerId);
+      requireProviderCapability(provider, 'create');
+      await authorizeProviderWrite(task);
       const receipt = await provider.create({ title: task.title, dueAt: task.dueAt, sourceRef: task.sourceRef });
       const activated = Object.freeze({ ...task, status: 'active', revision: receipt.revision, providerTaskId: receipt.taskId });
       return repository.put(activated);
@@ -38,26 +48,36 @@ export function createTaskService({ repository, hub, capabilityBroker, clock } =
 
     async complete(taskId) {
       const task = await requireTask(taskId);
-      const completed = Object.freeze({ ...task, status: 'completed' });
-      await repository.put(completed);
       if (task.status === 'active' && task.providerId) {
+        const provider = hub.adapter(task.providerId);
+        requireProviderCapability(provider, 'complete');
+        await authorizeProviderWrite(task);
+        let receipt;
         try {
-          await hub.adapter(task.providerId).complete(task.providerTaskId ?? taskId);
+          receipt = await provider.complete(task.providerTaskId ?? taskId);
         } catch {
           throw new Error('sync_conflict');
         }
+        const completed = Object.freeze({ ...task, status: 'completed', revision: receipt?.revision ?? task.revision });
+        return repository.put(completed);
       }
-      return completed;
+      return repository.put(Object.freeze({ ...task, status: 'completed' }));
     },
 
     async cancel(taskId) {
       const task = await requireTask(taskId);
-      const cancelled = Object.freeze({ ...task, status: 'cancelled' });
-      await repository.put(cancelled);
       if (task.status === 'active' && task.providerId) {
-        await hub.adapter(task.providerId).cancel(task.providerTaskId ?? taskId);
+        const provider = hub.adapter(task.providerId);
+        requireProviderCapability(provider, 'cancel');
+        await authorizeProviderWrite(task);
+        try {
+          const receipt = await provider.cancel(task.providerTaskId ?? taskId);
+          return repository.put(Object.freeze({ ...task, status: 'cancelled', revision: receipt?.revision ?? task.revision }));
+        } catch {
+          throw new Error('sync_conflict');
+        }
       }
-      return cancelled;
+      return repository.put(Object.freeze({ ...task, status: 'cancelled' }));
     },
 
     async sync(providerId) {

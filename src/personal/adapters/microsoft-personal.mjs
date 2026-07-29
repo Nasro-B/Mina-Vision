@@ -95,6 +95,7 @@ export function createMicrosoftPersonalAdapter({
 
   return Object.freeze({
     id: 'microsoft',
+    capabilities: Object.freeze(['health', 'sync']),
 
     async health() {
       try {

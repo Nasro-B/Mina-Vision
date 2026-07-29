@@ -25,8 +25,9 @@ function buildWorld(overrides = {}) {
   const fileWriter = fakeFileWriter();
   const capabilityBroker = { authorize: vi.fn(async () => ({ decision: 'allow', reason: 'ok' })) };
   const confirmationService = { confirm: vi.fn(async () => true) };
-  const forms = createFormService({ evidenceStore, fileWriter, capabilityBroker, confirmationService, clock: () => 1_700_000_000_000, ...overrides });
-  return { forms, evidenceStore, fileWriter, capabilityBroker, confirmationService };
+  const formRenderer = { render: vi.fn(async () => Buffer.from('filled-pdf-bytes')) };
+  const forms = createFormService({ evidenceStore, fileWriter, formRenderer, capabilityBroker, confirmationService, clock: () => 1_700_000_000_000, ...overrides });
+  return { forms, evidenceStore, fileWriter, formRenderer, capabilityBroker, confirmationService };
 }
 
 describe('createFormService: constructor guards', () => {
@@ -62,6 +63,14 @@ describe('createFormService.proposeFill: never invents a value, tracks unresolve
 });
 
 describe('createFormService.commitCopy: original integrity, sensitive-field confirmation', () => {
+  it('refuses to describe a JSON copy as a filled document when no form renderer is composed', async () => {
+    const { forms, fileWriter } = buildWorld({ formRenderer: null });
+    const proposal = await forms.proposeFill({ documentId: 'd1', values: { name: 'Nasro Berkoun' } });
+
+    await expect(forms.commitCopy(proposal.id)).rejects.toThrow('document_form_rendering_unavailable');
+    expect(fileWriter.writeAtomic).not.toHaveBeenCalled();
+  });
+
   it('never overwrites or touches the original document path', async () => {
     const { forms, fileWriter } = buildWorld();
     const originalBytes = Buffer.from('original pdf bytes');

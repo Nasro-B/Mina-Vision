@@ -23,7 +23,10 @@ export function createDocumentController({
 
     proposeFill: (input) => formService?.proposeFill(input),
     renderFormPreview: (proposalId) => formService?.renderPreview(proposalId),
-    commitFormCopy: (proposalId, options) => formService?.commitCopy(proposalId, options),
+    async commitFormCopy(proposalId, options) {
+      if (!formService?.commitCopy) throw new Error('document_form_rendering_unavailable');
+      return formService.commitCopy(proposalId, options);
+    },
 
     convertDocument: (input) => converter?.convert(input),
     downloadDocument: (proposal) => downloadService?.download(proposal),

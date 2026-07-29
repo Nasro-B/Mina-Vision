@@ -3,6 +3,10 @@ import { createTelegramCommandRouter } from '../../src/messaging/telegram-comman
 import { createTelegramHomeCommands } from '../../src/messaging/telegram-home-commands.mjs';
 import { createTelegramMailCommands } from '../../src/messaging/telegram-mail-commands.mjs';
 import { createTelegramConversationResponder } from '../../src/messaging/telegram-conversation-responder.mjs';
+import { createSmartHomeRegistry } from '../../src/home/registry.mjs';
+import { createSmartHomePolicy } from '../../src/home/policy.mjs';
+import { createSmartHomeRouter } from '../../src/home/router.mjs';
+import { createSmartHomeService } from '../../src/home/service.mjs';
 
 const OWNER_SENDER = '111111111:111111111';
 const STRANGER_SENDER = '222222222:222222222';
@@ -12,19 +16,47 @@ function realIsOwner(ownerChatId) {
 }
 
 describe('integration: Telegram tools — real router + real home/mail command handlers, fake transport only', () => {
-  it('the owner turns a light on via /home, deterministically, without ever consulting the LLM', async () => {
-    const homeRegistry = { list: () => [{ deviceId: 'd1', displayName: 'Lampe salon', roomName: 'Salon', enabled: true }] };
-    const homeService = { execute: vi.fn(async () => ({ state: 'state_confirmed', deviceId: 'd1' })) };
-    const conversation = { reply: vi.fn(async () => { throw new Error('LLM must never be reached for a valid /home command'); }) };
+  it('the owner cannot turn a light on directly via Telegram, and the LLM is never consulted', async () => {
+    const connector = {
+      id: 'home-assistant',
+      network: 'lan',
+      health: () => ({ available: true }),
+      supports: () => true,
+      execute: vi.fn(),
+      readState: vi.fn(),
+    };
+    const homeRegistry = createSmartHomeRegistry({ devices: [{
+      deviceId: 'light-salon',
+      displayName: 'Lampe salon',
+      aliases: [],
+      roomId: 'salon',
+      roomName: 'Salon',
+      deviceClass: 'light',
+      capabilities: ['turn_on', 'turn_off', 'read_state'],
+      bindings: [{ connectorId: 'home-assistant', bindingId: 'light-1', capabilities: ['turn_on', 'turn_off', 'read_state'] }],
+      riskTier: 'low',
+      confirmationPolicy: 'never',
+      enabled: true,
+    }] });
+    const homeService = createSmartHomeService({
+      registry: homeRegistry,
+      policy: createSmartHomePolicy({ firebaseLowRiskEnabled: true }),
+      router: createSmartHomeRouter({ connectors: [connector] }),
+      now: () => 1_000,
+    });
+    const conversation = { reply: vi.fn(async () => { throw new Error('LLM must never be reached for a /home command'); }) };
     const router = createTelegramCommandRouter({
-      homeCommands: createTelegramHomeCommands({ isOwner: realIsOwner('111111111'), homeService, homeRegistry, audit: () => {} }),
+      homeCommands: createTelegramHomeCommands({
+        isOwner: realIsOwner('111111111'), homeService, homeRegistry, audit: () => {}, now: () => 1_000,
+      }),
       conversation,
     });
 
     const result = await router.handle({ sender: OWNER_SENDER, body: '/home "lampe salon" on' });
 
-    expect(result).toMatchObject({ source: 'home', reply: ['État confirmé.'] });
-    expect(homeService.execute).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({ source: 'home', reply: ['Action refusée.'] });
+    expect(connector.execute).not.toHaveBeenCalled();
+    expect(conversation.reply).not.toHaveBeenCalled();
   });
 
   it('a stranger (non-owner chat id) is refused a /home command, with the home service never invoked', async () => {

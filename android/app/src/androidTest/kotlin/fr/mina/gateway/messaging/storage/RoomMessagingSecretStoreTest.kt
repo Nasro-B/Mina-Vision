@@ -3,11 +3,14 @@ package fr.mina.gateway.messaging.storage
 import android.content.Context
 import android.app.ActivityManager
 import android.app.NotificationManager
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.util.Base64
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import fr.mina.gateway.messaging.GatewayServiceStartPolicy
 import fr.mina.gateway.messaging.TelegramGateway
 import fr.mina.gateway.messaging.MinaGatewayService
 import org.junit.After
@@ -92,9 +95,13 @@ class RoomMessagingSecretStoreTest {
 
     @Test
     fun startsGatewayServiceOnlyFromTheApplicationUid() {
-        context.startForegroundService(Intent(context, MinaGatewayService::class.java))
+        context.startForegroundService(
+            Intent(context, MinaGatewayService::class.java)
+                .putExtra(GatewayServiceStartPolicy.EXTRA_ISOLATED_TEST_MODE, true),
+        )
         val manager = context.getSystemService(ActivityManager::class.java)
         val notifications = context.getSystemService(NotificationManager::class.java)
+        val notificationsGranted = context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         var running = false
         var foreground = false
         repeat(50) {
@@ -102,11 +109,11 @@ class RoomMessagingSecretStoreTest {
                 it.service.className == MinaGatewayService::class.java.name
             }
             foreground = notifications.activeNotifications.any { it.id == MinaGatewayService.NOTIFICATION_ID }
-            if (!running || !foreground) Thread.sleep(100)
+            if (!running || (notificationsGranted && !foreground)) Thread.sleep(100)
         }
 
         assertTrue(running)
-        assertTrue(foreground)
+        if (notificationsGranted) assertTrue(foreground)
         assertTrue(context.stopService(Intent(context, MinaGatewayService::class.java)))
     }
 

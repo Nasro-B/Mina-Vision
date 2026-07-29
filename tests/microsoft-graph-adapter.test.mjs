@@ -163,3 +163,63 @@ describe('Microsoft Graph adapter: drafts and send qualify only accepted_by_prov
       .resolves.toEqual({ state: 'accepted_by_provider', providerMessageId: 'draft-1' });
   });
 });
+
+describe('Microsoft Graph adapter: mark read is idempotent and confirmed by the response', () => {
+  it('PATCHes isRead and requires the matching read message in the response', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { id: 'm1', isRead: true }));
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await expect(adapter.markRead({ credentialsProvider, messageId: 'm1' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
+    expect(fetchImpl).toHaveBeenCalledWith('https://graph.microsoft.com/v1.0/me/messages/m1', expect.objectContaining({
+      method: 'PATCH', body: JSON.stringify({ isRead: true }),
+    }));
+  });
+
+  it('does not claim confirmation when Graph does not return a read matching message', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { id: 'm1', isRead: false }));
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await expect(adapter.markRead({ credentialsProvider, messageId: 'm1' }))
+      .rejects.toThrow('microsoft_mark_read_unconfirmed');
+  });
+});
+
+describe('Microsoft Graph adapter: archive is confirmed by a read from the well-known archive folder', () => {
+  it('moves a message to archive then reads the returned destination message', async () => {
+    const fetchImpl = vi.fn(async (url, options) => {
+      if (url.endsWith('/messages/m1/move')) {
+        expect(options).toMatchObject({ method: 'POST', body: JSON.stringify({ destinationId: 'archive' }) });
+        return jsonResponse(201, { id: 'm2' });
+      }
+      if (url.endsWith('/mailFolders/archive/messages/m2')) return jsonResponse(200, { id: 'm2' });
+      throw new Error(`unexpected_url:${url}`);
+    });
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await expect(adapter.archive({ credentialsProvider, messageId: 'm1' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm2' });
+  });
+
+  it('does not claim confirmation if the moved message cannot be read from archive', async () => {
+    const fetchImpl = vi.fn(async (url) => url.endsWith('/move')
+      ? jsonResponse(201, { id: 'm2' })
+      : jsonResponse(404, {}));
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await expect(adapter.archive({ credentialsProvider, messageId: 'm1' }))
+      .rejects.toThrow('microsoft_graph_request_failed:404');
+  });
+});
+
+describe('Microsoft Graph adapter: declared operation capability boundary', () => {
+  it('declares drafts and send, but not unimplemented mailbox mutations', () => {
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl: vi.fn() });
+
+    expect(adapter.capabilities).toContain('createDraft');
+    expect(adapter.capabilities).toContain('send');
+    expect(adapter.capabilities).toContain('markRead');
+    expect(adapter.capabilities).toContain('archive');
+    expect(adapter.capabilities).not.toContain('unsubscribe');
+  });
+});

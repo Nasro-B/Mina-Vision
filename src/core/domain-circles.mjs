@@ -45,6 +45,7 @@ export const DEFAULT_CIRCLE = 'gele';
 const DOMAIN_CIRCLES = Object.freeze({
   // CŒUR — voix/conversation, missions navigateur, bureau Windows, mémoire/coffre, diagnostic.
   voice: 'coeur',
+  'voice.local_only': 'gele',
   'computer_use.browser': 'coeur',
   'computer_use.desktop': 'coeur',
   missions_browser: 'coeur',
@@ -68,6 +69,9 @@ const DOMAIN_CIRCLES = Object.freeze({
   'biometrics.face': 'gele',
   telegram: 'gele',
   sandbox: 'gele',
+  printing: 'gele',
+  'avatar.visage': 'gele',
+  'packaging.local_voice': 'gele',
   // GELÉ / EXPÉRIMENTAL — non nommés par la décision, défaut conservateur (à reclasser par Nasro).
   personality: 'gele',
   backup: 'gele',

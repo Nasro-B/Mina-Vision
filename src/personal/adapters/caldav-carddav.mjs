@@ -79,6 +79,7 @@ export function createCaldavCarddavAdapter({
 
   return Object.freeze({
     id: 'caldav-carddav',
+    capabilities: Object.freeze(['health', 'sync']),
 
     async health() {
       try {

@@ -2,7 +2,7 @@ const ACTIONS = new Set([
   'turn_on', 'turn_off', 'set_brightness', 'set_color',
   'set_temperature', 'set_position', 'run_scene', 'read_state',
 ]);
-const CHANNELS = new Set(['local_ui', 'voice', 'telegram']);
+const CHANNELS = new Set(['local_ui', 'voice', 'telegram', 'firebase']);
 const ID = /^[A-Za-z0-9._:-]{1,160}$/u;
 
 function requiredText(value, code, max = 160) {

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { rankSource } from './source-policy.mjs';
 
+const EVIDENCE_VALIDATION_RESULT = Symbol('evidence_validation_result');
+
 const evidenceSchema = z.strictObject({
   sourceId: z.string().min(1).max(128),
   locator: z.string().min(1),
@@ -33,7 +35,9 @@ function deepFreeze(value) {
 }
 
 function result(status, acceptedEvidence, reasons) {
-  return deepFreeze({ status, acceptedEvidence, reasons });
+  const validation = { status, acceptedEvidence, reasons };
+  Object.defineProperty(validation, EVIDENCE_VALIDATION_RESULT, { value: true });
+  return deepFreeze(validation);
 }
 
 function isEmpty(value) {
@@ -112,4 +116,8 @@ export function createEvidenceValidator({ clock = Date.now } = {}) {
       return result('uncertain', acceptedEvidence, [...reasons, 'source_is_inference_only']);
     },
   });
+}
+
+export function isEvidenceValidationResult(value) {
+  return Boolean(value?.[EVIDENCE_VALIDATION_RESULT]);
 }

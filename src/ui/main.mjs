@@ -68,6 +68,7 @@ import { createHttpsmsProvider } from '../messaging/httpsms/provider.mjs';
 import { createHttpsmsWebhookServer } from '../messaging/httpsms/webhook-server.mjs';
 import { createSmsRouter } from '../messaging/sms-router.mjs';
 import { createSmsSendPolicy } from '../messaging/sms-send-policy.mjs';
+import { createSmsSendPolicyAccessor } from './runtime/compose-sms-send-policy.mjs';
 import { createJsonRepository } from '../documents/document-repository.mjs';
 import { createWindowsPrintSpooler } from '../printing/windows-print-spooler.mjs';
 import { createPrinterRegistry } from '../printing/printer-registry.mjs';
@@ -145,6 +146,7 @@ import { createSkillsSandboxController } from './pages/skills-sandbox-controller
 import { registerSkillsSandboxIpc } from './ipc/skills-sandbox-ipc.mjs';
 import { createSettingsController } from './pages/settings-controller.mjs';
 import { registerSettingsIpc } from './ipc/settings-ipc.mjs';
+import { resolveUserDataStrategy } from './user-data-path.mjs';
 import { createAnalyticsQuery } from '../usage/analytics-query.mjs';
 import { applyUsageMigrations } from '../usage/usage-repository.mjs';
 import { createBudgetGuard } from '../usage/budget-guard.mjs';
@@ -162,6 +164,7 @@ import { createSmartHomeRegistry } from '../home/registry.mjs';
 import { createSmartHomePolicy } from '../home/policy.mjs';
 import { createSmartHomeRouter } from '../home/router.mjs';
 import { createSmartHomeService } from '../home/service.mjs';
+import { toAutomationHomeResult } from '../home/automation-result.mjs';
 import { composeHomeDomain } from '../home/compose-home-domain.mjs';
 import { createHomeController } from './pages/home-controller.mjs';
 import { registerHomeIpc } from './ipc/home-ipc.mjs';
@@ -172,6 +175,7 @@ import { createCameraController } from './pages/camera-controller.mjs';
 import { registerCameraIpc } from './ipc/camera-ipc.mjs';
 import { createTechnicalLog, createTechnicalLogReader } from '../diagnostics/technical-log.mjs';
 import { createErrorAggregator } from '../diagnostics/error-aggregator.mjs';
+import { capabilityFromReadiness } from '../diagnostics/capability-readiness.mjs';
 import { probeLmStudio } from '../diagnostics/lm-studio-health.mjs';
 import { createGoogleRuntimeAdapters } from '../mail/google-runtime-adapters.mjs';
 import { loadGoogleClientConfigFromEnvDir } from '../mail/oauth/google-client-config-file.mjs';
@@ -236,16 +240,21 @@ app.setName('Mina Vision');
 // générique d'Electron ; ce modelId lui donne sa propre entrée avec son logo.
 if (process.platform === 'win32') app.setAppUserModelId('fr.sourireconcept.minavision');
 {
-  const legacyUserData = path.join(app.getPath('appData'), 'Electron');
-  const namedUserData = path.join(app.getPath('appData'), 'Mina Vision');
-  if (!existsSync(namedUserData) && existsSync(legacyUserData)) {
-    for (const entry of ['Local Storage', 'Session Storage']) {
-      try {
-        cpSync(path.join(legacyUserData, entry), path.join(namedUserData, entry), { recursive: true });
-      } catch { /* préférences UI perdues = valeurs par défaut, jamais bloquant */ }
+  const { preserveExplicitUserData, namedUserData } = resolveUserDataStrategy({
+    argv: process.argv,
+    appDataPath: app.getPath('appData'),
+  });
+  if (!preserveExplicitUserData) {
+    const legacyUserData = path.join(app.getPath('appData'), 'Electron');
+    if (!existsSync(namedUserData) && existsSync(legacyUserData)) {
+      for (const entry of ['Local Storage', 'Session Storage']) {
+        try {
+          cpSync(path.join(legacyUserData, entry), path.join(namedUserData, entry), { recursive: true });
+        } catch { /* préférences UI perdues = valeurs par défaut, jamais bloquant */ }
+      }
     }
+    app.setPath('userData', namedUserData);
   }
-  app.setPath('userData', namedUserData);
 }
 
 let mainWindow = null;
@@ -262,7 +271,6 @@ let samsungAdbWifiKeeper = null;
 let phoneMessageSync = null;
 let messageDeliveryLedger = null;
 let smsRouter = null;
-let smsSendPolicy = null;
 let httpsmsWebhookServer = null;
 // Set once at bootstrap: the Electron-ABI (148) better-sqlite3 binding path. Every SQLite store
 // opened outside openMemoryDatabase MUST use it, or better-sqlite3 loads its default Node-ABI (127)
@@ -274,16 +282,10 @@ let sqliteNativeBinding = null;
 // automatic SMS reply (only Telegram does, in phone-message-sync.mjs), so this policy currently
 // has nothing to decide. It is wired now, tested, and ready — including the global kill switch —
 // for whenever that generation flow is built (out of this task's file scope).
-const getSmsSendPolicy = () => {
-  if (smsSendPolicy) return smsSendPolicy;
-  const { policy } = currentConfig().sms;
-  smsSendPolicy = createSmsSendPolicy({
-    mode: policy.sendMode, allowlist: policy.allowlist,
-    quietHoursStart: policy.quietHoursStart, quietHoursEnd: policy.quietHoursEnd,
-    maxPerMinute: policy.maxPerMinute, maxPerDay: policy.maxPerDay,
-  });
-  return smsSendPolicy;
-};
+const getSmsSendPolicy = createSmsSendPolicyAccessor({
+  getConfig: () => currentConfig(),
+  createPolicy: createSmsSendPolicy,
+});
 let phoneMessageSyncTimer = null;
 let telegramTextGeneratorInstance = null;
 let cameraRuntime = null;
@@ -3005,7 +3007,7 @@ app.whenReady().then(async () => {
     const homeDomain = composeHomeDomain({ env: process.env });
     const homeConnectorList = Object.values(homeDomain.connectors);
     const homeRegistry = createSmartHomeRegistry({ devices: [] });
-    const homePolicy = createSmartHomePolicy({ telegramLowRiskEnabled: false });
+    const homePolicy = createSmartHomePolicy({ firebaseLowRiskEnabled: false });
     const homeRouter = createSmartHomeRouter({ connectors: homeConnectorList });
     const homeService = createSmartHomeService({ registry: homeRegistry, policy: homePolicy, router: homeRouter });
     homeController = createHomeController({
@@ -3068,6 +3070,11 @@ app.whenReady().then(async () => {
     try {
       runtimeCapabilityCatalog.report({ id, status, reason, evidence });
     } catch { /* le catalogue ne casse jamais le boot */ }
+  };
+  const reportCapabilityFromReadiness = (id, implemented, probe) => {
+    const entry = capabilityFromReadiness({ id, implemented, probe });
+    reportCapability(entry.id, entry.status, entry.reason, entry.evidence);
+    return entry;
   };
 
   // Supervision par domaine (T1.2). Chaque domaine composé passe par `bootSupervisor.run` : un throw
@@ -3136,7 +3143,8 @@ app.whenReady().then(async () => {
       // qui portent la confirmation locale (voir document-ipc.mjs).
       registerPrinting: false,
     };
-    reportCapability('documents', 'available');
+    reportCapability('documents', 'degraded', 'document_form_rendering_unavailable');
+    reportCapability('printing', 'degraded', 'printing_physical_receipt_unverified');
   });
 
   // Task 13 — personnalité : service réel scellé par le coffre (dégradé tant que le coffre
@@ -3179,6 +3187,7 @@ app.whenReady().then(async () => {
         definitions: createJsonRepository({ filename: path.join(app.getPath('userData'), 'mina-automation-definitions.sqlite'), table: 'definitions', nativeBinding }),
         grants: createJsonRepository({ filename: path.join(app.getPath('userData'), 'mina-automation-grants.sqlite'), table: 'grants', nativeBinding }),
       },
+      recoveryClosureRepository: createJsonRepository({ filename: path.join(app.getPath('userData'), 'mina-recovery-closures.sqlite'), table: 'closures', nativeBinding }),
       capabilityBroker: governanceBroker,
       budgetGuard,
       handlers: [
@@ -3213,7 +3222,7 @@ app.whenReady().then(async () => {
             // par le service réel (politique + vérification internes au domaine home).
             invoke: async (action) => {
               const result = await homeServiceRef.execute?.(action?.payload ?? {});
-              return { effect: { executed: true }, detail: result ?? null };
+              return toAutomationHomeResult(result);
             },
           },
         }] : []),
@@ -3283,10 +3292,40 @@ app.whenReady().then(async () => {
   reportCapability('backup', process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_STORAGE_BUCKET ? 'degraded' : 'unavailable', process.env.FIREBASE_PROJECT_ID ? 'configure_non_verifie' : 'firebase_non_configure');
   reportCapability('computer_use.browser', 'available');
   reportCapability('computer_use.desktop', 'available');
-  reportCapability('computer_use.android', 'available');
+  const readinessConfig = currentConfig();
+  const lmStudioProbe = readinessConfig.providers.lmStudio.enabled
+    ? await probeLmStudio({ config: readinessConfig.providers.lmStudio, timeoutMs: 3_000 })
+      .catch(() => ({ ready: false, reason: 'lm_studio_probe_failed' }))
+    : { ready: false, reason: 'lm_studio_disabled' };
+  const androidProbe = await Promise.race([
+    getPhoneBridge().detect()
+      .then(() => ({ ready: true }))
+      .catch((error) => {
+        const message = String(error?.message ?? '');
+        if (message === 'Mina exige une identité physique ADB autorisée.') {
+          return { ready: false, reason: 'no_authorized_android_device' };
+        }
+        if (message === 'Le téléphone doit être déverrouillé et autorisé en ADB.') {
+          return { ready: false, reason: 'adb_unauthorized' };
+        }
+        if (message === 'Mina exige une identité Mina Gateway signée et autorisée.') {
+          return { ready: false, reason: 'mina_gateway_identity_unavailable' };
+        }
+        if (message === 'Mina exige exactement une identité physique autorisée.') {
+          return { ready: false, reason: 'android_device_ambiguous' };
+        }
+        return { ready: false, reason: 'android_runtime_unavailable' };
+      }),
+    new Promise((resolve) => setTimeout(() => resolve({ ready: false, reason: 'android_probe_timeout' }), 3_000)),
+  ]);
+  reportCapabilityFromReadiness('models.lm_studio', true, lmStudioProbe);
+  reportCapabilityFromReadiness('computer_use.android', true, androidProbe);
   reportCapability('code', 'available');
   reportCapability('voice', 'available');
-  reportCapability('sandbox', 'degraded', 'sonde_a_la_demande_via_capabilities');
+  reportCapability('voice.local_only', lmStudioProbe.ready ? 'degraded' : 'unavailable', lmStudioProbe.ready ? 'local_voice_end_to_end_unverified' : lmStudioProbe.reason);
+  reportCapability('sandbox', 'degraded', 'sandbox_physical_isolation_unverified');
+  reportCapability('avatar.visage', 'unavailable', 'licensed_vrm_asset_not_approved');
+  reportCapability('packaging.local_voice', 'unavailable', 'espeak_distribution_decision_required');
   reportCapability('memory', memoryController?.status?.()?.locked === false ? 'available' : 'degraded', memoryController?.status?.()?.locked === false ? null : 'coffre_verrouille');
 
   minaCore = createMinaRuntime({

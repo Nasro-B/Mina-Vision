@@ -33,6 +33,7 @@ async function fullCompose(overrides = {}) {
     clock,
     openAutomationDatabase: () => new Database(join(directory, 'automation.sqlite')),
     automationRepositories: { definitions: memoryRepository(), grants: memoryRepository() },
+    recoveryClosureRepository: memoryRepository(),
     capabilityBroker: broker,
     budgetGuard,
     handlers: [{
@@ -117,6 +118,12 @@ describe('composeGovernanceDomains — dégradations honnêtes', () => {
     const byDomain = Object.fromEntries(composed.capabilities.map((entry) => [entry.domain, entry]));
     expect(byDomain.evaluation.state).toBe('unavailable');
     expect(byDomain.automation.state).toBe('available');
+  });
+
+  it('sans stockage de fermeture manuelle : recovery est dégradé, jamais présenté durable', async () => {
+    const composed = await fullCompose({ recoveryClosureRepository: null });
+    const byDomain = Object.fromEntries(composed.capabilities.map((entry) => [entry.domain, entry]));
+    expect(byDomain.recovery).toMatchObject({ state: 'degraded', reason: 'recovery_manual_closure_storage_unavailable' });
   });
 
   it('sans corpus urgence : emergency degraded (coupures seules), pas un faux available', async () => {

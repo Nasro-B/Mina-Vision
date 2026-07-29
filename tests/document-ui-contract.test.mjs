@@ -52,6 +52,14 @@ describe('document/emergency controllers: constructor guards', () => {
   });
 });
 
+describe('document controller: unavailable form rendering is explicit', () => {
+  it('rejects committing a filled-form copy when no real renderer is composed', async () => {
+    const { documentController } = buildDocumentWorld();
+
+    await expect(documentController.commitFormCopy('proposal-1')).rejects.toThrow('document_form_rendering_unavailable');
+  });
+});
+
 describe('IPC channel allowlist: named channels only, never a raw write escape hatch', () => {
   it('registers the documented mina:documents:*/mina:printing:*/mina:emergency:* channels', () => {
     const { documentController } = buildDocumentWorld();

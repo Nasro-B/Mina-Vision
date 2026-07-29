@@ -4,7 +4,13 @@ import { createGoogleRuntimeAdapters } from '../src/mail/google-runtime-adapters
 describe('Google runtime adapter composition', () => {
   it('binds configured Gmail credentials to mail and Tasks adapters', async () => {
     const oauth = {
-      request: vi.fn(async (_credentials, options) => ({ response: { data: options.method === 'POST' ? { id: 'tk1', etag: '"r1"' } : {} } })),
+      request: vi.fn(async (_credentials, options) => ({
+        response: {
+          data: options.url.endsWith('/messages/m1/modify')
+            ? { id: 'm1', labelIds: options.data?.removeLabelIds?.includes('INBOX') ? ['ALL_MAIL'] : ['INBOX'] }
+            : options.method === 'POST' ? { id: 'tk1', etag: '"r1"' } : {},
+        },
+      })),
       generateConsentUrl: vi.fn(),
     };
     const getCredentials = vi.fn(async () => ({ refreshToken: 'refresh' }));
@@ -17,6 +23,11 @@ describe('Google runtime adapter composition', () => {
 
     expect(result.operationalAccountIds).toEqual(['google-primary']);
     expect(result.mailAdapters['google-primary']).toBeDefined();
+    expect(result.mailAdapters['google-primary'].capabilities).toEqual(expect.arrayContaining(['sync', 'createDraft', 'send', 'markRead']));
+    await expect(result.mailAdapters['google-primary'].markRead({ messageId: 'm1' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
+    await expect(result.mailAdapters['google-primary'].archive({ messageId: 'm1' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
     await expect(result.googlePersonalAdapter.create({ title: 'Test' })).resolves.toMatchObject({ taskId: 'tk1' });
     expect(getCredentials).toHaveBeenCalledWith('google-primary');
   });

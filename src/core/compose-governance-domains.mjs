@@ -35,6 +35,7 @@ export function composeGovernanceDomains({
   clock = () => Date.now(),
   openAutomationDatabase = null, // () => better-sqlite3 Database (fichier automation.sqlite)
   automationRepositories = null, // { definitions: {put,get,list}, grants: {put,get,list} }
+  recoveryClosureRepository = null, // { put, get } persistant pour les fermetures manuelles
   capabilityBroker,
   budgetGuard,
   handlers = [], // [{prefix, handler}] — capabilities réelles branchées au registre invocable
@@ -107,9 +108,14 @@ export function composeGovernanceDomains({
       automationLedger: automation.ledger,
       automationRunner: automation.runner,
       domainReconcilers: {},
+      closureRepository: recoveryClosureRepository,
       clock,
     });
-    report('recovery', 'available', null);
+    if (recoveryClosureRepository?.get && recoveryClosureRepository?.put) {
+      report('recovery', 'available', null);
+    } else {
+      report('recovery', 'degraded', 'recovery_manual_closure_storage_unavailable');
+    }
   } else {
     report('recovery', 'unavailable', 'dependance_absente:automation_runner');
   }
@@ -200,6 +206,9 @@ export function composeGovernanceDomains({
     approvals,
     connectors,
     capabilities: Object.freeze(capabilities),
-    close: () => automation?.close?.(),
+    close: () => {
+      automation?.close?.();
+      recoveryClosureRepository?.close?.();
+    },
   });
 }

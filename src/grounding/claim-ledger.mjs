@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { parseClaim } from '../contracts/claims.mjs';
+import { isEvidenceValidationResult } from './evidence-validator.mjs';
 import { sourcePolicyForClaim } from './source-policy.mjs';
 
 export function createClaimLedger({ clock = Date.now, ids = () => randomUUID() } = {}) {
@@ -39,6 +40,16 @@ export function createClaimLedger({ clock = Date.now, ids = () => randomUUID() }
     },
     get(claimId) {
       return byId.get(claimId) ?? null;
+    },
+    applyValidation({ claimId, validation } = {}) {
+      if (!isEvidenceValidationResult(validation)) throw new TypeError('claim_validation_result_required');
+      const existing = byId.get(claimId);
+      if (!existing) throw new Error('claim_not_found');
+      const updated = parseClaim({ ...existing, status: validation.status });
+      const index = claims.findIndex((claim) => claim.claimId === claimId);
+      claims[index] = updated;
+      byId.set(claimId, updated);
+      return updated;
     },
     list(sessionId = null) {
       return Object.freeze(claims.filter((claim) => sessionId === null || claim.sessionId === sessionId));

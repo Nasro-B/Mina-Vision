@@ -25,6 +25,7 @@ afterEach(async () => {
 function fakeProvider(overrides = {}) {
   const provider = {
     revision: 'r1',
+    capabilities: Object.freeze(['sync', 'createEvent', 'getEvent', 'updateEvent', 'cancelEvent']),
     createEvent: vi.fn(async (input) => Object.freeze({ eventId: 'e1', revision: 'r1' })),
     updateEvent: vi.fn(async ({ eventId, patch }) => Object.freeze({ eventId, revision: 'r2' })),
     cancelEvent: vi.fn(async (eventId) => Object.freeze({ eventId, cancelled: true })),
@@ -125,6 +126,18 @@ describe('createCalendarService: proposeCreate / commitProposal', () => {
     const proposal = await service.proposeCreate({ providerId: 'google', calendarId: 'primary', title: 'RDV', startAt: '2026-07-20T09:00:00.000Z', endAt: '2026-07-20T10:00:00.000Z' });
     expect(proposal.status).toBe('proposed');
     expect(provider.createEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses a provider mutation missing from capability metadata before confirmation or a local write', async () => {
+    const provider = fakeProvider({ capabilities: Object.freeze(['sync']) });
+    const confirmationService = { confirm: vi.fn(async () => true) };
+    const service = buildService({ hub: fakeHub(provider), confirmationService });
+    const proposal = await service.proposeCreate({ providerId: 'google', calendarId: 'primary', title: 'RDV', startAt: '2026-07-20T09:00:00.000Z', endAt: '2026-07-20T10:00:00.000Z' });
+
+    await expect(service.commitProposal(proposal.proposalId)).rejects.toThrow('personal_action_unsupported_by_provider:createEvent');
+    expect(confirmationService.confirm).not.toHaveBeenCalled();
+    expect(provider.createEvent).not.toHaveBeenCalled();
+    expect(await repository.list()).toEqual([]);
   });
 
   it('commits a create proposal: calls createEvent, verifies via getEvent, and persists locally', async () => {

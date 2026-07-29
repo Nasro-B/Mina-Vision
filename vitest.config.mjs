@@ -7,9 +7,10 @@ import { defineConfig } from 'vitest/config';
 // sous contention, ce sont les premiers à dépasser leur budget.
 //
 // Le choix est de rendre le gate REPRODUCTIBLE plutôt que de gonfler les timeouts, ce qui aurait
-// masqué la lenteur réelle. Deux workers gardent un parallélisme utile tout en tenant dans la
-// contrainte mémoire connue de ce poste. `--maxWorkers=2` est également passé dans le script
-// `test:unit` de package.json pour que la valeur soit visible là où la commande est lue.
+// masqué la lenteur réelle. Le corpus contient des tests qui balaient le disque ou créent un
+// dépôt Git réel : `test:unit` désactive donc le parallélisme des fichiers tout en conservant les
+// deux workers comme plafond explicite. Le dépôt Git de test isole aussi ses hooks temporaires,
+// afin que le hook personnel de la machine ne modifie ni ne ralentisse la suite.
 export default defineConfig({
   test: {
     environment: 'node',

@@ -57,20 +57,79 @@ describe('smart home registry: alias and risk edits', () => {
     const registry = createSmartHomeRegistry({ devices: [light] });
     expect(() => registry.update('ghost', { riskTier: 'medium' })).toThrow('smart_home_device_not_found');
   });
+
+  it('derives a fail-closed risk floor from each device class', () => {
+    const { riskTier: ignoredRisk, ...baseDevice } = light;
+    const registry = createSmartHomeRegistry({ devices: [
+      { ...baseDevice, deviceId: 'light-default', displayName: 'Lumière', deviceClass: 'light' },
+      { ...baseDevice, deviceId: 'plug-default', displayName: 'Prise', deviceClass: 'plug' },
+      { ...baseDevice, deviceId: 'lock-forced', displayName: 'Serrure', deviceClass: 'lock', riskTier: 'low' },
+      { ...baseDevice, deviceId: 'unknown-forced', displayName: 'Inconnu', deviceClass: 'future_switch', riskTier: 'low' },
+    ] });
+
+    expect(registry.get('light-default').riskTier).toBe('low');
+    expect(registry.get('plug-default').riskTier).toBe('medium');
+    expect(registry.get('lock-forced').riskTier).toBe('blocked');
+    expect(registry.get('unknown-forced').riskTier).toBe('blocked');
+  });
+
+  it('makes a scene inherit the highest member risk and blocks one with unresolved members', () => {
+    const { riskTier: ignoredRisk, ...baseDevice } = light;
+    const registry = createSmartHomeRegistry({ devices: [
+      { ...baseDevice, deviceId: 'light-member', displayName: 'Lumière', deviceClass: 'light' },
+      { ...baseDevice, deviceId: 'lock-member', displayName: 'Serrure', deviceClass: 'lock' },
+      {
+        ...baseDevice,
+        deviceId: 'scene-evening',
+        displayName: 'Soir',
+        deviceClass: 'scene',
+        capabilities: ['run_scene'],
+        sceneMembers: ['light-member', 'lock-member'],
+      },
+      {
+        ...baseDevice,
+        deviceId: 'scene-unresolved',
+        displayName: 'Incomplète',
+        deviceClass: 'scene',
+        capabilities: ['run_scene'],
+        sceneMembers: ['missing-device'],
+      },
+    ] });
+
+    expect(registry.get('scene-evening').riskTier).toBe('blocked');
+    expect(registry.get('scene-unresolved').riskTier).toBe('blocked');
+  });
 });
 
 describe('smart home policy and routing', () => {
-  it('allows a validated low-risk light, confirms unknown switches, and denies blocked devices', () => {
-    const policy = createSmartHomePolicy({ telegramLowRiskEnabled: true });
-    expect(policy.decide({ device: light, action: 'turn_on', sourceChannel: 'telegram' })).toEqual({ decision: 'allow' });
+  it('allows low-risk remote actions only through Firebase and caps their TTL at thirty seconds', async () => {
+    const policy = createSmartHomePolicy({ firebaseLowRiskEnabled: true });
+    expect(policy.decide({ device: light, action: 'turn_on', sourceChannel: 'telegram' }))
+      .toEqual({ decision: 'deny', reason: 'remote_channel_requires_firebase' });
+    expect(policy.decide({ device: light, action: 'turn_on', sourceChannel: 'firebase' })).toEqual({ decision: 'allow' });
+    expect(policy.decide({ device: { ...light, riskTier: 'medium' }, action: 'turn_on', sourceChannel: 'firebase' }))
+      .toEqual({ decision: 'deny', reason: 'firebase_low_risk_only' });
     expect(policy.decide({ device: { ...light, riskTier: 'medium' }, action: 'turn_on', sourceChannel: 'voice' }))
       .toMatchObject({ decision: 'confirm' });
     expect(policy.decide({ device: { ...light, riskTier: 'blocked' }, action: 'read_state', sourceChannel: 'local_ui' }))
       .toMatchObject({ decision: 'deny' });
+
+    const service = createSmartHomeService({
+      registry: { resolve: () => null },
+      policy: { decide: () => null },
+      router: { resolve: () => null },
+      now: () => 1_000,
+    });
+    const intent = normalizeSmartHomeIntent({
+      action: 'turn_on', targetText: 'Plafonnier', sourceChannel: 'firebase', sessionId: 'relay-1',
+    });
+    await expect(service.execute({
+      commandId: '123e4567-e89b-42d3-a456-426614174009', intent, expiresAt: 31_001,
+    })).rejects.toThrow('smart_home_command_expired');
   });
 
   it('requires a local confirmation draft for a medium-risk device requested from Telegram, never a direct allow', () => {
-    const policy = createSmartHomePolicy({ telegramLowRiskEnabled: true });
+    const policy = createSmartHomePolicy({ firebaseLowRiskEnabled: true });
     expect(policy.decide({ device: { ...light, riskTier: 'medium' }, action: 'turn_on', sourceChannel: 'telegram', confirmedLocally: true }))
       .toEqual({ decision: 'confirm', reason: 'telegram_medium_requires_local_confirmation' });
   });

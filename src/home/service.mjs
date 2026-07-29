@@ -11,7 +11,8 @@ export function createSmartHomeService({ registry, policy, router, now = Date.no
   async function execute({ commandId, intent, expiresAt, confirmedLocally = false, offline = false } = {}) {
     if (!UUID_V4.test(commandId ?? '')) throw new TypeError('smart_home_command_id_invalid');
     const current = now();
-    if (!Number.isSafeInteger(expiresAt) || expiresAt <= current || expiresAt - current > 60_000) {
+    const maximumTtlMs = intent?.sourceChannel === 'firebase' ? 30_000 : 60_000;
+    if (!Number.isSafeInteger(expiresAt) || expiresAt <= current || expiresAt - current > maximumTtlMs) {
       throw new Error('smart_home_command_expired');
     }
 

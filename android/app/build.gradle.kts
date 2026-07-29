@@ -10,6 +10,10 @@ plugins {
 // présent — l'APK compile sans, Firebase reste optionnel jusqu'à la vague qui le branche.
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
+    // La variante debug isolée n'a volontairement aucun client Firebase provisionné.
+    tasks.matching { it.name == "processDebugGoogleServices" }.configureEach {
+        enabled = false
+    }
 }
 
 android {
@@ -28,6 +32,13 @@ android {
             annotationProcessorOptions {
                 arguments["room.schemaLocation"] = "$projectDir/schemas"
             }
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            // L'instrumentation ne doit jamais remplacer la passerelle active du téléphone.
+            applicationIdSuffix = ".debug"
         }
     }
 

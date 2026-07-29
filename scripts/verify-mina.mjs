@@ -4,8 +4,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { createHealthService } from '../src/diagnostics/health-service.mjs';
+import { capabilityFromReadiness } from '../src/diagnostics/capability-readiness.mjs';
 import { probeLmStudio } from '../src/diagnostics/lm-studio-health.mjs';
 import { loadConfig } from '../src/config.mjs';
+import { parseAuthorizedAdbTransports } from '../src/devices/adb-devices.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 dotenv.config({ path: path.join(ROOT, '.env'), quiet: true });
@@ -37,8 +39,9 @@ const probes = {
   androidTransport: async () => {
     const { error, stdout } = await run(process.env.ADB_PATH || 'adb', ['devices']);
     if (error) return { ready: false, reason: 'adb_unavailable' };
-    const authorized = stdout.split(/\r?\n/).slice(1).some((line) => /\bdevice\b/u.test(line));
-    return { ready: authorized, reason: authorized ? undefined : 'no_authorized_android_device', transports: authorized ? ['usb'] : [] };
+    const transports = parseAuthorizedAdbTransports(stdout);
+    const authorized = transports.length > 0;
+    return { ready: authorized, reason: authorized ? undefined : 'no_authorized_android_device', transports };
   },
   wifi: async () => {
     const { error, stdout } = await run(process.env.ADB_PATH || 'adb', ['devices']);
@@ -62,6 +65,15 @@ const probes = {
   }),
 };
 
+function capabilitiesFromHealth(report) {
+  return Object.freeze({
+    'models.lm_studio': capabilityFromReadiness({ id: 'models.lm_studio', implemented: true, probe: report.lmStudio }),
+    'computer_use.android': capabilityFromReadiness({ id: 'computer_use.android', implemented: true, probe: report.androidTransport }),
+    mail: capabilityFromReadiness({ id: 'mail', implemented: true, probe: report.mailAccounts }),
+    'backup.firebase': capabilityFromReadiness({ id: 'backup.firebase', implemented: true, probe: report.firebase }),
+  });
+}
+
 async function main() {
   const service = createHealthService({ probes });
   const report = await service.runOnce();
@@ -71,6 +83,7 @@ async function main() {
     nodeVersion: process.version,
     rootDir: ROOT,
     ...report,
+    capabilities: capabilitiesFromHealth(report),
   };
   console.log(JSON.stringify(output, null, 2));
   process.exitCode = report.summary.allRequiredReady ? 0 : 0; // informational: readiness is reported, never fails the process by itself.

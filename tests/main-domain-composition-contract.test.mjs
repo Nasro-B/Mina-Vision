@@ -36,8 +36,14 @@ describe('contrat de composition des domaines (main.mjs)', () => {
       "reportCapability('biometrics.face', faceEmbedderState, faceEmbedderReason)",
       "reportCapability('personal'",
       "reportCapability('documents'",
+      "reportCapability('documents', 'degraded', 'document_form_rendering_unavailable')",
+      "reportCapability('printing', 'degraded', 'printing_physical_receipt_unverified')",
       "reportCapability('personality'",
       "reportCapability('code', 'available')",
+      "reportCapability('voice.local_only', lmStudioProbe.ready ? 'degraded' : 'unavailable', lmStudioProbe.ready ? 'local_voice_end_to_end_unverified' : lmStudioProbe.reason)",
+      "reportCapability('sandbox', 'degraded', 'sandbox_physical_isolation_unverified')",
+      "reportCapability('avatar.visage', 'unavailable', 'licensed_vrm_asset_not_approved')",
+      "reportCapability('packaging.local_voice', 'unavailable', 'espeak_distribution_decision_required')",
     ]) {
       expect(main).toContain(needle);
     }
@@ -53,6 +59,7 @@ describe('contrat de composition des domaines (main.mjs)', () => {
     expect(main).toContain('mina-personal-routines.sqlite');
     expect(main).toContain('mina-personal-graph.sqlite');
     expect(main).toContain('mina-document-quarantine.sqlite');
+    expect(main).toContain('mina-recovery-closures.sqlite');
     expect(main).toContain('mina-personality.sqlite');
   });
 });

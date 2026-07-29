@@ -378,3 +378,18 @@ describe('caldav-carddav adapter (RFC 6578 sync-collection)', () => {
     expect(await adapter.health()).toEqual({ available: false, reason: 'authentication_failed' });
   });
 });
+
+describe('personal adapters: declared mutation capability boundary', () => {
+  it('advertises Google mutations and keeps Microsoft/CalDAV-CardDAV sync-only', () => {
+    const google = createGooglePersonalAdapter({ oauth: fakeGoogleOAuth(() => ({})), credentialsProvider });
+    const microsoft = createMicrosoftPersonalAdapter({ oauth: fakeMicrosoftOAuth(), credentialsProvider, fetchImpl: vi.fn() });
+    const caldav = createCaldavCarddavAdapter({
+      fetchImpl: vi.fn(), xmlParser: { parse: () => ({}) }, baseUrl: 'https://dav.example.test',
+      credentials: { username: 'nasro', password: 'test-password' },
+    });
+
+    expect(google.capabilities).toEqual(expect.arrayContaining(['create', 'complete', 'cancel', 'createEvent', 'getEvent', 'updateEvent', 'cancelEvent']));
+    expect(microsoft.capabilities).toEqual(['health', 'sync']);
+    expect(caldav.capabilities).toEqual(['health', 'sync']);
+  });
+});

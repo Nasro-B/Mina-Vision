@@ -23,7 +23,8 @@ export function createReceiptVerifier() {
       if (!receipt?.receiptId || receipt.capability !== String(action?.capability ?? '')) {
         return Object.freeze({ confirmed: false, reason: 'recu_absent_ou_capability_differente' });
       }
-      const confirmed = subsetMatches(expectedEffect ?? action?.expectedEffect ?? null, receipt.effect);
+      const confirmed = receipt?.effect?.verified !== false
+        && subsetMatches(expectedEffect ?? action?.expectedEffect ?? null, receipt.effect);
       return Object.freeze({
         confirmed,
         reason: confirmed ? null : 'effet_attendu_non_prouve',

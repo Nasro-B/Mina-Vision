@@ -26,9 +26,12 @@ export async function createGoogleRuntimeAdapters({
   for (const account of googleAccounts) {
     const adapter = createGmailAdapter({ account: { id: account.accountId, address: account.address }, oauth });
     mailAdapters[account.accountId] = Object.freeze({
+      capabilities: adapter.capabilities,
       sync: (request) => adapter.sync({ ...request, credentialsProvider: getCredentials }),
       createDraft: (request) => adapter.createDraft({ ...request, credentialsProvider: getCredentials }),
       send: (request) => adapter.send({ ...request, credentialsProvider: getCredentials }),
+      markRead: (request) => adapter.markRead({ ...request, credentialsProvider: getCredentials }),
+      archive: (request) => adapter.archive({ ...request, credentialsProvider: getCredentials }),
     });
   }
   const primary = googleAccounts[0];

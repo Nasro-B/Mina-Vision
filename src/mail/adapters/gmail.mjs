@@ -91,6 +91,7 @@ export function createGmailAdapter({
     id: account.id,
     provider: 'gmail',
     scopes: Object.freeze([...requestedScopes]),
+    capabilities: Object.freeze(['sync', 'listThreads', 'listLabels', 'createDraft', 'send', 'markRead', 'archive']),
 
     getConsentUrl: () => oauth.generateConsentUrl(requestedScopes),
 
@@ -154,6 +155,38 @@ export function createGmailAdapter({
       }
       if (!ID.test(response.data?.id ?? '')) throw new Error('gmail_send_response_invalid');
       return Object.freeze({ state: 'accepted_by_provider', providerMessageId: response.data.id });
+    },
+
+    async markRead({ credentialsProvider, messageId } = {}) {
+      if (typeof credentialsProvider !== 'function' || !ID.test(messageId ?? '')) {
+        throw new TypeError('gmail_mark_read_request_invalid');
+      }
+      const { response } = await call(credentialsProvider, {
+        url: `${BASE_URL}/messages/${encodeURIComponent(messageId)}/modify`,
+        method: 'POST',
+        data: { removeLabelIds: ['UNREAD'] },
+      });
+      if (response.data?.id !== messageId || !Array.isArray(response.data?.labelIds)
+        || response.data.labelIds.includes('UNREAD')) {
+        throw new Error('gmail_mark_read_unconfirmed');
+      }
+      return Object.freeze({ state: 'state_confirmed', providerMessageId: messageId });
+    },
+
+    async archive({ credentialsProvider, messageId } = {}) {
+      if (typeof credentialsProvider !== 'function' || !ID.test(messageId ?? '')) {
+        throw new TypeError('gmail_archive_request_invalid');
+      }
+      const { response } = await call(credentialsProvider, {
+        url: `${BASE_URL}/messages/${encodeURIComponent(messageId)}/modify`,
+        method: 'POST',
+        data: { removeLabelIds: ['INBOX'] },
+      });
+      if (response.data?.id !== messageId || !Array.isArray(response.data?.labelIds)
+        || response.data.labelIds.includes('INBOX')) {
+        throw new Error('gmail_archive_unconfirmed');
+      }
+      return Object.freeze({ state: 'state_confirmed', providerMessageId: messageId });
     },
   });
 }

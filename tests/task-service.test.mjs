@@ -14,6 +14,7 @@ function fakeBackingRepo() {
 
 function fakeProvider(overrides = {}) {
   return {
+    capabilities: Object.freeze(['sync', 'create', 'complete', 'cancel']),
     create: vi.fn(async (input) => ({ taskId: `provider-${randomUUID()}`, revision: 'r1' })),
     complete: vi.fn(async () => ({ revision: 'r2' })),
     cancel: vi.fn(async () => ({ revision: 'r2' })),
@@ -95,9 +96,19 @@ describe('createTaskService.activate: the only method that writes to a provider'
     const { service } = buildService();
     await expect(service.activate('missing')).rejects.toThrow('task_not_found');
   });
+
+  it('rejects an undeclared provider create action before changing local status', async () => {
+    const provider = fakeProvider({ capabilities: Object.freeze(['sync']) });
+    const { service, repo } = buildService({ hub: { adapter: () => provider } });
+    const proposed = await service.propose({ title: 'Rappeler Alice', sourceRef: 'mail:m1', providerId: 'google' });
+
+    await expect(service.activate(proposed.taskId)).rejects.toThrow('personal_action_unsupported_by_provider:create');
+    expect(provider.create).not.toHaveBeenCalled();
+    expect((await repo.get(proposed.taskId)).status).toBe('proposed');
+  });
 });
 
-describe('createTaskService.complete: local-first, provider failure surfaces as sync_conflict', () => {
+describe('createTaskService.complete: provider-backed state commits only after the provider succeeds', () => {
   it('completes a local-only (never activated) proposed task without touching the provider', async () => {
     const { service, provider } = buildService();
     const proposed = await service.propose({ title: 'Rappeler Alice', sourceRef: 'mail:m1' });
@@ -106,7 +117,7 @@ describe('createTaskService.complete: local-first, provider failure surfaces as 
     expect(provider.complete).not.toHaveBeenCalled();
   });
 
-  it('marks an active task completed locally, then confirms with the provider', async () => {
+  it('confirms an active task with the provider before persisting completed locally', async () => {
     const { service, provider } = buildService();
     const proposed = await service.propose({ title: 'Rappeler Alice', sourceRef: 'mail:m1', providerId: 'google' });
     await service.activate(proposed.taskId);
@@ -115,14 +126,25 @@ describe('createTaskService.complete: local-first, provider failure surfaces as 
     expect(provider.complete).toHaveBeenCalledWith(expect.stringMatching(/^provider-/u));
   });
 
-  it('leaves the task completed locally even when the provider call fails, and throws sync_conflict', async () => {
+  it('leaves the task active when the provider call fails and throws sync_conflict', async () => {
     const provider = fakeProvider({ complete: vi.fn(async () => { throw new Error('provider_down'); }) });
     const { service, repo } = buildService({ hub: { adapter: () => provider } });
     const proposed = await service.propose({ title: 'Rappeler Alice', sourceRef: 'mail:m1', providerId: 'google' });
     await service.activate(proposed.taskId);
 
     await expect(service.complete(proposed.taskId)).rejects.toThrow('sync_conflict');
-    expect((await repo.get(proposed.taskId)).status).toBe('completed');
+    expect((await repo.get(proposed.taskId)).status).toBe('active');
+  });
+
+  it('rejects an undeclared provider completion before changing local status', async () => {
+    const provider = fakeProvider({ capabilities: Object.freeze(['sync', 'create']) });
+    const { service, repo } = buildService({ hub: { adapter: () => provider } });
+    const proposed = await service.propose({ title: 'Rappeler Alice', sourceRef: 'mail:m1', providerId: 'google' });
+    await service.activate(proposed.taskId);
+
+    await expect(service.complete(proposed.taskId)).rejects.toThrow('personal_action_unsupported_by_provider:complete');
+    expect(provider.complete).not.toHaveBeenCalled();
+    expect((await repo.get(proposed.taskId)).status).toBe('active');
   });
 
   it('rejects completing an unknown task', async () => {

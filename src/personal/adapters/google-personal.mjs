@@ -69,6 +69,7 @@ export function createGooglePersonalAdapter({ oauth, credentialsProvider, clock 
 
   return Object.freeze({
     id: 'google',
+    capabilities: Object.freeze(['health', 'sync', 'create', 'complete', 'cancel', 'createEvent', 'getEvent', 'updateEvent', 'cancelEvent']),
 
     async create({ title, dueAt = null, sourceRef = null } = {}) {
       if (typeof title !== 'string' || title.trim().length < 1 || title.length > 500) {

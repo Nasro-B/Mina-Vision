@@ -19,12 +19,15 @@ const gitAvailable = (await runner.run('git', ['--version'])).code === 0;
 
 describe.skipIf(!gitAvailable)('git — dépôt réel temporaire', () => {
   let repoPath;
+  let hookPath;
   let client;
 
   beforeAll(async () => {
+    hookPath = await mkdtemp(join(tmpdir(), 'mina-git-hooks-'));
     repoPath = await mkdtemp(join(tmpdir(), 'mina-git-'));
     client = createGitClient({ runCommand: runner, repoPath, confirm: async () => true });
-    await runner.run('git', ['init', '--initial-branch=main'], { cwd: repoPath });
+    await runner.run('git', ['init', '--initial-branch=main', `--template=${hookPath}`], { cwd: repoPath });
+    await runner.run('git', ['config', 'core.hooksPath', hookPath], { cwd: repoPath });
     await runner.run('git', ['config', 'user.email', 'mina@test.local'], { cwd: repoPath });
     await runner.run('git', ['config', 'user.name', 'Mina Test'], { cwd: repoPath });
     await writeFile(join(repoPath, 'app.mjs'), 'export const version = 1;\n', 'utf8');
@@ -32,6 +35,7 @@ describe.skipIf(!gitAvailable)('git — dépôt réel temporaire', () => {
 
   afterAll(async () => {
     await rm(repoPath, { recursive: true, force: true }).catch(() => {});
+    await rm(hookPath, { recursive: true, force: true }).catch(() => {});
   });
 
   it('isRepository true dans le dépôt, false hors dépôt', async () => {

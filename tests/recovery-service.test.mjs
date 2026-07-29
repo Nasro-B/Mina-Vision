@@ -14,6 +14,14 @@ let ledger;
 const definition = Object.freeze({ automationId: 'def-1', status: 'active', version: 1 });
 const allowDecision = Object.freeze({ decision: 'allow', reasons: [] });
 
+function closureRepository() {
+  const closures = new Map();
+  return {
+    get: vi.fn(async (caseId) => closures.get(caseId) ?? null),
+    put: vi.fn(async (caseId, closure) => { closures.set(caseId, closure); }),
+  };
+}
+
 function simulationWith(actions, digest = 'a'.repeat(64)) {
   return Object.freeze({ simulationId: 'sim-1', digest, proposedActions: actions });
 }
@@ -152,7 +160,7 @@ describe('createRecoveryService.proposeNextAction', () => {
 describe('createRecoveryService.closeManually', () => {
   it('records a note and excludes the case from listCases afterwards', async () => {
     await makeUnknownRun();
-    const service = createRecoveryService({ automationLedger: ledger, automationRunner: createAutomationRunner({ ledger, domainRegistry: { invoke: vi.fn() }, actionVerifier: { verify: vi.fn() }, clock: () => 0 }), clock: () => 5000 });
+    const service = createRecoveryService({ automationLedger: ledger, automationRunner: createAutomationRunner({ ledger, domainRegistry: { invoke: vi.fn() }, actionVerifier: { verify: vi.fn() }, clock: () => 0 }), closureRepository: closureRepository(), clock: () => 5000 });
     const closed = await service.closeManually('run-unknown', 'Vérifié manuellement avec Nasro, sans effet.');
     expect(closed).toMatchObject({ caseId: 'run-unknown', note: 'Vérifié manuellement avec Nasro, sans effet.', closedAt: 5000 });
 
@@ -162,11 +170,23 @@ describe('createRecoveryService.closeManually', () => {
 
   it('is included in listCases when includeClosed is requested', async () => {
     await makeUnknownRun();
-    const service = createRecoveryService({ automationLedger: ledger, automationRunner: createAutomationRunner({ ledger, domainRegistry: { invoke: vi.fn() }, actionVerifier: { verify: vi.fn() }, clock: () => 0 }), clock: () => 0 });
+    const service = createRecoveryService({ automationLedger: ledger, automationRunner: createAutomationRunner({ ledger, domainRegistry: { invoke: vi.fn() }, actionVerifier: { verify: vi.fn() }, clock: () => 0 }), closureRepository: closureRepository(), clock: () => 0 });
     await service.closeManually('run-unknown', 'note');
     const cases = await service.listCases({ includeClosed: true });
     const found = cases.find((c) => c.caseId === 'run-unknown');
     expect(found.closedManually).toMatchObject({ note: 'note' });
+  });
+
+  it('persists a manual closure across a fresh recovery service instance', async () => {
+    await makeUnknownRun('run-durable');
+    const closures = closureRepository();
+    const runner = createAutomationRunner({ ledger, domainRegistry: { invoke: vi.fn() }, actionVerifier: { verify: vi.fn() }, clock: () => 0 });
+    const first = createRecoveryService({ automationLedger: ledger, automationRunner: runner, closureRepository: closures, clock: () => 1 });
+    await first.closeManually('run-durable', 'fermeture durable');
+
+    const restarted = createRecoveryService({ automationLedger: ledger, automationRunner: runner, closureRepository: closures, clock: () => 2 });
+    const recovered = (await restarted.listCases({ includeClosed: true })).find((entry) => entry.caseId === 'run-durable');
+    expect(recovered.closedManually).toMatchObject({ note: 'fermeture durable', closedAt: 1 });
   });
 
   it('rejects closing an unknown caseId', async () => {

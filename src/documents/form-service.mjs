@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 const SENSITIVE_FIELDS = new Set(['iban', 'signature', 'ssn', 'password', 'creditCard', 'cardNumber']);
 
-export function createFormService({ evidenceStore, fileWriter, capabilityBroker, confirmationService, clock } = {}) {
+export function createFormService({ evidenceStore, fileWriter, formRenderer = null, capabilityBroker, confirmationService, clock } = {}) {
   if (!evidenceStore?.get) throw new TypeError('form_service_evidence_store_required');
   if (!fileWriter?.writeAtomic) throw new TypeError('form_service_file_writer_required');
   if (!capabilityBroker?.authorize) throw new TypeError('form_service_capability_broker_required');
@@ -56,6 +56,7 @@ export function createFormService({ evidenceStore, fileWriter, capabilityBroker,
     async commitCopy(proposalId, { destinationPath } = {}) {
       const proposal = proposals.get(proposalId);
       if (!proposal) throw new Error('form_proposal_not_found');
+      if (!formRenderer?.render) throw new Error('document_form_rendering_unavailable');
 
       const sensitive = proposal.diffs.filter((diff) => SENSITIVE_FIELDS.has(diff.fieldName));
       if (sensitive.length > 0) {
@@ -67,8 +68,15 @@ export function createFormService({ evidenceStore, fileWriter, capabilityBroker,
         if (!confirmed) throw new Error('confirmation_refused');
       }
 
-      const path = destinationPath ?? `documents/filled/${proposal.documentId}.${proposal.id}.json`;
-      const content = JSON.stringify({ documentId: proposal.documentId, values: Object.fromEntries(proposal.diffs.map((d) => [d.fieldName, d.proposedValue])) });
+      const path = destinationPath ?? `documents/filled/${proposal.documentId}.${proposal.id}.pdf`;
+      const content = await formRenderer.render({
+        documentId: proposal.documentId,
+        values: Object.freeze(Object.fromEntries(proposal.diffs.map((diff) => [diff.fieldName, diff.proposedValue]))),
+        destinationPath: path,
+      });
+      if (!Buffer.isBuffer(content) && !(content instanceof Uint8Array) && typeof content !== 'string') {
+        throw new Error('document_form_rendering_invalid');
+      }
       const written = await fileWriter.writeAtomic({ path, content, encoding: 'utf8' });
       proposals.set(proposalId, Object.freeze({ ...proposal, status: 'committed' }));
       return Object.freeze({ proposalId, path, bytes: written?.bytes ?? Buffer.byteLength(content) });

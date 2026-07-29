@@ -177,6 +177,91 @@ describe('IMAP/SMTP adapter: IDLE with renewal, falling back to bounded polling'
   });
 });
 
+describe('IMAP/SMTP adapter: mark read is idempotent and post-write verified', () => {
+  it('sets \\Seen by UID and verifies the selected message flags', async () => {
+    const client = {
+      connect: vi.fn(async () => {}),
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      messageFlagsAdd: vi.fn(async () => true),
+      fetchOne: vi.fn(async () => ({ uid: 42, flags: new Set(['\\Seen']) })),
+      logout: vi.fn(async () => {}),
+    };
+    const adapter = createImapSmtpAdapter({
+      account,
+      credentialsProvider: async () => ({ user: account.address, password: 'app-password' }),
+      imapFactory: vi.fn(async () => client),
+    });
+
+    await expect(adapter.markRead({ folder: 'INBOX', uid: 42 }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'INBOX:42' });
+    expect(client.messageFlagsAdd).toHaveBeenCalledWith(42, ['\\Seen'], { uid: true });
+    expect(client.fetchOne).toHaveBeenCalledWith(42, { uid: true, flags: true }, { uid: true });
+  });
+
+  it('does not claim confirmation when the post-write fetch is not seen', async () => {
+    const client = {
+      connect: vi.fn(async () => {}),
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      messageFlagsAdd: vi.fn(async () => true),
+      fetchOne: vi.fn(async () => ({ uid: 42, flags: new Set() })),
+      logout: vi.fn(async () => {}),
+    };
+    const adapter = createImapSmtpAdapter({
+      account,
+      credentialsProvider: async () => ({ user: account.address, password: 'app-password' }),
+      imapFactory: vi.fn(async () => client),
+    });
+
+    await expect(adapter.markRead({ folder: 'INBOX', uid: 42 }))
+      .rejects.toThrow('imap_mark_read_unconfirmed');
+  });
+});
+
+describe('IMAP/SMTP adapter: archive requires an explicit destination and post-write proof', () => {
+  it('moves by source UID then rereads the mapped destination UID', async () => {
+    const sourceClient = {
+      connect: vi.fn(async () => {}),
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      messageMove: vi.fn(async () => ({ destination: 'Archive', uidMap: new Map([[42, 88]]) })),
+      logout: vi.fn(async () => {}),
+    };
+    const destinationClient = {
+      connect: vi.fn(async () => {}),
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      fetchOne: vi.fn(async () => ({ uid: 88 })),
+      logout: vi.fn(async () => {}),
+    };
+    const clients = [sourceClient, destinationClient];
+    const adapter = createImapSmtpAdapter({
+      account,
+      credentialsProvider: async () => ({ user: account.address, password: 'app-password' }),
+      imapFactory: vi.fn(async () => clients.shift()),
+    });
+
+    await expect(adapter.archive({ folder: 'INBOX', uid: 42, archiveFolder: 'Archive' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'Archive:88' });
+    expect(sourceClient.messageMove).toHaveBeenCalledWith(42, 'Archive', { uid: true });
+    expect(destinationClient.fetchOne).toHaveBeenCalledWith(88, { uid: true }, { uid: true });
+  });
+
+  it('reports delivery_unknown instead of inventing confirmation without UIDPLUS mapping', async () => {
+    const sourceClient = {
+      connect: vi.fn(async () => {}),
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      messageMove: vi.fn(async () => ({ destination: 'Archive' })),
+      logout: vi.fn(async () => {}),
+    };
+    const adapter = createImapSmtpAdapter({
+      account,
+      credentialsProvider: async () => ({ user: account.address, password: 'app-password' }),
+      imapFactory: vi.fn(async () => sourceClient),
+    });
+
+    await expect(adapter.archive({ folder: 'INBOX', uid: 42, archiveFolder: 'Archive' }))
+      .resolves.toEqual({ state: 'delivery_unknown', providerMessageId: 'INBOX:42' });
+  });
+});
+
 describe('IMAP/SMTP adapter: search Sent before any retry', () => {
   it('finds a previously sent message in Sent by Message-ID so a retry is never blind', async () => {
     const client = {
@@ -204,5 +289,15 @@ describe('IMAP/SMTP adapter: search Sent before any retry', () => {
       imapFactory: vi.fn(() => client),
     });
     await expect(adapter.searchSent({ messageId: '<ghost@example.test>' })).resolves.toEqual({ found: false, uids: [] });
+  });
+});
+
+describe('IMAP/SMTP adapter: declared operation capability boundary', () => {
+  it('does not advertise a draft or mailbox mutation API it does not implement', () => {
+    const adapter = createImapSmtpAdapter({ account, credentialsProvider: async () => ({ user: account.address, password: 'app-password' }) });
+
+    expect(adapter.capabilities).toContain('send');
+    expect(adapter.capabilities).not.toContain('createDraft');
+    expect(adapter.capabilities).not.toContain('unsubscribe');
   });
 });

@@ -5,7 +5,7 @@ import { createMailVerifier } from './mail-verifier.mjs';
 const ACCOUNT_ID = /^[A-Za-z0-9._:-]{1,160}$/u;
 const ACTION_METHODS = Object.freeze({
   create_draft: 'createDraft', send: 'send', reply: 'reply', forward: 'forward',
-  move: 'move', label: 'label', archive: 'archive', mark_spam: 'markSpam',
+  move: 'move', label: 'label', archive: 'archive', mark_read: 'markRead', mark_spam: 'markSpam',
   unsubscribe: 'unsubscribe', trash: 'trash',
 });
 const SENDING_ACTIONS = new Set(['send', 'reply', 'forward']);
@@ -38,12 +38,16 @@ export function createMailService({
   }
 
   async function propose({ accountId, action, targets, content, revision, ruleAuthorized, confirmedLocally, threadId } = {}) {
-    adapterFor(accountId);
+    const adapter = adapterFor(accountId);
     const decision = policy.decide({
       action, requestedBy: 'automation', accountId, threadId: threadId ?? targets?.threadId, ruleAuthorized, confirmedLocally,
     });
     if (decision.decision === 'deny') throw new Error(decision.reason);
     if (!Object.hasOwn(ACTION_METHODS, action ?? '')) throw new TypeError('mail_proposal_action_invalid');
+    const method = ACTION_METHODS[action];
+    if (!Array.isArray(adapter.capabilities) || !adapter.capabilities.includes(method)) {
+      throw new Error(`mail_action_unsupported_by_provider:${action}`);
+    }
 
     const digest = digestFor({ accountId, action, targets, content, revision });
     const proposalId = randomUUID();
@@ -92,7 +96,9 @@ export function createMailService({
     const adapter = adapterFor(proposal.accountId);
     const method = ACTION_METHODS[proposal.action];
     const invoke = adapter[method];
-    if (typeof invoke !== 'function') throw new Error(`mail_action_unsupported_by_provider:${proposal.action}`);
+    if (!Array.isArray(adapter.capabilities) || !adapter.capabilities.includes(method) || typeof invoke !== 'function') {
+      throw new Error(`mail_action_unsupported_by_provider:${proposal.action}`);
+    }
 
     const rawResult = await invoke.call(adapter, { ...proposal.targets, ...proposal.content });
     const verified = await verifier.verify({ providerResult: rawResult });

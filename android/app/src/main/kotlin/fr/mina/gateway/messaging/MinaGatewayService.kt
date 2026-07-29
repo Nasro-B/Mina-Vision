@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.Manifest
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.IBinder
 import fr.mina.gateway.MainActivity
@@ -40,7 +41,18 @@ class MinaGatewayService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        startForeground(NOTIFICATION_ID, notification("SMS actif · Telegram en démarrage"))
+        val startLiveLoops = GatewayServiceStartPolicy.shouldStartLiveLoops(
+            debugBuild = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0,
+            isolatedTestRequested = intent?.getBooleanExtra(
+                GatewayServiceStartPolicy.EXTRA_ISOLATED_TEST_MODE,
+                false,
+            ) == true,
+        )
+        startForeground(
+            NOTIFICATION_ID,
+            notification(if (startLiveLoops) "SMS actif · Telegram en démarrage" else "SMS actif · mode test isolé"),
+        )
+        if (!startLiveLoops) return START_NOT_STICKY
         if (running.compareAndSet(false, true)) {
             pollExecutor.execute {
                 try {

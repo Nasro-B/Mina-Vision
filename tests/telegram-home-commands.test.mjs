@@ -17,7 +17,7 @@ const PLUG = Object.freeze({
 });
 const LOCK = Object.freeze({ ...LIGHT, deviceId: 'lock-porte', displayName: 'Serrure', riskTier: 'high' });
 
-function harness({ devices = [LIGHT, PLUG, LOCK], telegramLowRiskEnabled = true } = {}) {
+function harness({ devices = [LIGHT, PLUG, LOCK] } = {}) {
   const connector = {
     id: 'home-assistant', network: 'lan', health: () => ({ available: true }), supports: () => true,
     execute: vi.fn(async () => ({ accepted: true })),
@@ -25,7 +25,7 @@ function harness({ devices = [LIGHT, PLUG, LOCK], telegramLowRiskEnabled = true 
   };
   const homeService = createSmartHomeService({
     registry: createSmartHomeRegistry({ devices }),
-    policy: createSmartHomePolicy({ telegramLowRiskEnabled }),
+    policy: createSmartHomePolicy({ firebaseLowRiskEnabled: true }),
     router: createSmartHomeRouter({ connectors: [connector] }),
     now: () => 1_000,
   });
@@ -54,18 +54,18 @@ describe('Telegram /home commands: owner identity is the only gate', () => {
   });
 });
 
-describe('Telegram /home commands: status and low-risk direct execution', () => {
+describe('Telegram /home commands: status and no direct remote execution', () => {
   it('lists enabled devices on /home status', async () => {
     const { commands } = harness();
     const result = await commands.handle({ sender: '999111222', body: '/home status' });
     expect(result.reply.join('')).toContain('Plafonnier');
   });
 
-  it('executes a low-risk device turn_on directly and confirms the resulting state', async () => {
+  it('never executes a low-risk device directly', async () => {
     const { commands, connector } = harness();
     const result = await commands.handle({ sender: '999111222', body: '/home Plafonnier on' });
-    expect(connector.execute).toHaveBeenCalledTimes(1);
-    expect(result.reply.join('')).toContain('confirmé');
+    expect(connector.execute).not.toHaveBeenCalled();
+    expect(result.reply.join('')).toContain('refusé');
   });
 });
 

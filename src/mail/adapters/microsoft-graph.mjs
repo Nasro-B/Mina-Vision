@@ -16,6 +16,13 @@ function normalizeMessage(raw) {
   });
 }
 
+function graphMessagePath(messageId, errorCode) {
+  if (typeof messageId !== 'string' || messageId.length < 1 || messageId.length > 2_048 || /[\u0000\r\n]/u.test(messageId)) {
+    throw new TypeError(errorCode);
+  }
+  return encodeURIComponent(messageId);
+}
+
 async function parseJson(response) {
   const text = await response.text();
   return text.length > 0 ? JSON.parse(text) : {};
@@ -79,6 +86,7 @@ export function createMicrosoftGraphAdapter({
   return Object.freeze({
     id: account.id,
     provider: 'microsoft',
+    capabilities: Object.freeze(['sync', 'listFolders', 'createDraft', 'send', 'markRead', 'archive']),
 
     async sync({ credentialsProvider, folderId = 'inbox', cursor = null, persist } = {}) {
       if (typeof credentialsProvider !== 'function' || typeof persist !== 'function') {
@@ -137,6 +145,35 @@ export function createMicrosoftGraphAdapter({
       const { status } = await call(credentialsProvider, { url: `${GRAPH_BASE}/me/messages/${draftId}/send`, method: 'POST' });
       if (status < 200 || status > 299) throw new Error('microsoft_send_response_invalid');
       return Object.freeze({ state: 'accepted_by_provider', providerMessageId: draftId });
+    },
+
+    async markRead({ credentialsProvider, messageId } = {}) {
+      if (typeof credentialsProvider !== 'function') throw new TypeError('microsoft_mark_read_request_invalid');
+      const { data } = await call(credentialsProvider, {
+        url: `${GRAPH_BASE}/me/messages/${graphMessagePath(messageId, 'microsoft_mark_read_request_invalid')}`,
+        method: 'PATCH',
+        body: { isRead: true },
+      });
+      if (data?.id !== messageId || data?.isRead !== true) throw new Error('microsoft_mark_read_unconfirmed');
+      return Object.freeze({ state: 'state_confirmed', providerMessageId: messageId });
+    },
+
+    async archive({ credentialsProvider, messageId } = {}) {
+      if (typeof credentialsProvider !== 'function') throw new TypeError('microsoft_archive_request_invalid');
+      const { status, data } = await call(credentialsProvider, {
+        url: `${GRAPH_BASE}/me/messages/${graphMessagePath(messageId, 'microsoft_archive_request_invalid')}/move`,
+        method: 'POST',
+        body: { destinationId: 'archive' },
+      });
+      if (status !== 201 || typeof data?.id !== 'string' || data.id.length < 1) {
+        throw new Error('microsoft_archive_unconfirmed');
+      }
+      const providerMessageId = data.id;
+      const { data: observed } = await call(credentialsProvider, {
+        url: `${GRAPH_BASE}/me/mailFolders/archive/messages/${graphMessagePath(providerMessageId, 'microsoft_archive_unconfirmed')}`,
+      });
+      if (observed?.id !== providerMessageId) throw new Error('microsoft_archive_unconfirmed');
+      return Object.freeze({ state: 'state_confirmed', providerMessageId });
     },
   });
 }

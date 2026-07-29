@@ -197,3 +197,70 @@ describe('Gmail adapter: drafts and send qualify only accepted_by_provider, neve
       .resolves.toEqual({ state: 'accepted_by_provider', providerMessageId: 'm11' });
   });
 });
+
+describe('Gmail adapter: mark read is idempotent and confirmed by the returned message labels', () => {
+  it('removes UNREAD and confirms the provider returned no unread label', async () => {
+    const oauth = fakeGmailOAuth({
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/modify': async (options) => {
+        expect(options).toMatchObject({ method: 'POST', data: { removeLabelIds: ['UNREAD'] } });
+        return { data: { id: 'm1', labelIds: ['INBOX'] } };
+      },
+    });
+    const adapter = createGmailAdapter({ account, oauth });
+
+    await expect(adapter.markRead({ credentialsProvider, messageId: 'm1' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
+  });
+
+  it('does not claim confirmation when Gmail still returns UNREAD', async () => {
+    const adapter = createGmailAdapter({
+      account,
+      oauth: fakeGmailOAuth({
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/modify': async () => ({ data: { id: 'm1', labelIds: ['INBOX', 'UNREAD'] } }),
+      }),
+    });
+
+    await expect(adapter.markRead({ credentialsProvider, messageId: 'm1' }))
+      .rejects.toThrow('gmail_mark_read_unconfirmed');
+  });
+});
+
+describe('Gmail adapter: archive is idempotent and confirmed by the returned message labels', () => {
+  it('removes INBOX and confirms the provider returned no inbox label', async () => {
+    const oauth = fakeGmailOAuth({
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/modify': async (options) => {
+        expect(options).toMatchObject({ method: 'POST', data: { removeLabelIds: ['INBOX'] } });
+        return { data: { id: 'm1', labelIds: ['ALL_MAIL'] } };
+      },
+    });
+    const adapter = createGmailAdapter({ account, oauth });
+
+    await expect(adapter.archive({ credentialsProvider, messageId: 'm1' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
+  });
+
+  it('does not claim confirmation when Gmail still returns INBOX', async () => {
+    const adapter = createGmailAdapter({
+      account,
+      oauth: fakeGmailOAuth({
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/modify': async () => ({ data: { id: 'm1', labelIds: ['INBOX'] } }),
+      }),
+    });
+
+    await expect(adapter.archive({ credentialsProvider, messageId: 'm1' }))
+      .rejects.toThrow('gmail_archive_unconfirmed');
+  });
+});
+
+describe('Gmail adapter: declared operation capability boundary', () => {
+  it('declares only the operations its concrete adapter exposes', () => {
+    const adapter = createGmailAdapter({ account, oauth: fakeGmailOAuth() });
+
+    expect(adapter.capabilities).toContain('createDraft');
+    expect(adapter.capabilities).toContain('send');
+    expect(adapter.capabilities).toContain('markRead');
+    expect(adapter.capabilities).toContain('archive');
+    expect(adapter.capabilities).not.toContain('unsubscribe');
+    expect(adapter.capabilities).not.toContain('markSpam');
+  });
+});
