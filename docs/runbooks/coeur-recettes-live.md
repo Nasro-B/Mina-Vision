@@ -31,7 +31,7 @@ lance une action sans avoir à redire « Mina » (décision du 2026-07-29).
 | 1.7 | Demander « **que sais-tu faire ?** » | Elle énonce ses capacités RÉELLES **jusqu'au bout**, sans sauter à une clôture (« voilà ») ; tu peux l'interrompre à tout moment |
 | 1.8 | Dire « **ouvre youtube** » (sans re-préfixer « Mina ») | La mission navigateur part (enchaîne sur la recette 2) |
 
-**Résultat** : ⬜ pass ⬜ fail — Date : ____________ — Notes : ________________________________
+**Résultat** : ✅ pass ⬜ fail — Date : 2026-07-29 — Notes : « que sais-tu faire » énonce enfin ses outils jusqu'au bout (confirmé Nasro « oui ça marche ») après correction des 3 causes empilées — bouclier micro `ab466b8`, patterns élargis `5771fba`, cache-first sonde téléphone `e24eca7`. Reste à cocher live sur cette même recette : stop/pause (1.3–1.5) et « ouvre youtube » (1.7–1.8).
 
 ---
 
