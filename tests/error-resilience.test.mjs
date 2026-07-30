@@ -94,4 +94,19 @@ describe('withRetry', () => {
     expect(fn).toHaveBeenCalledTimes(1);
     expect(onRetry).not.toHaveBeenCalled();
   });
+
+  // Durcissement 2026-07-29 (réseau vers Google en à-coups) : le défaut encaisse plus de coupures.
+  it('par défaut, encaisse jusqu’à 5 tentatives sur une coupure réseau (durci depuis 3)', async () => {
+    const fn = vi.fn().mockRejectedValue(new Error('Connection error.'));
+    await expect(withRetry(fn, { sleep: instantSleep })).rejects.toThrow('Connection error.');
+    expect(fn).toHaveBeenCalledTimes(5);
+  });
+
+  it('plafonne le backoff exponentiel à maxDelayMs (jamais d’attente démesurée)', async () => {
+    const fn = vi.fn().mockRejectedValue(new Error('Connection error.'));
+    const sleep = vi.fn().mockResolvedValue();
+    await expect(withRetry(fn, { attempts: 6, baseDelayMs: 1_000, maxDelayMs: 3_000, sleep })).rejects.toThrow('Connection error.');
+    expect(sleep.mock.calls.map((call) => call[0])).toEqual([1_000, 2_000, 3_000, 3_000, 3_000]);
+    expect(fn).toHaveBeenCalledTimes(6);
+  });
 });

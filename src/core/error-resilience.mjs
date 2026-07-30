@@ -24,9 +24,15 @@ export function classifyFailure(error) {
   return 'permanent';
 }
 
+// Défaut durci (2026-07-29, bug live Nasro : réseau vers Google qui coupe par à-coups). 5 tentatives
+// avec backoff plafonné (400, 800, 1600, 3000 = ~6 s de fenêtre) au lieu de 3/~1,2 s : une coupure
+// brève de quelques secondes est ENCAISSÉE au lieu de tuer la mission ou le brief vocal. Le plafond
+// évite qu'un backoff exponentiel fasse attendre trop longtemps sur une vraie panne. Un refus de
+// sécurité ou une erreur permanente n'est JAMAIS retenté, quel que soit le budget.
 export async function withRetry(fn, {
-  attempts = 3,
+  attempts = 5,
   baseDelayMs = 400,
+  maxDelayMs = 3_000,
   classify = classifyFailure,
   onRetry = () => {},
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -38,7 +44,7 @@ export async function withRetry(fn, {
       return await fn();
     } catch (error) {
       if (classify(error) !== 'transient' || attempt >= attempts) throw error;
-      const delayMs = baseDelayMs * 2 ** (attempt - 1);
+      const delayMs = Math.min(baseDelayMs * 2 ** (attempt - 1), maxDelayMs);
       onRetry({ attempt, delayMs, error });
       await sleep(delayMs);
     }
