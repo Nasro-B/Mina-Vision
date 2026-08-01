@@ -369,3 +369,12 @@
 - proof: le diagnostic a indexé `935` fichiers sans réduire le corpus en `23481 ms` (lecture cumulée `18288 ms`, parsing cumulé `3271 ms`, `3969` symboles). Le chemin assemblé réel Mina Code a passé `1` fichier / `9` tests; son hook `beforeAll` d'indexation a pris `11.82 s`. Les deux mesures observées sont sous l'objectif historique `<30 s`. Elles remplacent l'état ouvert fondé sur la mesure antérieure `68.887 s`, sans nier cette mesure historique.
 - manual/live: passé pour une indexation locale en lecture seule; aucune écriture projet, opération Git ou action externe.
 - remaining: aucune action ouverte pour la cible d'indexation initiale. Re-mesurer après toute modification substantielle du corpus ou de l'indexeur.
+
+## 2026-08-01 20:49 | runtime | serveur LM Studio joignable, modèles Mina non chargés
+
+- files: aucun fichier source modifié; observation runtime en lecture seule.
+- command: `npm run verify`; `lms server status`; `lms ps`.
+- exit: `0`; `0`; `0`.
+- proof: le serveur répond sur le port `1234`. `lms ps` retourne `No models are currently loaded`; le diagnostic Mina retourne donc `lm_studio_models_not_ready` pour `google/gemma-4-e2b` (texte et vision) et `text-embedding-nomic-embed-text-v1.5` (embedding). Aucun modèle n'est présenté comme prêt.
+- manual/live: aucun chargement de modèle, appel d'inférence, capture micro, ni changement de configuration n'a été effectué.
+- remaining: autorisation explicite de charger les modèles configurés, puis preuve séparée texte/embedding; la boucle STT → modèle → TTS hors réseau et la route caméra demeurent ouvertes.
