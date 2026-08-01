@@ -38,13 +38,14 @@ export function createMailSyncService({ repository, adapters, quarantine = quara
     const syncResult = await adapter.sync({
       cursor,
       persist: async (message) => {
-        const saved = await repository.saveMessage({ ...message, accountId });
+        const { attachments, ...messageWithoutAttachments } = message;
+        const saved = await repository.saveMessage({ ...messageWithoutAttachments, accountId, attachments: [] });
         if (saved.duplicate) {
           duplicateMessages += 1;
           return;
         }
         newMessages += 1;
-        await persistAttachments(saved.messageId, message.attachments);
+        await persistAttachments(saved.messageId, attachments);
       },
     });
     await repository.saveCursor({ accountId, cursor: syncResult });

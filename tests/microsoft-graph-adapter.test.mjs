@@ -212,6 +212,116 @@ describe('Microsoft Graph adapter: archive is confirmed by a read from the well-
   });
 });
 
+describe('Microsoft Graph adapter: move is confirmed by a read from the requested destination folder', () => {
+  it('moves a message to an explicit folder and rereads the Graph destination message', async () => {
+    const fetchImpl = vi.fn(async (url, options) => {
+      if (url.endsWith('/messages/m1/move')) {
+        expect(options).toMatchObject({ method: 'POST', body: JSON.stringify({ destinationId: 'folder-1' }) });
+        return jsonResponse(201, { id: 'm2' });
+      }
+      if (url.endsWith('/mailFolders/folder-1/messages/m2')) return jsonResponse(200, { id: 'm2' });
+      throw new Error(`unexpected_url:${url}`);
+    });
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await expect(adapter.move({ credentialsProvider, messageId: 'm1', destinationId: 'folder-1' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm2' });
+  });
+
+  it('does not claim confirmation when Graph rereads a different destination message', async () => {
+    const fetchImpl = vi.fn(async (url) => url.endsWith('/move')
+      ? jsonResponse(201, { id: 'm2' })
+      : jsonResponse(200, { id: 'm3' }));
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await expect(adapter.move({ credentialsProvider, messageId: 'm1', destinationId: 'folder-1' }))
+      .rejects.toThrow('microsoft_move_unconfirmed');
+  });
+});
+
+describe('Microsoft Graph adapter: label uses existing master categories and rereads the message', () => {
+  it('preserves unrelated categories while adding and removing only the requested categories', async () => {
+    let messageReads = 0;
+    const fetchImpl = vi.fn(async (url, options) => {
+      if (url.endsWith('/outlook/masterCategories')) return jsonResponse(200, {
+        value: [{ displayName: 'Finance' }, { displayName: 'Existing' }, { displayName: 'Remove' }],
+      });
+      if (url.includes('/messages/m1?')) {
+        messageReads += 1;
+        return jsonResponse(200, { id: 'm1', categories: messageReads === 1 ? ['Existing', 'Remove'] : ['Existing', 'Finance'] });
+      }
+      if (url.endsWith('/messages/m1')) {
+        expect(options).toMatchObject({ method: 'PATCH', body: JSON.stringify({ categories: ['Existing', 'Finance'] }) });
+        return jsonResponse(200, { id: 'm1', categories: ['Existing', 'Finance'] });
+      }
+      throw new Error(`unexpected_url:${url}`);
+    });
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await expect(adapter.label({
+      credentialsProvider, messageId: 'm1', addCategories: ['Finance'], removeCategories: ['Remove'],
+    })).resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
+  });
+
+  it('does not PATCH an add-category request that is absent from the master category list', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      if (url.endsWith('/outlook/masterCategories')) return jsonResponse(200, { value: [{ displayName: 'Existing' }] });
+      throw new Error(`unexpected_url:${url}`);
+    });
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await expect(adapter.label({
+      credentialsProvider, messageId: 'm1', addCategories: ['Finance'], removeCategories: [],
+    })).rejects.toThrow('microsoft_label_category_unavailable');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not claim confirmation when the post-write reread omits an added category', async () => {
+    let messageReads = 0;
+    const fetchImpl = vi.fn(async (url) => {
+      if (url.endsWith('/outlook/masterCategories')) return jsonResponse(200, { value: [{ displayName: 'Finance' }] });
+      if (url.includes('/messages/m1?')) {
+        messageReads += 1;
+        return jsonResponse(200, { id: 'm1', categories: messageReads === 1 ? [] : [] });
+      }
+      if (url.endsWith('/messages/m1')) return jsonResponse(200, { id: 'm1', categories: ['Finance'] });
+      throw new Error(`unexpected_url:${url}`);
+    });
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await expect(adapter.label({
+      credentialsProvider, messageId: 'm1', addCategories: ['Finance'], removeCategories: [],
+    })).rejects.toThrow('microsoft_label_unconfirmed');
+  });
+});
+
+describe('Microsoft Graph adapter: trash is confirmed by a read from deleted items', () => {
+  it('moves a message to deleted items and rereads the returned destination message', async () => {
+    const fetchImpl = vi.fn(async (url, options) => {
+      if (url.endsWith('/messages/m1/move')) {
+        expect(options).toMatchObject({ method: 'POST', body: JSON.stringify({ destinationId: 'deleteditems' }) });
+        return jsonResponse(201, { id: 'm2' });
+      }
+      if (url.endsWith('/mailFolders/deleteditems/messages/m2')) return jsonResponse(200, { id: 'm2' });
+      throw new Error(`unexpected_url:${url}`);
+    });
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await expect(adapter.trash({ credentialsProvider, messageId: 'm1' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm2' });
+  });
+
+  it('does not claim confirmation when the message cannot be reread from deleted items', async () => {
+    const fetchImpl = vi.fn(async (url) => url.endsWith('/move')
+      ? jsonResponse(201, { id: 'm2' })
+      : jsonResponse(200, { id: 'm3' }));
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await expect(adapter.trash({ credentialsProvider, messageId: 'm1' }))
+      .rejects.toThrow('microsoft_trash_unconfirmed');
+  });
+});
+
 describe('Microsoft Graph adapter: declared operation capability boundary', () => {
   it('declares drafts and send, but not unimplemented mailbox mutations', () => {
     const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl: vi.fn() });
@@ -220,6 +330,11 @@ describe('Microsoft Graph adapter: declared operation capability boundary', () =
     expect(adapter.capabilities).toContain('send');
     expect(adapter.capabilities).toContain('markRead');
     expect(adapter.capabilities).toContain('archive');
+    expect(adapter.capabilities).toContain('move');
+    expect(adapter.capabilities).toContain('label');
+    expect(adapter.capabilities).toContain('trash');
+    expect(adapter.capabilities).not.toContain('markSpam');
+    expect(adapter.capabilities).not.toContain('downloadAttachment');
     expect(adapter.capabilities).not.toContain('unsubscribe');
   });
 });

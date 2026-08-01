@@ -26,6 +26,7 @@ export function createComfyUiImageProvider({
     try {
       const response = await fetch(`${root}/mina/generate`, {
         method: 'POST',
+        redirect: 'error',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(request),
         signal: controller?.signal,
@@ -42,7 +43,7 @@ export function createComfyUiImageProvider({
     async health() {
       if (!enabled) return { ready: false, reason: 'comfyui_disabled' };
       try {
-        const response = await fetch(`${root}/system_stats`, { method: 'GET' });
+        const response = await fetch(`${root}/system_stats`, { method: 'GET', redirect: 'error' });
         return response?.ok ? { ready: true, reason: null } : { ready: false, reason: 'comfyui_unreachable' };
       } catch {
         return { ready: false, reason: 'comfyui_unreachable' };

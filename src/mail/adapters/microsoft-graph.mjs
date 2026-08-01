@@ -3,6 +3,14 @@ const MAX_SYNC_MESSAGES = 100;
 const MAX_THROTTLE_RETRIES = 3;
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 
+function isCategoryName(value) {
+  return typeof value === 'string' && value.length > 0 && value.length <= 255 && !/[\u0000\r\n]/u.test(value);
+}
+
+function sameStringSet(left, right) {
+  return left.length === right.length && left.every((value) => right.includes(value));
+}
+
 function normalizeMessage(raw) {
   if (typeof raw?.id !== 'string' || raw.id.length < 1) throw new Error('microsoft_message_invalid');
   return Object.freeze({
@@ -83,10 +91,40 @@ export function createMicrosoftGraphAdapter({
     return Object.freeze({ deltaLink, imported, resynced: true });
   }
 
+  async function moveAndVerify(credentialsProvider, messageId, destinationId, requestError, unconfirmedError) {
+    const sourcePath = graphMessagePath(messageId, requestError);
+    const destinationPath = graphMessagePath(destinationId, requestError);
+    const { status, data } = await call(credentialsProvider, {
+      url: `${GRAPH_BASE}/me/messages/${sourcePath}/move`,
+      method: 'POST',
+      body: { destinationId },
+    });
+    if (status !== 201 || typeof data?.id !== 'string' || data.id.length < 1) {
+      throw new Error(unconfirmedError);
+    }
+    const providerMessageId = data.id;
+    const { data: observed } = await call(credentialsProvider, {
+      url: `${GRAPH_BASE}/me/mailFolders/${destinationPath}/messages/${graphMessagePath(providerMessageId, unconfirmedError)}`,
+    });
+    if (observed?.id !== providerMessageId) throw new Error(unconfirmedError);
+    return Object.freeze({ state: 'state_confirmed', providerMessageId });
+  }
+
+  async function readMessageCategories(credentialsProvider, messageId, error) {
+    const { data } = await call(credentialsProvider, {
+      url: `${GRAPH_BASE}/me/messages/${graphMessagePath(messageId, error)}?%24select=id%2Ccategories`,
+    });
+    const categories = data?.categories ?? [];
+    if (data?.id !== messageId || !Array.isArray(categories) || categories.some((category) => !isCategoryName(category))) {
+      throw new Error(error);
+    }
+    return [...new Set(categories)];
+  }
+
   return Object.freeze({
     id: account.id,
     provider: 'microsoft',
-    capabilities: Object.freeze(['sync', 'listFolders', 'createDraft', 'send', 'markRead', 'archive']),
+    capabilities: Object.freeze(['sync', 'listFolders', 'createDraft', 'send', 'markRead', 'archive', 'move', 'label', 'trash']),
 
     async sync({ credentialsProvider, folderId = 'inbox', cursor = null, persist } = {}) {
       if (typeof credentialsProvider !== 'function' || typeof persist !== 'function') {
@@ -160,20 +198,52 @@ export function createMicrosoftGraphAdapter({
 
     async archive({ credentialsProvider, messageId } = {}) {
       if (typeof credentialsProvider !== 'function') throw new TypeError('microsoft_archive_request_invalid');
-      const { status, data } = await call(credentialsProvider, {
-        url: `${GRAPH_BASE}/me/messages/${graphMessagePath(messageId, 'microsoft_archive_request_invalid')}/move`,
-        method: 'POST',
-        body: { destinationId: 'archive' },
-      });
-      if (status !== 201 || typeof data?.id !== 'string' || data.id.length < 1) {
-        throw new Error('microsoft_archive_unconfirmed');
+      return moveAndVerify(credentialsProvider, messageId, 'archive', 'microsoft_archive_request_invalid', 'microsoft_archive_unconfirmed');
+    },
+
+    async move({ credentialsProvider, messageId, destinationId } = {}) {
+      if (typeof credentialsProvider !== 'function') throw new TypeError('microsoft_move_request_invalid');
+      return moveAndVerify(credentialsProvider, messageId, destinationId, 'microsoft_move_request_invalid', 'microsoft_move_unconfirmed');
+    },
+
+    async label({ credentialsProvider, messageId, addCategories = [], removeCategories = [] } = {}) {
+      if (typeof credentialsProvider !== 'function' || !Array.isArray(addCategories) || !Array.isArray(removeCategories)
+        || addCategories.length + removeCategories.length < 1 || addCategories.length + removeCategories.length > 100
+        || [...addCategories, ...removeCategories].some((category) => !isCategoryName(category))
+        || new Set(addCategories).size !== addCategories.length || new Set(removeCategories).size !== removeCategories.length
+        || addCategories.some((category) => removeCategories.includes(category))) {
+        throw new TypeError('microsoft_label_request_invalid');
       }
-      const providerMessageId = data.id;
-      const { data: observed } = await call(credentialsProvider, {
-        url: `${GRAPH_BASE}/me/mailFolders/archive/messages/${graphMessagePath(providerMessageId, 'microsoft_archive_unconfirmed')}`,
+      const messagePath = graphMessagePath(messageId, 'microsoft_label_request_invalid');
+      if (addCategories.length > 0) {
+        const { data } = await call(credentialsProvider, { url: `${GRAPH_BASE}/me/outlook/masterCategories` });
+        const masterCategories = new Set((data?.value ?? [])
+          .map((category) => category?.displayName)
+          .filter((category) => isCategoryName(category)));
+        if (addCategories.some((category) => !masterCategories.has(category))) {
+          throw new Error('microsoft_label_category_unavailable');
+        }
+      }
+      const current = await readMessageCategories(credentialsProvider, messageId, 'microsoft_label_unconfirmed');
+      const next = [...current.filter((category) => !removeCategories.includes(category))];
+      for (const category of addCategories) if (!next.includes(category)) next.push(category);
+      if (sameStringSet(current, next)) {
+        return Object.freeze({ state: 'state_confirmed', providerMessageId: messageId });
+      }
+      const { status, data } = await call(credentialsProvider, {
+        url: `${GRAPH_BASE}/me/messages/${messagePath}`,
+        method: 'PATCH',
+        body: { categories: next },
       });
-      if (observed?.id !== providerMessageId) throw new Error('microsoft_archive_unconfirmed');
-      return Object.freeze({ state: 'state_confirmed', providerMessageId });
+      if (status !== 200 || data?.id !== messageId) throw new Error('microsoft_label_unconfirmed');
+      const observed = await readMessageCategories(credentialsProvider, messageId, 'microsoft_label_unconfirmed');
+      if (!sameStringSet(observed, next)) throw new Error('microsoft_label_unconfirmed');
+      return Object.freeze({ state: 'state_confirmed', providerMessageId: messageId });
+    },
+
+    async trash({ credentialsProvider, messageId } = {}) {
+      if (typeof credentialsProvider !== 'function') throw new TypeError('microsoft_trash_request_invalid');
+      return moveAndVerify(credentialsProvider, messageId, 'deleteditems', 'microsoft_trash_request_invalid', 'microsoft_trash_unconfirmed');
     },
   });
 }

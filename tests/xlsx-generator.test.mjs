@@ -27,6 +27,12 @@ describe('xlsx-generator', () => {
     })).rejects.toThrow('publication_xlsx_external_reference_forbidden');
   });
 
+  it('refuse les fonctions de formule qui peuvent charger une ressource distante', async () => {
+    await expect(generateXlsx({
+      sheets: [{ name: 'X', rows: [[1]], formulas: [{ cell: 'A2', formula: 'HYPERLINK("https://example.test", "ouvrir")' }] }],
+    })).rejects.toThrow('publication_xlsx_external_reference_forbidden');
+  });
+
   it('tronque un nom de feuille > 31 caractères et retire les caractères interdits', async () => {
     const buffer = await generateXlsx({ sheets: [{ name: `${'a'.repeat(40)}/*?:`, rows: [[1]] }] });
     const workbook = await load(buffer);

@@ -50,6 +50,34 @@ describe('IMAP/SMTP secure adapter', () => {
     expect(logout).toHaveBeenCalledTimes(1);
   });
 
+  it('passes parser attachment bytes to the quarantine boundary during sync', async () => {
+    const persisted = [];
+    const attachmentBytes = Buffer.from('%PDF-1.7 parser attachment');
+    const client = {
+      mailbox: { uidValidity: 77n },
+      connect: vi.fn(async () => {}),
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      fetch: vi.fn(() => (async function* values() { yield { uid: 14, source: Buffer.from('raw-14') }; }())),
+      logout: vi.fn(async () => {}),
+    };
+    const adapter = createImapSmtpAdapter({
+      account,
+      credentialsProvider: async () => ({ user: account.address, password: 'app-password' }),
+      imapFactory: vi.fn(() => client),
+      parseMessage: vi.fn(async () => ({
+        messageId: '<raw-14>', subject: 'Pièce jointe', text: 'Contenu',
+        from: { value: [{ address: 'sender@example.test' }] }, to: { value: [{ address: account.address }] },
+        attachments: [{ filename: 'proof.pdf', contentType: 'application/pdf', content: attachmentBytes, size: attachmentBytes.length }],
+      })),
+    });
+
+    await adapter.sync({ folder: 'INBOX', persist: async (message) => persisted.push(message) });
+
+    expect(persisted[0].attachments).toEqual([expect.objectContaining({
+      filename: 'proof.pdf', contentType: 'application/pdf', bytes: attachmentBytes,
+    })]);
+  });
+
   it('enforces SMTP TLS and qualifies provider acceptance without claiming delivery', async () => {
     const sendMail = vi.fn(async () => ({ messageId: '<mina-1@example.test>', response: '250 queued' }));
     const smtpFactory = vi.fn(() => ({ verify: vi.fn(async () => true), sendMail, close: vi.fn() }));
@@ -262,6 +290,86 @@ describe('IMAP/SMTP adapter: archive requires an explicit destination and post-w
   });
 });
 
+describe('IMAP/SMTP adapter: move requires an explicit destination and post-write proof', () => {
+  it('moves by source UID then rereads the mapped destination UID', async () => {
+    const sourceClient = {
+      connect: vi.fn(async () => {}),
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      messageMove: vi.fn(async () => ({ destination: 'Receipts', uidMap: new Map([[42, 88]]) })),
+      logout: vi.fn(async () => {}),
+    };
+    const destinationClient = {
+      connect: vi.fn(async () => {}),
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      fetchOne: vi.fn(async () => ({ uid: 88 })),
+      logout: vi.fn(async () => {}),
+    };
+    const clients = [sourceClient, destinationClient];
+    const adapter = createImapSmtpAdapter({
+      account,
+      credentialsProvider: async () => ({ user: account.address, password: 'app-password' }),
+      imapFactory: vi.fn(async () => clients.shift()),
+    });
+
+    await expect(adapter.move({ folder: 'INBOX', uid: 42, destinationFolder: 'Receipts' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'Receipts:88' });
+    expect(sourceClient.messageMove).toHaveBeenCalledWith(42, 'Receipts', { uid: true });
+    expect(destinationClient.fetchOne).toHaveBeenCalledWith(88, { uid: true }, { uid: true });
+  });
+});
+
+describe('IMAP/SMTP adapter: trash and spam require explicitly configured special-use folders', () => {
+  it('moves to the supplied Trash folder and rereads the mapped destination UID', async () => {
+    const sourceClient = {
+      connect: vi.fn(async () => {}),
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      messageMove: vi.fn(async () => ({ destination: 'Trash', uidMap: new Map([[42, 88]]) })),
+      logout: vi.fn(async () => {}),
+    };
+    const destinationClient = {
+      connect: vi.fn(async () => {}),
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      fetchOne: vi.fn(async () => ({ uid: 88 })),
+      logout: vi.fn(async () => {}),
+    };
+    const clients = [sourceClient, destinationClient];
+    const adapter = createImapSmtpAdapter({
+      account,
+      credentialsProvider: async () => ({ user: account.address, password: 'app-password' }),
+      imapFactory: vi.fn(async () => clients.shift()),
+    });
+
+    await expect(adapter.trash({ folder: 'INBOX', uid: 42, trashFolder: 'Trash' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'Trash:88' });
+    expect(sourceClient.messageMove).toHaveBeenCalledWith(42, 'Trash', { uid: true });
+  });
+
+  it('moves to the supplied Junk folder and rereads the mapped destination UID', async () => {
+    const sourceClient = {
+      connect: vi.fn(async () => {}),
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      messageMove: vi.fn(async () => ({ destination: 'Junk', uidMap: new Map([[42, 88]]) })),
+      logout: vi.fn(async () => {}),
+    };
+    const destinationClient = {
+      connect: vi.fn(async () => {}),
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      fetchOne: vi.fn(async () => ({ uid: 88 })),
+      logout: vi.fn(async () => {}),
+    };
+    const clients = [sourceClient, destinationClient];
+    const adapter = createImapSmtpAdapter({
+      account,
+      credentialsProvider: async () => ({ user: account.address, password: 'app-password' }),
+      imapFactory: vi.fn(async () => clients.shift()),
+    });
+
+    await expect(adapter.markSpam({ folder: 'INBOX', uid: 42, junkFolder: 'Junk' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'Junk:88' });
+    expect(sourceClient.messageMove).toHaveBeenCalledWith(42, 'Junk', { uid: true });
+  });
+});
+
 describe('IMAP/SMTP adapter: search Sent before any retry', () => {
   it('finds a previously sent message in Sent by Message-ID so a retry is never blind', async () => {
     const client = {
@@ -297,6 +405,11 @@ describe('IMAP/SMTP adapter: declared operation capability boundary', () => {
     const adapter = createImapSmtpAdapter({ account, credentialsProvider: async () => ({ user: account.address, password: 'app-password' }) });
 
     expect(adapter.capabilities).toContain('send');
+    expect(adapter.capabilities).toContain('move');
+    expect(adapter.capabilities).toContain('trash');
+    expect(adapter.capabilities).toContain('markSpam');
+    expect(adapter.capabilities).not.toContain('label');
+    expect(adapter.capabilities).not.toContain('downloadAttachment');
     expect(adapter.capabilities).not.toContain('createDraft');
     expect(adapter.capabilities).not.toContain('unsubscribe');
   });

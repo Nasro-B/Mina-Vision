@@ -40,6 +40,17 @@ describe('comfyui-image-provider', () => {
     expect(result.sha256).toMatch(/^[a-f0-9]{64}$/u);
   });
 
+  it('interdit les redirections HTTP afin qu’un endpoint loopback ne puisse jamais sortir du loopback', async () => {
+    const fetch = okFetch();
+    const provider = createComfyUiImageProvider({ baseUrl: 'http://127.0.0.1:8188', enabled: true, fetch });
+
+    await provider.generate(validRequest);
+    await provider.health();
+
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:8188/mina/generate', expect.objectContaining({ redirect: 'error' }));
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:8188/system_stats', expect.objectContaining({ redirect: 'error' }));
+  });
+
   it('refuse une sortie qui n’est pas une image validée (magic bytes)', async () => {
     const provider = createComfyUiImageProvider({ baseUrl: 'http://127.0.0.1:8188', enabled: true, fetch: okFetch(Buffer.from('MZ ceci n_est pas une image')) });
     await expect(provider.generate(validRequest)).rejects.toThrow('comfyui_output_media_type_invalid');

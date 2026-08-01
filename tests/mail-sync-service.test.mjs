@@ -4,17 +4,19 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyMailMigrations, createMailRepository } from '../src/mail/mail-repository.mjs';
+import { openRecord } from '../src/memory/record-codec.mjs';
 import { createMailSyncService } from '../src/mail/mail-sync-service.mjs';
 
 let db;
 let directory;
 let repository;
+const ENCRYPTION_KEY = Buffer.alloc(32, 11);
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'mina-mail-sync-'));
   db = new Database(join(directory, 'mail.sqlite'));
   applyMailMigrations(db);
-  repository = createMailRepository({ db, encryptionKey: Buffer.alloc(32, 11) });
+  repository = createMailRepository({ db, encryptionKey: ENCRYPTION_KEY });
 });
 
 afterEach(async () => {
@@ -104,6 +106,26 @@ describe('mail sync service: attachment quarantine wiring', () => {
     await service.syncAccount('personal-imap');
     const stored = repository.getMessageByDedupKey(messageWithAttachment.dedupKey);
     expect(stored.attachments).toEqual([expect.objectContaining({ declaredFilename: 'facture.exe', status: 'blocked' })]);
+  });
+
+  it('does not retain attachment bytes in the encrypted message body after quarantine', async () => {
+    const attachmentBytes = Buffer.from('%PDF-1.7 attachment content that must not remain in the message body');
+    const messageWithAttachment = Object.freeze({
+      ...MESSAGE_A,
+      dedupKey: 'imap-smtp:personal-imap:INBOX:77:privacy',
+      attachments: Object.freeze([{ filename: 'devis.pdf', bytes: attachmentBytes }]),
+    });
+    const adapter = fakeAdapter({ pages: [{ messages: [messageWithAttachment], result: { uidValidity: '77', lastUid: 5, imported: 1 } }] });
+    const service = createMailSyncService({ repository, adapters: { 'personal-imap': adapter } });
+
+    await service.syncAccount('personal-imap');
+
+    const row = db.prepare('SELECT message_id, body_ciphertext FROM mail_messages WHERE dedup_key = ?')
+      .get(messageWithAttachment.dedupKey);
+    const body = openRecord({ key: ENCRYPTION_KEY, type: 'mail_message_body', id: row.message_id, ciphertext: row.body_ciphertext });
+    expect(body.attachments).toEqual([]);
+    expect(repository.getMessageByDedupKey(messageWithAttachment.dedupKey).attachments)
+      .toEqual([expect.objectContaining({ declaredFilename: 'devis.pdf', status: 'inspectable' })]);
   });
 
   it('deduplicates an identical attachment digest shared by two different messages, storing bytes once', async () => {

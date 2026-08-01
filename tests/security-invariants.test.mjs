@@ -85,6 +85,7 @@ describe('invariants sécurité (threat model exécutable)', () => {
       }
     };
     await walk(fileURLToPath(new URL('../src', import.meta.url)));
+    const contents = await Promise.all(files.map(async (file) => ({ file, content: await readFile(file, 'utf8') })));
     const offenders = [];
     const SECRET_PATTERNS = [
       /AIza[0-9A-Za-z_-]{35}/u,
@@ -93,8 +94,7 @@ describe('invariants sécurité (threat model exécutable)', () => {
       /hf_[A-Za-z0-9]{30,}/u,
       /ghp_[A-Za-z0-9]{36}/u,
     ];
-    for (const file of files) {
-      const content = await readFile(file, 'utf8');
+    for (const { file, content } of contents) {
       if (SECRET_PATTERNS.some((pattern) => pattern.test(content))) offenders.push(file);
     }
     expect(offenders).toEqual([]);

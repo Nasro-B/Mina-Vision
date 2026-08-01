@@ -78,7 +78,7 @@ export function createPublicationService({
         templateId = normalized.templateId;
         if (format === 'pdf') buffer = await generators.pdf({ title: normalized.title, blocks: normalized.blocks, assets, theme: normalized.theme, author: normalized.author, createdAt });
         else if (format === 'docx') buffer = await generators.docx({ title: normalized.title, blocks: normalized.blocks, assets, author: normalized.author, createdAt });
-        else if (TEXT_FORMATS.has(format)) buffer = generators.text(format, normalized);
+        else if (TEXT_FORMATS.has(format)) buffer = await generators.text(format, normalized);
         else throw new Error(`publication_format_invalid:${format}`);
       }
 

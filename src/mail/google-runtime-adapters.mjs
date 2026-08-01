@@ -32,6 +32,10 @@ export async function createGoogleRuntimeAdapters({
       send: (request) => adapter.send({ ...request, credentialsProvider: getCredentials }),
       markRead: (request) => adapter.markRead({ ...request, credentialsProvider: getCredentials }),
       archive: (request) => adapter.archive({ ...request, credentialsProvider: getCredentials }),
+      label: (request) => adapter.label({ ...request, credentialsProvider: getCredentials }),
+      move: (request) => adapter.move({ ...request, credentialsProvider: getCredentials }),
+      trash: (request) => adapter.trash({ ...request, credentialsProvider: getCredentials }),
+      markSpam: (request) => adapter.markSpam({ ...request, credentialsProvider: getCredentials }),
     });
   }
   const primary = googleAccounts[0];

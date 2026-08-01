@@ -91,7 +91,7 @@ export function createGmailAdapter({
     id: account.id,
     provider: 'gmail',
     scopes: Object.freeze([...requestedScopes]),
-    capabilities: Object.freeze(['sync', 'listThreads', 'listLabels', 'createDraft', 'send', 'markRead', 'archive']),
+    capabilities: Object.freeze(['sync', 'listThreads', 'listLabels', 'createDraft', 'send', 'markRead', 'archive', 'label', 'move', 'trash', 'markSpam']),
 
     getConsentUrl: () => oauth.generateConsentUrl(requestedScopes),
 
@@ -185,6 +185,81 @@ export function createGmailAdapter({
       if (response.data?.id !== messageId || !Array.isArray(response.data?.labelIds)
         || response.data.labelIds.includes('INBOX')) {
         throw new Error('gmail_archive_unconfirmed');
+      }
+      return Object.freeze({ state: 'state_confirmed', providerMessageId: messageId });
+    },
+
+    async label({ credentialsProvider, messageId, addLabelIds = [], removeLabelIds = [] } = {}) {
+      if (typeof credentialsProvider !== 'function' || !ID.test(messageId ?? '')
+        || !Array.isArray(addLabelIds) || !Array.isArray(removeLabelIds)
+        || addLabelIds.length + removeLabelIds.length < 1 || addLabelIds.length + removeLabelIds.length > 100
+        || [...addLabelIds, ...removeLabelIds].some((labelId) => !ID.test(labelId))
+        || new Set(addLabelIds).size !== addLabelIds.length
+        || new Set(removeLabelIds).size !== removeLabelIds.length
+        || addLabelIds.some((labelId) => removeLabelIds.includes(labelId))) {
+        throw new TypeError('gmail_label_request_invalid');
+      }
+      const { response } = await call(credentialsProvider, {
+        url: `${BASE_URL}/messages/${encodeURIComponent(messageId)}/modify`,
+        method: 'POST',
+        data: { addLabelIds, removeLabelIds },
+      });
+      const labels = response.data?.labelIds;
+      if (response.data?.id !== messageId || !Array.isArray(labels)
+        || addLabelIds.some((labelId) => !labels.includes(labelId))
+        || removeLabelIds.some((labelId) => labels.includes(labelId))) {
+        throw new Error('gmail_label_unconfirmed');
+      }
+      return Object.freeze({ state: 'state_confirmed', providerMessageId: messageId });
+    },
+
+    async move({ credentialsProvider, messageId, destinationLabelId, sourceLabelIds } = {}) {
+      if (typeof credentialsProvider !== 'function' || !ID.test(messageId ?? '') || !ID.test(destinationLabelId ?? '')
+        || !Array.isArray(sourceLabelIds) || sourceLabelIds.length < 1 || sourceLabelIds.length > 99
+        || sourceLabelIds.some((labelId) => !ID.test(labelId))
+        || sourceLabelIds.includes(destinationLabelId) || new Set(sourceLabelIds).size !== sourceLabelIds.length) {
+        throw new TypeError('gmail_move_request_invalid');
+      }
+      const { response } = await call(credentialsProvider, {
+        url: `${BASE_URL}/messages/${encodeURIComponent(messageId)}/modify`,
+        method: 'POST',
+        data: { addLabelIds: [destinationLabelId], removeLabelIds: sourceLabelIds },
+      });
+      const labels = response.data?.labelIds;
+      if (response.data?.id !== messageId || !Array.isArray(labels) || !labels.includes(destinationLabelId)
+        || sourceLabelIds.some((labelId) => labels.includes(labelId))) {
+        throw new Error('gmail_move_unconfirmed');
+      }
+      return Object.freeze({ state: 'state_confirmed', providerMessageId: messageId });
+    },
+
+    async trash({ credentialsProvider, messageId } = {}) {
+      if (typeof credentialsProvider !== 'function' || !ID.test(messageId ?? '')) {
+        throw new TypeError('gmail_trash_request_invalid');
+      }
+      const { response } = await call(credentialsProvider, {
+        url: `${BASE_URL}/messages/${encodeURIComponent(messageId)}/trash`,
+        method: 'POST',
+      });
+      if (response.data?.id !== messageId || !Array.isArray(response.data?.labelIds)
+        || !response.data.labelIds.includes('TRASH')) {
+        throw new Error('gmail_trash_unconfirmed');
+      }
+      return Object.freeze({ state: 'state_confirmed', providerMessageId: messageId });
+    },
+
+    async markSpam({ credentialsProvider, messageId } = {}) {
+      if (typeof credentialsProvider !== 'function' || !ID.test(messageId ?? '')) {
+        throw new TypeError('gmail_mark_spam_request_invalid');
+      }
+      const { response } = await call(credentialsProvider, {
+        url: `${BASE_URL}/messages/${encodeURIComponent(messageId)}/modify`,
+        method: 'POST',
+        data: { addLabelIds: ['SPAM'] },
+      });
+      if (response.data?.id !== messageId || !Array.isArray(response.data?.labelIds)
+        || !response.data.labelIds.includes('SPAM')) {
+        throw new Error('gmail_mark_spam_unconfirmed');
       }
       return Object.freeze({ state: 'state_confirmed', providerMessageId: messageId });
     },

@@ -260,3 +260,103 @@
 - proof: le scan de contrat lisait les fichiers séquentiellement et dépassait son timeout sous Vitest; les lectures sont maintenant parallèles, sans changer son corpus ni ses assertions. La trace Git a mesuré le hook `post-commit` hérité du template personnel à `7.117 s`; le dépôt temporaire de test utilise désormais un template/hooks vide local. Aucun correctif navigateur n'a été appliqué : son test a seulement passé dans le run final après libération de ressources. Pendant ce run, Gemma n'était pas chargé et le diagnostic informatif a donc publié `models.lm_studio: degraded`; cela ne constitue pas une preuve runtime. À 11:32, `lms ps`, la requête Mina (`MINA_LOCAL_RELOAD_OK`) et `npm run verify` ont de nouveau confirmé Gemma, l'embedder et `models.lm_studio: available`. Android reste `available` sur transport `lan`; Home est `google_home_sdk_unavailable`; mail reste sans comptes configurables par CLI; Firebase reste non configuré.
 - manual/live: vision Mina sur caméra, voix locale hors réseau, comptes mail dédiés, Google Home, parcours Android utilisateur, Sandbox, native-chat, avatar et packaging restent `unrun` ou soumis à décision explicite.
 - remaining: ne pas assimiler la santé vision du diagnostic à la route caméra qui a échoué; ne pas déclarer les gates externes passés sans leurs preuves dédiées.
+
+## 2026-07-29 12:31 | task-5 | déplacement mail post-vérifié, sans compte externe
+
+- files: `src/mail/adapters/gmail.mjs`, `src/mail/google-runtime-adapters.mjs`, `src/mail/adapters/microsoft-graph.mjs`, `src/mail/adapters/imap-smtp.mjs` et les quatre suites d'adaptateur/runtime associées.
+- command: rouge `npx vitest run tests/gmail-adapter.test.mjs tests/google-runtime-adapters.test.mjs tests/microsoft-graph-adapter.test.mjs tests/imap-smtp-adapter.test.mjs`; vert ciblé avec la même commande; gate élargi `npx vitest run tests/gmail-adapter.test.mjs tests/google-runtime-adapters.test.mjs tests/microsoft-graph-adapter.test.mjs tests/imap-smtp-adapter.test.mjs tests/mail-service.test.mjs tests/personal-adapters.test.mjs tests/calendar-service.test.mjs tests/contact-service.test.mjs tests/task-service.test.mjs`.
+- exit: rouge `1` (méthodes `move` et capacités absentes); vert ciblé `0` (`4` fichiers / `68` tests); gate élargi `0` (`9` fichiers / `176` tests).
+- proof: Gmail ajoute le label destination et retire tous les labels source demandés, puis vérifie les labels retournés. Graph déplace le message, récupère son nouvel identifiant et le relit dans le dossier explicitement demandé. IMAP exige la correspondance UIDPLUS et relit l'UID destination; absence de correspondance ou de relecture conserve `delivery_unknown`.
+- manual/live: `unrun` — aucun compte Gmail, IMAP/SMTP ou Microsoft dédié, aucune autorisation OAuth/TLS ni mutation fournisseur réelle n'a été utilisé.
+- remaining: labels Graph, opérations spam/corbeille hors Gmail et téléchargement de pièce jointe explicitement autorisé restent ouverts; le stockage chiffré du contenu joint n'existe pas encore dans le dépôt actuel, donc aucun téléchargement brut n'est exposé.
+
+## 2026-07-29 12:40 | task-5 | opérations réversibles étendues, frontières fournisseurs conservées
+
+- files: `src/mail/adapters/gmail.mjs`, `src/mail/google-runtime-adapters.mjs`, `src/mail/adapters/microsoft-graph.mjs`, `src/mail/adapters/imap-smtp.mjs` et tests associés.
+- command: tests rouges unitaires par opération, puis `npx vitest run tests/gmail-adapter.test.mjs tests/google-runtime-adapters.test.mjs tests/microsoft-graph-adapter.test.mjs tests/imap-smtp-adapter.test.mjs tests/mail-service.test.mjs tests/personal-adapters.test.mjs tests/calendar-service.test.mjs tests/contact-service.test.mjs tests/task-service.test.mjs`; `git diff --check`.
+- exit: rouges `1` avant implémentation; gate élargi `0` (`9` fichiers / `183` tests); contrôle diff `0` sans erreur de diff.
+- proof: Gmail expose et confirme `move`, `label`, `trash` et `markSpam`. Graph confirme `move`, `label` par catégorie existante de la liste maître et `trash` via `deleteditems`; `markSpam` reste absent car la seule API trouvée est bêta, dépréciée et non supportée en production v1.0. IMAP confirme `move`, `trash` et `markSpam` seulement avec les dossiers destination explicites et une relecture UIDPLUS; `label` générique reste absent faute de preuve d'extension serveur. Les trois adaptateurs n'exposent toujours pas `downloadAttachment`.
+- manual/live: `unrun` — les tests utilisent des fournisseurs injectés; aucun compte, token, boîte, message ou fichier externe n'a été touché.
+- remaining: un téléchargement réellement sûr nécessite de récupérer le contenu dans une quarantaine chiffrée persistante. Le repository actuel ne stocke que le digest, type, statut et taille : aucun contenu joint n'est persistant ni exportable, donc la fonctionnalité ne doit pas être annoncée comme implémentée avant ce raccordement.
+
+## 2026-07-29 13:32 | task-5/integrity | gate complet stable après extension mail
+
+- files: les quatre adaptateurs mail et leurs tests; `tests/security-invariants.test.mjs`; `tests/architecture/storage-boundaries.test.mjs`; ce journal.
+- command: mesure en lecture seule du scan de `472` fichiers (`séquentiel: 7145 ms`; `parallèle: 372 ms`); rouge du test d'invariant `9` et des limites de stockage; vert ciblé `npx vitest run tests/security-invariants.test.mjs tests/architecture/storage-boundaries.test.mjs --maxWorkers=1 --no-file-parallelism`; `npm run test:unit`; `npm run test:integration`; `npm run smoke:sqlite:electron`.
+- exit: focused `0` (`2` fichiers / `15` tests); unit `0` (`406` fichiers / `3 328` tests, `828.22 s`); intégration `0` (`17` fichiers / `48` tests, `128.86 s`); smoke `0` (`electron 43.1.0`, ABI `148`).
+- proof: les deux scans de fichiers lisaient leur corpus séquentiellement et dépassaient leurs délais sous contention Vitest. Ils lisent désormais le même corpus en parallèle, sans réduire les assertions. Le gate complet est vert après les opérations mail : Gmail confirme `label`, `move`, `trash`, `markSpam`; Graph confirme `label`, `move`, `trash`; IMAP confirme `move`, `trash`, `markSpam` avec dossiers explicites et relecture UIDPLUS. Le smoke SQLite/Electron a retourné exactement `{"ok":true,"electron":"43.1.0","abi":"148"}`.
+- manual/live: `unrun` — aucun compte fournisseur, contenu joint, token, boîte ou opération externe n'a été utilisé.
+- remaining: le téléchargement de pièce jointe demeure indisponible tant que Nasro n'a pas choisi et autorisé le contrat de persistance chiffrée/quarantaine; il n'existe actuellement ni stockage du contenu brut ni chaîne sûre de récupération vers le dépôt local.
+
+## 2026-07-29 13:33 | runtime | LM Studio en service, modèle Mina texte/vision non chargé
+
+- files: ce journal uniquement.
+- command: `npm run verify`; `lms server status`; `lms ps`.
+- exit: `0` pour les trois commandes.
+- proof: le serveur LM Studio écoute sur le port `1234`. `lms ps` ne liste que `text-embedding-nomic-embed-text-v1.5` en état `IDLE`. Le diagnostic Mina marque donc `google/gemma-4-e2b` non chargé pour texte et vision, l'embedder chargé, et `models.lm_studio: degraded / lm_studio_models_not_ready`.
+- manual/live: aucune inférence texte, vision ou voix n'a été lancée dans cette vérification.
+- remaining: charger explicitement un modèle texte/vision compatible puis refaire une preuve fournisseur distincte; ne pas utiliser cette observation pour déclarer la route caméra saine.
+
+## 2026-07-29 13:38 | runtime | modèles LM Studio configurés rechargés et observés sains
+
+- files: ce journal uniquement.
+- command: `lms load google/gemma-4-e2b --yes`; `npm run verify`.
+- exit: `0`; `0`.
+- proof: LM Studio a chargé `google/gemma-4-e2b` en `2m 22.79s` (`4.11 GiB`). Le diagnostic Mina observe ensuite Gemma chargé à la fois pour texte et vision, l'embedder chargé, et `models.lm_studio: available`. Android reste disponible par transport LAN; Google Home et les comptes mail restent respectivement `google_home_sdk_unavailable` et `mail_accounts_not_yet_configurable_from_cli`.
+- manual/live: aucun appel de fournisseur Mina ni route caméra n'a été exécuté après ce chargement.
+- remaining: la précédente route caméra locale a échoué après crash modèle sur JPEG valide; elle reste dégradée jusqu'à une preuve dédiée réussie. La santé de chargement ne suffit pas à la promouvoir.
+
+## 2026-07-29 14:35 | task-5 | quarantaine IMAP éphémère, aucun octet joint dans le corps mail chiffré
+
+- files: `src/mail/adapters/imap-smtp.mjs`, `src/mail/mail-sync-service.mjs`, `tests/imap-smtp-adapter.test.mjs`, `tests/mail-sync-service.test.mjs` et le plan de réconciliation.
+- command: preuve MIME synthétique `mailparser`; rouge `npx vitest run tests/mail-sync-service.test.mjs tests/imap-smtp-adapter.test.mjs --maxWorkers=1 --no-file-parallelism`; vert avec la même commande; gate fournisseur `10` fichiers / `191` tests; suite unitaire, intégration et smoke consignés ci-dessous.
+- exit: rouge `1` (`2` régressions); vert ciblé `0` (`2` fichiers / `29` tests); gate fournisseur `0` (`10` fichiers / `191` tests).
+- proof: `mailparser` fournit un Buffer de contenu joint. Avant correction, l'adaptateur IMAP le supprimait avant la quarantaine, tandis que `saveMessage` pouvait l'inclure dans `body_ciphertext` lorsqu'il était fourni. L'adaptateur transmet désormais les bytes uniquement au synchroniseur; celui-ci les retire avant `saveMessage`, appelle la quarantaine, puis conserve le digest, type, statut, taille et lien. Le test déchiffre le record et prouve `attachments: []` dans le corps, tout en retrouvant le descripteur lié.
+- manual/live: `unrun` — message MIME synthétique et fournisseurs injectés uniquement; aucun compte, fichier externe ou pièce jointe réelle n'a été touché.
+- remaining: `downloadAttachment` reste absent. Il faudra d'abord le contrat explicite de récupération et de persistance chiffrée/quarantaine avant d'exposer un téléchargement.
+
+## 2026-07-29 14:35 | code/integrity | indexeur réel rétabli sans réduire le corpus
+
+- files: `src/code/intelligence/symbol-index.mjs`; `tests/code/code-services-real-project.test.mjs`; ce journal.
+- command: unit complet rouge; test réel isolé rouge; diagnostic instrumenté de l'indexeur; prototype externe avec cache exact; test réel + index de symboles; suite unitaire, intégration et smoke.
+- exit: rouge `1` par timeout du hook à `180000 ms`, y compris isolé; diagnostic réel `0` après `257989 ms` (`917` fichiers); prototype `0` après `68887 ms`; test ciblé `0` (`2` fichiers / `16` tests, `69.01 s`).
+- proof: l'indexeur parcourait les `917` fichiers JavaScript du corpus et, pour chaque appel, `byName(..., { exact: true })` balayait tous les symboles déjà indexés. `symbol-index` maintient désormais un index exact mis à jour à l'ajout/remplacement d'un fichier; les recherches partielles conservent leur balayage existant. Le corpus n'a pas été réduit et le test réel passe dans sa borne de `180 s`.
+- manual/live: aucune opération Git, écriture projet ou action externe; l'indexation lit le dépôt local.
+- remaining: l'objectif historique de la spécification Mina Code (`<30 s` d'indexation initiale) n'est pas atteint sur ce corpus : mesure actuelle `68.887 s`. Une optimisation de parsing ou une décision explicite de périmètre est nécessaire avant de le cocher.
+
+## 2026-07-29 14:35 | gates | vérification automatisée après les correctifs mail et indexeur
+
+- files: toutes les modifications de cette vague; aucun fichier publication non lié.
+- command: `npm run test:unit`; `npm run test:integration`; `npm run smoke:sqlite:electron`; `npm run verify`; contrôle du plan publication exclu séparé.
+- exit: unit `0` (`406` fichiers / `3330` tests, `836.73 s`); intégration `0` (`17` fichiers / `48` tests, `159.37 s`); smoke `0`.
+- proof: smoke retourné exactement `{"ok":true,"electron":"43.1.0","abi":"148"}`. Les tests de régression mail et l'indexeur réel sont inclus dans la suite unitaire verte. Le diagnostic courant voit Gemma chargé pour texte/vision, l'embedder chargé et `models.lm_studio: available`; Google Home et les comptes mail CLI restent non prêts.
+- manual/live: les comptes mail dédiés, route caméra locale, Google Home, Firebase, Sandbox, voix hors réseau et actions Android utilisateur restent `unrun` ou dégradés selon les entrées précédentes.
+- remaining: les gates externes et décisions explicites du plan maître restent ouverts; aucun push, déploiement ou commit de cette vague n'a été effectué.
+
+## 2026-07-29 15:14 | task-5/integrity | labels Gmail ambigus refusés et scan d'architecture stabilisé
+
+- files: `src/mail/adapters/gmail.mjs`, `tests/gmail-adapter.test.mjs`, `tests/architecture/no-direct-provider.test.mjs` et le plan de réconciliation.
+- command: rouge `npx vitest run tests/gmail-adapter.test.mjs --maxWorkers=1 --no-file-parallelism`; vert avec la même commande; gate mail étendu de `10` fichiers; repro isolée puis suite de `tests/architecture/no-direct-provider.test.mjs`; `npm run test:unit`; `npm run test:integration`; `npm run smoke:sqlite:electron`.
+- exit: rouge Gmail `1` (la mutation atteignait encore le fournisseur et retournait `unhandled_url`); vert ciblé `0` (`29` tests); gate mail `0` (`10` fichiers / `192` tests); repro architecture isolée `0` (`21.35 s` pour le scan cible) mais run complet précédent `1` par timeout à `30 s`; test architecture optimisé `0` (`4` tests, `615 ms`); unit `0` (`406` fichiers / `3331` tests, `527.33 s`); intégration `0` (`17` fichiers / `48` tests, `92.12 s`); smoke `0`.
+- proof: Gmail rejette désormais les IDs de labels dupliqués et tout label demandé à la fois en ajout et en retrait avant tout appel OAuth. Le test d'architecture lisait le même corpus de manière séquentielle; il lit désormais tous ses contenus en parallèle sans réduire le corpus ni les assertions. Le contrôle complet des imports fournisseurs est donc inclus dans la suite unitaire verte.
+- manual/live: `unrun` — les fournisseurs mail restent injectés; aucune boîte, aucun token, aucun message ou fichier externe n'a été utilisé.
+- remaining: `downloadAttachment` demeure indisponible jusqu'au contrat de récupération et de persistance chiffrée/quarantaine explicitement autorisé; les comptes dédiés restent requis pour le gate live.
+
+## 2026-07-29 15:14 | runtime | LM Studio non prêt après échec de rechargement local
+
+- files: ce journal et le plan de réconciliation uniquement.
+- command: `npm run verify`; `lms ps`; `lms load google/gemma-4-e2b --yes`; puis `lms ps` et `npm run verify`.
+- exit: diagnostics et listings `0`; chargement Gemma `1` avec `Failed to load model`.
+- proof: avant et après la tentative, `lms ps` a retourné `No models are currently loaded`. Le diagnostic final a retourné `lm_studio_models_not_ready`: Gemma est non chargé pour texte et vision, et l'embedder est non chargé. Aucun motif plus précis n'a été fourni par LM Studio; aucun succès de runtime n'est donc déclaré pour cet état.
+- manual/live: aucune inférence texte, vision, voix ou caméra n'a été exécutée après cet échec.
+- remaining: résoudre le chargement côté LM Studio puis refaire séparément la preuve texte/embedding; ne pas assimiler un serveur ouvert ou le modèle présent sur disque à un modèle prêt.
+
+## 2026-08-01 20:40 | review/publication | neuf commits post-réconciliation revus et trois écarts corrigés
+
+- commits revus: `12465c0` (PPTX), `222338e` (XLSX/texte), `4f0c2f8` (service/LibreOffice), `32ad938` (pipeline huit formats), `2cd1061` (ComfyUI), `beab695` (IPC), `229da02` (composition principale), `1d7195b` (page UI) et `b10760a` (retry résilience).
+- proof commits: `npm run test:publication` a passé `14` fichiers / `69` tests avant correction; `npx vitest run tests/error-resilience.test.mjs --maxWorkers=1 --no-file-parallelism` a passé `1` fichier / `35` tests. Le diff résilience conserve les refus/permanentes hors retry et plafonne le backoff.
+- corrections TDD: rouge puis vert sur trois points issus de la relecture. ComfyUI passe désormais `redirect:'error'` sur santé et génération, afin qu'un endpoint loopback ne suive jamais une redirection distante. XLSX refuse aussi `HYPERLINK(...)` et `WEBSERVICE(...)`, en plus des références de classeur externe. Tous les générateurs de publication (PDF, DOCX, XLSX, texte, PPTX) sont importés dynamiquement au premier usage; `main.mjs` ne charge plus leurs dépendances lourdes au boot.
+- gates: ciblé `3` fichiers / `13` tests vert; contrat/service `2` fichiers / `8` tests vert; publication final `14` fichiers / `70` tests vert; smoke boot Electron `0`; unit `416` fichiers / `3375` tests en `348.45 s`; intégration `18` fichiers / `49` tests en `36.43 s`; smoke SQLite/Electron `0` (`{"ok":true,"electron":"43.1.0","abi":"148"}`).
+- runtime: `npm run verify` puis `lms ps` ont observé `lm_studio_unreachable`, aucun transport Android autorisé, aucun Wi-Fi connecté, Home absent, comptes mail CLI absents et Firebase non configuré. `lms ps` a confirmé qu'aucun modèle n'est chargé.
+- manual/live: le boot Electron réel est passé. Les pipelines de publication génèrent réellement les huit formats dans leur environnement de test; aucun document n'a été créé dans le dossier Documents utilisateur, aucun fournisseur, compte mail, appareil Android ou service Home n'a été sollicité.
+- remaining: l'indexation Mina Code reste au-dessus de son objectif historique `<30 s`; les décisions/gates externes restent explicitement ouverts dans le plan maître.

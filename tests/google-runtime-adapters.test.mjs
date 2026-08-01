@@ -6,8 +6,21 @@ describe('Google runtime adapter composition', () => {
     const oauth = {
       request: vi.fn(async (_credentials, options) => ({
         response: {
-          data: options.url.endsWith('/messages/m1/modify')
-            ? { id: 'm1', labelIds: options.data?.removeLabelIds?.includes('INBOX') ? ['ALL_MAIL'] : ['INBOX'] }
+          data: options.url.endsWith('/messages/m1/trash')
+            ? { id: 'm1', labelIds: ['TRASH'] }
+            : options.url.endsWith('/messages/m1/modify')
+            ? {
+              id: 'm1',
+              labelIds: options.data?.removeLabelIds?.includes('INBOX')
+                ? options.data?.addLabelIds?.includes('Label_Destination')
+                  ? ['ALL_MAIL', 'Label_Destination']
+                  : ['ALL_MAIL']
+                : options.data?.addLabelIds?.includes('Label_123')
+                  ? ['INBOX', 'Label_123']
+                  : options.data?.addLabelIds?.includes('SPAM')
+                    ? ['SPAM']
+                  : ['INBOX'],
+            }
             : options.method === 'POST' ? { id: 'tk1', etag: '"r1"' } : {},
         },
       })),
@@ -23,10 +36,19 @@ describe('Google runtime adapter composition', () => {
 
     expect(result.operationalAccountIds).toEqual(['google-primary']);
     expect(result.mailAdapters['google-primary']).toBeDefined();
-    expect(result.mailAdapters['google-primary'].capabilities).toEqual(expect.arrayContaining(['sync', 'createDraft', 'send', 'markRead']));
+    expect(result.mailAdapters['google-primary'].capabilities).toEqual(expect.arrayContaining(['sync', 'createDraft', 'send', 'markRead', 'label', 'move']));
     await expect(result.mailAdapters['google-primary'].markRead({ messageId: 'm1' }))
       .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
     await expect(result.mailAdapters['google-primary'].archive({ messageId: 'm1' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
+    await expect(result.mailAdapters['google-primary'].label({ messageId: 'm1', addLabelIds: ['Label_123'], removeLabelIds: [] }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
+    await expect(result.mailAdapters['google-primary'].move({
+      messageId: 'm1', destinationLabelId: 'Label_Destination', sourceLabelIds: ['INBOX'],
+    })).resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
+    await expect(result.mailAdapters['google-primary'].trash({ messageId: 'm1' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
+    await expect(result.mailAdapters['google-primary'].markSpam({ messageId: 'm1' }))
       .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
     await expect(result.googlePersonalAdapter.create({ title: 'Test' })).resolves.toMatchObject({ taskId: 'tk1' });
     expect(getCredentials).toHaveBeenCalledWith('google-primary');

@@ -25,5 +25,14 @@ describe('publication UI contract', () => {
     expect(main).toContain('registerPublicationIpc');
     expect(main).toContain('const getPublicationService');
     expect(main).toContain("path.join(app.getPath('documents'), 'Mina Vision', 'Publications')");
+    expect(main).toContain("import('pptxgenjs')");
+    expect(main).not.toMatch(/^import PptxGenJS from ['"]pptxgenjs['"];?$/mu);
+    for (const modulePath of [
+      '../publication/pdf-generator.mjs', '../publication/docx-generator.mjs', '../publication/xlsx-generator.mjs',
+      '../publication/text-generators.mjs', '../publication/pptx-generator.mjs',
+    ]) {
+      expect(main).toContain(`import('${modulePath}')`);
+      expect(main).not.toMatch(new RegExp(`^import .+ from ['"]${modulePath.replaceAll('.', '\\.')}['"];?$`, 'mu'));
+    }
   });
 });

@@ -35,13 +35,16 @@ async function walk(directory, files = []) {
   return files;
 }
 
+async function contentsFor(files) {
+  return Promise.all(files.map(async (file) => ({ file, content: await readFile(file, 'utf8') })));
+}
+
 describe('architecture: no direct third-party SDK call outside its adapter directory', () => {
   it('finds every restricted package import only inside its designated domain', { timeout: 30_000 }, async () => {
     const files = await walk(ROOT);
     const violations = [];
-    for (const file of files) {
+    for (const { file, content } of await contentsFor(files)) {
       const relative = path.relative(ROOT, file).replaceAll('\\', '/');
-      const content = await readFile(file, 'utf8');
       for (const [pkg, allowedDomains] of Object.entries(RESTRICTED_PACKAGES)) {
         const mentionsPackage = content.includes(`'${pkg}'`) || content.includes(`"${pkg}"`);
         if (!mentionsPackage) continue;
@@ -57,10 +60,9 @@ describe('architecture: home and mail provider adapters are only reachable throu
   it('finds no import of a mail adapter file outside mail-service.mjs, mail-sync-service.mjs, and mail itself', { timeout: 30_000 }, async () => {
     const files = await walk(ROOT);
     const violations = [];
-    for (const file of files) {
+    for (const { file, content } of await contentsFor(files)) {
       const relative = path.relative(ROOT, file).replaceAll('\\', '/');
       if (relative.startsWith('mail/')) continue;
-      const content = await readFile(file, 'utf8');
       if (/from ['"].*\/mail\/adapters\//u.test(content)) violations.push(relative);
     }
     expect(violations).toEqual([]);
@@ -69,10 +71,9 @@ describe('architecture: home and mail provider adapters are only reachable throu
   it('finds no import of a home connector adapter file outside the home domain itself', { timeout: 30_000 }, async () => {
     const files = await walk(ROOT);
     const violations = [];
-    for (const file of files) {
+    for (const { file, content } of await contentsFor(files)) {
       const relative = path.relative(ROOT, file).replaceAll('\\', '/');
       if (relative.startsWith('home/')) continue;
-      const content = await readFile(file, 'utf8');
       if (/from ['"].*\/home\/adapters\//u.test(content)) violations.push(relative);
     }
     expect(violations).toEqual([]);

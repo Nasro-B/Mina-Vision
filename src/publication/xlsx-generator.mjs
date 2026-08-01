@@ -5,7 +5,7 @@ import ExcelJS from 'exceljs';
 // formule contenant « [ » ou « ] » est REFUSÉE (référence à un classeur externe = fuite/lien). Aucune
 // macro. 100 % hors-ligne.
 
-const EXTERNAL_REF = /[[\]]/u;
+const EXTERNAL_REF = /[[\]]|\b(?:HYPERLINK|WEBSERVICE)\s*\(/iu;
 const FORBIDDEN_SHEET_CHARS = /[\\/*?:[\]]/gu;
 
 export async function generateXlsx({ title = '', sheets = [], author = 'Mina Vision' } = {}) {

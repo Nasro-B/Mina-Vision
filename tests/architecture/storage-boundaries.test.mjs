@@ -14,15 +14,18 @@ async function walk(directory, files = []) {
   return files;
 }
 
+async function contentsFor(files) {
+  return Promise.all(files.map(async (file) => ({ file, content: await readFile(file, 'utf8') })));
+}
+
 describe('storage boundary: biometric and camera-frame code never reaches memory/RAG/backup', () => {
   it('finds no import of src/biometrics or src/camera from the memory, rag, or backup domains', { timeout: 30_000 }, async () => {
     const files = await walk(ROOT);
     const guardedDomains = ['memory/', 'rag/', 'backup/'];
+    const guardedFiles = files.filter((file) => guardedDomains.some((domain) => path.relative(ROOT, file).replaceAll('\\', '/').startsWith(domain)));
     const violations = [];
-    for (const file of files) {
+    for (const { file, content } of await contentsFor(guardedFiles)) {
       const relative = path.relative(ROOT, file).replaceAll('\\', '/');
-      if (!guardedDomains.some((domain) => relative.startsWith(domain))) continue;
-      const content = await readFile(file, 'utf8');
       if (/from ['"].*\/(biometrics|camera)\//u.test(content)) violations.push(relative);
     }
     expect(violations).toEqual([]);
@@ -31,11 +34,10 @@ describe('storage boundary: biometric and camera-frame code never reaches memory
   it('finds no import of src/memory, src/rag, or src/backup from the biometrics or camera domains', { timeout: 30_000 }, async () => {
     const files = await walk(ROOT);
     const guardedDomains = ['biometrics/', 'camera/'];
+    const guardedFiles = files.filter((file) => guardedDomains.some((domain) => path.relative(ROOT, file).replaceAll('\\', '/').startsWith(domain)));
     const violations = [];
-    for (const file of files) {
+    for (const { file, content } of await contentsFor(guardedFiles)) {
       const relative = path.relative(ROOT, file).replaceAll('\\', '/');
-      if (!guardedDomains.some((domain) => relative.startsWith(domain))) continue;
-      const content = await readFile(file, 'utf8');
       if (/from ['"].*\/(memory|rag|backup)\//u.test(content)) violations.push(relative);
     }
     expect(violations).toEqual([]);
@@ -54,10 +56,10 @@ describe('storage boundary: usage analytics never carries conversation or file c
 describe('storage boundary: keyring secret domains stay namespaced and non-overlapping', () => {
   it('finds every keyring secret-name prefix used across the codebase and confirms each domain owns a distinct prefix', { timeout: 30_000 }, async () => {
     const files = await walk(ROOT);
+    const contents = await contentsFor(files);
     const prefixes = new Set();
     const prefixPattern = /['"`]([a-z][a-z0-9-]*\/[a-z0-9/_*-]+)['"`]/gu;
-    for (const file of files) {
-      const content = await readFile(file, 'utf8');
+    for (const { content } of contents) {
       if (!content.includes('setSecret') && !content.includes('getSecret') && !content.includes('deleteSecret')) continue;
       for (const match of content.matchAll(prefixPattern)) {
         const candidate = match[1];
@@ -74,9 +76,9 @@ describe('storage boundary: keyring secret domains stay namespaced and non-overl
 
   it('never references Android Keystore from PC-side Node source, that boundary is phone-only', { timeout: 30_000 }, async () => {
     const files = await walk(ROOT);
+    const contents = await contentsFor(files);
     const violations = [];
-    for (const file of files) {
-      const content = await readFile(file, 'utf8');
+    for (const { file, content } of contents) {
       if (/android\s*keystore/iu.test(content)) violations.push(path.relative(ROOT, file));
     }
     expect(violations).toEqual([]);

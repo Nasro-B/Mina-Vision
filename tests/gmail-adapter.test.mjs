@@ -252,6 +252,139 @@ describe('Gmail adapter: archive is idempotent and confirmed by the returned mes
   });
 });
 
+describe('Gmail adapter: label mutation is confirmed by the returned message labels', () => {
+  it('adds and removes only the requested labels before returning state_confirmed', async () => {
+    const oauth = fakeGmailOAuth({
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/modify': async (options) => {
+        expect(options).toMatchObject({
+          method: 'POST',
+          data: { addLabelIds: ['Label_123'], removeLabelIds: ['OLD'] },
+        });
+        return { data: { id: 'm1', labelIds: ['INBOX', 'Label_123'] } };
+      },
+    });
+    const adapter = createGmailAdapter({ account, oauth });
+
+    await expect(adapter.label({
+      credentialsProvider, messageId: 'm1', addLabelIds: ['Label_123'], removeLabelIds: ['OLD'],
+    })).resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
+  });
+
+  it('does not claim confirmation when Gmail omits an added label', async () => {
+    const adapter = createGmailAdapter({
+      account,
+      oauth: fakeGmailOAuth({
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/modify': async () => ({ data: { id: 'm1', labelIds: ['INBOX'] } }),
+      }),
+    });
+
+    await expect(adapter.label({
+      credentialsProvider, messageId: 'm1', addLabelIds: ['Label_123'], removeLabelIds: [],
+    })).rejects.toThrow('gmail_label_unconfirmed');
+  });
+
+  it('rejects duplicate or contradictory labels before contacting Gmail', async () => {
+    const oauth = fakeGmailOAuth();
+    const adapter = createGmailAdapter({ account, oauth });
+
+    await expect(adapter.label({
+      credentialsProvider, messageId: 'm1', addLabelIds: ['Label_123', 'Label_123'], removeLabelIds: [],
+    })).rejects.toThrow('gmail_label_request_invalid');
+    await expect(adapter.label({
+      credentialsProvider, messageId: 'm1', addLabelIds: ['Label_123'], removeLabelIds: ['Label_123'],
+    })).rejects.toThrow('gmail_label_request_invalid');
+    expect(oauth.request).not.toHaveBeenCalled();
+  });
+});
+
+describe('Gmail adapter: move is confirmed by the returned destination and source labels', () => {
+  it('adds the requested destination label and removes every requested source label', async () => {
+    const oauth = fakeGmailOAuth({
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/modify': async (options) => {
+        expect(options).toMatchObject({
+          method: 'POST',
+          data: { addLabelIds: ['Label_Destination'], removeLabelIds: ['INBOX'] },
+        });
+        return { data: { id: 'm1', labelIds: ['ALL_MAIL', 'Label_Destination'] } };
+      },
+    });
+    const adapter = createGmailAdapter({ account, oauth });
+
+    await expect(adapter.move({
+      credentialsProvider, messageId: 'm1', destinationLabelId: 'Label_Destination', sourceLabelIds: ['INBOX'],
+    })).resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
+  });
+
+  it('does not claim confirmation when Gmail still returns a source label', async () => {
+    const adapter = createGmailAdapter({
+      account,
+      oauth: fakeGmailOAuth({
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/modify': async () => ({
+          data: { id: 'm1', labelIds: ['INBOX', 'Label_Destination'] },
+        }),
+      }),
+    });
+
+    await expect(adapter.move({
+      credentialsProvider, messageId: 'm1', destinationLabelId: 'Label_Destination', sourceLabelIds: ['INBOX'],
+    })).rejects.toThrow('gmail_move_unconfirmed');
+  });
+});
+
+describe('Gmail adapter: trash is confirmed by the returned system label', () => {
+  it('moves the message to Gmail trash and requires TRASH in the returned message', async () => {
+    const oauth = fakeGmailOAuth({
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/trash': async (options) => {
+        expect(options).toMatchObject({ method: 'POST' });
+        return { data: { id: 'm1', labelIds: ['TRASH'] } };
+      },
+    });
+    const adapter = createGmailAdapter({ account, oauth });
+
+    await expect(adapter.trash({ credentialsProvider, messageId: 'm1' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
+  });
+
+  it('does not claim confirmation when Gmail does not return TRASH', async () => {
+    const adapter = createGmailAdapter({
+      account,
+      oauth: fakeGmailOAuth({
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/trash': async () => ({ data: { id: 'm1', labelIds: ['INBOX'] } }),
+      }),
+    });
+
+    await expect(adapter.trash({ credentialsProvider, messageId: 'm1' }))
+      .rejects.toThrow('gmail_trash_unconfirmed');
+  });
+});
+
+describe('Gmail adapter: mark spam is confirmed by the returned system label', () => {
+  it('adds SPAM and requires it in the returned message before reporting state_confirmed', async () => {
+    const oauth = fakeGmailOAuth({
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/modify': async (options) => {
+        expect(options).toMatchObject({ method: 'POST', data: { addLabelIds: ['SPAM'] } });
+        return { data: { id: 'm1', labelIds: ['SPAM'] } };
+      },
+    });
+    const adapter = createGmailAdapter({ account, oauth });
+
+    await expect(adapter.markSpam({ credentialsProvider, messageId: 'm1' }))
+      .resolves.toEqual({ state: 'state_confirmed', providerMessageId: 'm1' });
+  });
+
+  it('does not claim confirmation when Gmail omits SPAM', async () => {
+    const adapter = createGmailAdapter({
+      account,
+      oauth: fakeGmailOAuth({
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/modify': async () => ({ data: { id: 'm1', labelIds: ['INBOX'] } }),
+      }),
+    });
+
+    await expect(adapter.markSpam({ credentialsProvider, messageId: 'm1' }))
+      .rejects.toThrow('gmail_mark_spam_unconfirmed');
+  });
+});
+
 describe('Gmail adapter: declared operation capability boundary', () => {
   it('declares only the operations its concrete adapter exposes', () => {
     const adapter = createGmailAdapter({ account, oauth: fakeGmailOAuth() });
@@ -260,7 +393,11 @@ describe('Gmail adapter: declared operation capability boundary', () => {
     expect(adapter.capabilities).toContain('send');
     expect(adapter.capabilities).toContain('markRead');
     expect(adapter.capabilities).toContain('archive');
+    expect(adapter.capabilities).toContain('label');
+    expect(adapter.capabilities).toContain('move');
+    expect(adapter.capabilities).toContain('trash');
+    expect(adapter.capabilities).toContain('markSpam');
+    expect(adapter.capabilities).not.toContain('downloadAttachment');
     expect(adapter.capabilities).not.toContain('unsubscribe');
-    expect(adapter.capabilities).not.toContain('markSpam');
   });
 });

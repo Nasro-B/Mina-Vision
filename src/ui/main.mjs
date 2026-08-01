@@ -46,12 +46,6 @@ import { createJobWorkspaceManager } from '../sandbox/job-workspace.mjs';
 import { createSandboxRunner } from '../sandbox/sandbox-runner.mjs';
 import { createCodeServices } from '../code/code-services.mjs';
 import { createDocumentGenerator } from '../documents/document-generator.mjs';
-import PptxGenJS from 'pptxgenjs';
-import { generatePdf } from '../publication/pdf-generator.mjs';
-import { generateDocx } from '../publication/docx-generator.mjs';
-import { generateXlsx } from '../publication/xlsx-generator.mjs';
-import { generateText } from '../publication/text-generators.mjs';
-import { createPresentationGenerator } from '../publication/pptx-generator.mjs';
 import { createPresentationTemplateRegistry } from '../publication/presentation-template-registry.mjs';
 import { createPublicationService } from '../publication/publication-service.mjs';
 import { registerPublicationIpc } from '../publication/publication-ipc.mjs';
@@ -517,14 +511,22 @@ const getDocumentGenerator = () => {
 // Publications, écriture ATOMIQUE, jamais d'écrasement, reçu hashé. 100 % local, aucun fournisseur IA
 // sur le chemin sans IA. Paresseux : construit au premier usage (zéro coût au boot).
 let publicationServiceInstance = null;
+let pptxGeneratorInstance = null;
+const getPptxGenerator = async () => {
+  pptxGeneratorInstance ??= Promise.all([import('pptxgenjs'), import('../publication/pptx-generator.mjs')])
+    .then(([{ default: PptxGenJS }, { createPresentationGenerator }]) => createPresentationGenerator({
+      pptxFactory: () => new PptxGenJS(),
+    }));
+  return pptxGeneratorInstance;
+};
 const getPublicationService = () => {
   publicationServiceInstance ??= createPublicationService({
     generators: {
-      pdf: generatePdf,
-      docx: generateDocx,
-      xlsx: generateXlsx,
-      text: generateText,
-      pptx: createPresentationGenerator({ pptxFactory: () => new PptxGenJS() }),
+      pdf: async (request) => (await import('../publication/pdf-generator.mjs')).generatePdf(request),
+      docx: async (request) => (await import('../publication/docx-generator.mjs')).generateDocx(request),
+      xlsx: async (request) => (await import('../publication/xlsx-generator.mjs')).generateXlsx(request),
+      text: async (format, request) => (await import('../publication/text-generators.mjs')).generateText(format, request),
+      pptx: Object.freeze({ generate: async (spec) => (await getPptxGenerator()).generate(spec) }),
     },
     filesystem: { writeFile, rename, mkdir, access },
     hash: (buffer) => createHash('sha256').update(buffer).digest('hex'),
