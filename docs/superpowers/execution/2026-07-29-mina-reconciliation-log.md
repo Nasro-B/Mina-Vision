@@ -378,3 +378,12 @@
 - proof: le serveur répond sur le port `1234`. `lms ps` retourne `No models are currently loaded`; le diagnostic Mina retourne donc `lm_studio_models_not_ready` pour `google/gemma-4-e2b` (texte et vision) et `text-embedding-nomic-embed-text-v1.5` (embedding). Aucun modèle n'est présenté comme prêt.
 - manual/live: aucun chargement de modèle, appel d'inférence, capture micro, ni changement de configuration n'a été effectué.
 - remaining: autorisation explicite de charger les modèles configurés, puis preuve séparée texte/embedding; la boucle STT → modèle → TTS hors réseau et la route caméra demeurent ouvertes.
+
+## 2026-08-01 20:54 | runtime | embedding local prouvé, modèle Mina texte/vision refusé par LM Studio
+
+- files: aucun fichier source modifié; modèles déjà présents sur disque et observation runtime locale.
+- command: `lms ls --json`; `lms load google/gemma-4-e2b --yes`; `lms load text-embedding-nomic-embed-text-v1.5 --yes`; appel `createLmStudioEmbeddingProvider(...).embed('Mina embedding probe')`; `lms ps`; `npm run verify`.
+- exit: Gemma `1`; embedder, sonde et diagnostic `0`.
+- proof: Gemma 4 E2B est présent sur disque (`4 414 807 594` octets) mais son chargement échoue après environ `76 s` avec `Error loading model` et le code interne `18446744072635812000`; aucun autre modèle texte n'a été essayé. L'embedder Nomic est chargé (`84.11 MB`, état `IDLE`) et la sonde locale a retourné un vecteur fini de `768` dimensions. Le diagnostic Mina voit donc l'embedding chargé, mais Gemma non chargé pour texte et vision et conserve `models.lm_studio: degraded / lm_studio_models_not_ready`.
+- manual/live: une requête d'embedding locale avec la chaîne non sensible `Mina embedding probe` a été exécutée; aucun log de requête LM Studio, microphone, image, compte ou service réseau n'a été utilisé.
+- remaining: investiguer l'échec de chargement Gemma avec une autorisation de modifier sa configuration ou l'environnement LM Studio; ne pas déclarer le texte, la vision ou la voix locale prêts avant leurs preuves dédiées.
