@@ -360,3 +360,12 @@
 - runtime: `npm run verify` puis `lms ps` ont observé `lm_studio_unreachable`, aucun transport Android autorisé, aucun Wi-Fi connecté, Home absent, comptes mail CLI absents et Firebase non configuré. `lms ps` a confirmé qu'aucun modèle n'est chargé.
 - manual/live: le boot Electron réel est passé. Les pipelines de publication génèrent réellement les huit formats dans leur environnement de test; aucun document n'a été créé dans le dossier Documents utilisateur, aucun fournisseur, compte mail, appareil Android ou service Home n'a été sollicité.
 - remaining: l'indexation Mina Code reste au-dessus de son objectif historique `<30 s`; les décisions/gates externes restent explicitement ouverts dans le plan maître.
+
+## 2026-08-01 20:47 | code/performance | objectif d'indexation initiale Mina Code revalidé sur le corpus actuel
+
+- files: aucun fichier source modifié; lecture locale du corpus réel uniquement.
+- command: diagnostic instrumenté de `createCodebaseIndexer(...).fullIndex()`; `npx vitest run tests/code/code-services-real-project.test.mjs --maxWorkers=1 --no-file-parallelism`.
+- exit: `0`; `0`.
+- proof: le diagnostic a indexé `935` fichiers sans réduire le corpus en `23481 ms` (lecture cumulée `18288 ms`, parsing cumulé `3271 ms`, `3969` symboles). Le chemin assemblé réel Mina Code a passé `1` fichier / `9` tests; son hook `beforeAll` d'indexation a pris `11.82 s`. Les deux mesures observées sont sous l'objectif historique `<30 s`. Elles remplacent l'état ouvert fondé sur la mesure antérieure `68.887 s`, sans nier cette mesure historique.
+- manual/live: passé pour une indexation locale en lecture seule; aucune écriture projet, opération Git ou action externe.
+- remaining: aucune action ouverte pour la cible d'indexation initiale. Re-mesurer après toute modification substantielle du corpus ou de l'indexeur.
