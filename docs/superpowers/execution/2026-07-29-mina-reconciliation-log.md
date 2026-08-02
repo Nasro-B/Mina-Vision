@@ -460,3 +460,12 @@
 - exit: `0` pour la description du bucket ; la lecture de release retourne HTTP `404`.
 - proof: le bucket `gs://mina-vision.firebasestorage.app` est présent, créé à `2026-08-02T08:52:11Z`, emplacement `US-CENTRAL1`, type `region`, classe par défaut `REGIONAL`, et politique de soft-delete de `604800` secondes. La règle Firebase Storage n'est pas encore publiée. Cette entrée constate une création cloud observée; Mina n'a créé, modifié ni déployé aucune ressource dans cette vérification.
 - remaining: obtenir l'autorisation explicite avant de créer une clé de service locale ou un endpoint de jeton, de déployer `storage`/`firestore` rules, puis de créer une session/document/objet de recette éphémère.
+
+## 2026-08-02 10:17 | docs/reconciliation | entrées caméra distinguées de l'analyse locale et périmètre VRM fermé
+
+- files: `docs/superpowers/execution/2026-08-02-mina-remaining-work.md`, ce journal, et les documents de travail locaux ignorés `docs/superpowers/plans/2026-07-29-mina-audit-reconciliation-plan.md` / `docs/superpowers/specs/2026-07-24-mina-visage-avatar-spec.md`.
+- source: précision explicite de Nasro : Mina dispose aussi de la vision par caméra du PC et des téléphones ; décision antérieure : « pas de Avatar VRM ».
+- proof source: `src/ui/renderer.js` appelle `navigator.mediaDevices.getUserMedia` puis `mina:analyze-vision-frame`; `src/ui/main.mjs` expose `mina:phone-camera` et démarre le flux caméra partagé. Le runtime conserve donc les deux entrées. `npm run verify` retourne `lmStudio.ready: true` avec Gemma texte et Nomic embedding chargés, mais `vision.enabled:false`, `vision.loaded:false`, raison `lm_studio_vision_disabled`.
+- scope: le crash image de Gemma reste séparé des captures; aucune webcam PC, caméra téléphone, permission matérielle, image utilisateur ou modèle vision alternatif n'a été lancé. L'avatar VRM reste `unavailable / vrm_avatar_out_of_scope`.
+- git: les dossiers `docs/superpowers/plans/` et `docs/superpowers/specs/` sont volontairement ignorés par `.gitignore` comme documents de travail privés. Leurs mises à jour locales ne sont pas forcées dans le dépôt; ce journal versionné porte la trace de réconciliation publiable.
+- remaining: choisir/provisionner un modèle vision stable, réussir une sonde image dédiée, puis exécuter séparément les recettes physiques webcam PC et Android autorisé. Aucun travail VRM ne reste.
