@@ -15,8 +15,8 @@
 
 ### Runtime local
 
-- [ ] **Vision Mina par webcam PC et caméra téléphone** — les deux captures sont présentes dans le code (`getUserMedia` côté PC, flux Android signé côté téléphone), mais aucune recette matérielle n'a été exécutée. Gemma a de nouveau crashé sur un JPEG synthétique 1×1 même avec `4096` tokens et un seul flux (`18446744072635812000`); `LM_STUDIO_VISION_ENABLED=false` empêche désormais cette route locale de recevoir une image. Réactiver seulement après une sonde image réussie avec un modèle stable, puis tester la permission webcam et un téléphone Android autorisé. L'unique autre modèle vision inventorié pèse `7,95 GiB` : il n'a pas été chargé.
-- [ ] **Voix locale complète hors réseau** — la recette requiert microphone → STT local → modèle → TTS, réseau désactivé. Kokoro n'était pas présent dans le cache local et la mémoire libre mesurée est `1,87 GiB`; aucun téléchargement ni chargement n'a été lancé.
+- [ ] **Vision Mina par webcam PC et caméra téléphone** — les deux captures sont présentes dans le code (`getUserMedia` côté PC, flux Android signé côté téléphone), mais aucune recette matérielle n'a été exécutée. Gemma a de nouveau crashé sur un JPEG synthétique 1×1 même avec `4096` tokens et un seul flux (`18446744072635812000`); `LM_STUDIO_VISION_ENABLED=false` empêche désormais cette route locale de recevoir une image. Réactiver seulement après une sonde image réussie avec un modèle stable, puis tester la permission webcam et un téléphone Android autorisé. L'unique autre modèle vision inventorié est GLM‑4.6V Flash (`7,95 GiB`); son estimation à `4096`/`1` est `7,83 Gio` alors que la mémoire libre observée est `0,68 Gio`, donc il n'a pas été chargé.
+- [ ] **Voix locale complète hors réseau** — la recette requiert microphone → STT local → modèle → TTS, réseau désactivé. Kokoro n'est pas présent dans le cache local; le dernier relevé mémoire, avec Gemma chargé, est `0,68 Gio` libres. Aucun téléchargement, chargement de Kokoro ni test microphone n'a été lancé.
 - [ ] **Packaging voix locale** — décision de distribution eSpeak/Kokoro requise avant publication de ce chemin.
 
 ### Contrats produit à choisir avant code

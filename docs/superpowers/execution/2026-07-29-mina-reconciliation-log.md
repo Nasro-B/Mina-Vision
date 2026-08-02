@@ -469,3 +469,10 @@
 - scope: le crash image de Gemma reste séparé des captures; aucune webcam PC, caméra téléphone, permission matérielle, image utilisateur ou modèle vision alternatif n'a été lancé. L'avatar VRM reste `unavailable / vrm_avatar_out_of_scope`.
 - git: les dossiers `docs/superpowers/plans/` et `docs/superpowers/specs/` sont volontairement ignorés par `.gitignore` comme documents de travail privés. Leurs mises à jour locales ne sont pas forcées dans le dépôt; ce journal versionné porte la trace de réconciliation publiable.
 - remaining: choisir/provisionner un modèle vision stable, réussir une sonde image dédiée, puis exécuter séparément les recettes physiques webcam PC et Android autorisé. Aucun travail VRM ne reste.
+
+## 2026-08-02 10:23 | runtime/vision | seul modèle vision alternatif local non chargé faute de marge mémoire observée
+
+- command: `lms ps`; `lms ls --json`; `lms load zai-org/glm-4.6v-flash --context-length 4096 --parallel 1 --estimate-only`; lecture mémoire physique Windows et contrôleur graphique.
+- proof: Gemma (`4,41 GB`, contexte `4096`, parallèle `1`) et Nomic sont les seules instances chargées. Les deux seuls modèles locaux déclarant `vision:true` sont Gemma et `zai-org/glm-4.6v-flash` (`7 953 555 436` octets, `9,4B`, Q4_K_M). L'estimation LM Studio pour GLM à `4096`/`1` est `7,83 GiB` de mémoire totale. La mémoire physique libre observée est `0,68 Gio` sur `15,92 Gio`; le contrôleur déclaré est Intel UHD 630 (`1 Gio` d'AdapterRAM), sans `nvidia-smi` disponible.
+- decision: aucune charge de GLM n'est tentée dans cet état, afin de ne pas déstabiliser LM Studio ou le poste. Cette décision ne conclut pas que GLM échouerait : elle constate seulement qu'aucune marge mémoire vérifiée ne permet une recette prudente.
+- remaining: libérer/provisionner une marge mémoire appropriée ou choisir un modèle vision plus léger, puis autoriser une unique sonde image locale avant toute recette webcam/téléphone.
