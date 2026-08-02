@@ -1,6 +1,6 @@
 # Mina Vision — tâches restantes de réconciliation
 
-> État au 2026-08-02 10:08 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
+> État au 2026-08-02 10:12 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
 
 ## Clos avec preuve récente
 
@@ -28,7 +28,7 @@
 
 ### Preuves externes ou physiques
 
-- [ ] **Firebase cloud** — lecture seule vérifiée le `2026-08-02 09:30` : la base Firestore `(default)` existe (`FIRESTORE_NATIVE`, `eur3`) et publie `cloud.firestore`. Après normalisation, la seule différence source est le refus catch-all explicite du fichier local (`match /{document=**} { allow read, write: if false; }`), absent de la release distante ; cela ne prouve pas un écart de comportement sans recette cloud. Aucun bucket Storage n'est listé et la release `firebase.storage` retourne `404`. Le compte `firebase-adminsdk-fbsvc@mina-vision.iam.gserviceaccount.com` existe, mais le fichier local actuel appartient à `mina-vission` et est refusé. Il faut décider puis autoriser explicitement : initialisation du bucket (emplacement/coût), nouvelle clé ou endpoint du compte `mina-vision`, déploiement éventuel des règles et recette cloud avec écritures éphémères.
+- [ ] **Firebase cloud** — lecture seule vérifiée le `2026-08-02 10:12` : la base Firestore `(default)` existe (`FIRESTORE_NATIVE`, `eur3`) et publie `cloud.firestore`. Après normalisation, la seule différence source est le refus catch-all explicite du fichier local (`match /{document=**} { allow read, write: if false; }`), absent de la release distante ; cela ne prouve pas un écart de comportement sans recette cloud. Le bucket `gs://mina-vision.firebasestorage.app` existe désormais (`US-CENTRAL1`, `REGIONAL`, rétention douce `7` jours), mais la release `firebase.storage` retourne encore `404`. Le compte `firebase-adminsdk-fbsvc@mina-vision.iam.gserviceaccount.com` existe, mais le fichier local actuel appartient à `mina-vission` et est refusé. Il faut maintenant autoriser explicitement : nouvelle clé ou endpoint du compte `mina-vision`, déploiement des règles Storage/Firestore et recette cloud avec écritures éphémères.
 - [ ] **Android utilisateur** — parcours application, permissions caméra/micro, SMS et Telegram sur appareil autorisé. Le test instrumentation isolé passé ne prouve pas ce parcours.
 - [ ] **Google Home** — SDK signé, relais autorisé et recette sur lumière non critique, supervisée.
 - [ ] **Mail fournisseurs** — comptes de test dédiés, consentement OAuth/TLS et opérations réversibles réelles par fournisseur.

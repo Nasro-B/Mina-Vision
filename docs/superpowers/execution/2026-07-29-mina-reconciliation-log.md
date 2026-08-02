@@ -452,3 +452,11 @@
 - live local: après rechargement Gemma à `4096` tokens et `1` flux, une unique requête loopback sur JPEG synthétique 1×1, `64` tokens maximum, a retourné HTTP `400` avec `The model has crashed without additional information. (Exit code: 18446744072635812000)` puis a déchargé Gemma. Cela élimine le contexte `1000` et la sortie `640` comme seule explication observée. Gemma a été rechargé sans image après la sonde.
 - capture paths: le code conserve la webcam PC via `navigator.mediaDevices.getUserMedia` puis `mina:analyze-vision-frame`, et le flux téléphone via `mina:phone-camera`, `shared-camera-runtime` et les enveloppes Android signées. Aucune webcam ni téléphone réel n'a été ouvert dans cette entrée.
 - remaining: fournir ou autoriser un modèle vision local stable, puis une sonde dédiée réussie avant de passer `LM_STUDIO_VISION_ENABLED=true`; exécuter séparément les recettes physiques webcam PC et Android autorisé.
+
+## 2026-08-02 10:12 | cloud/firebase | bucket Storage créé hors Mina, règles encore absentes
+
+- files: ce journal et le tableau des tâches restantes.
+- command: `gcloud storage buckets describe gs://mina-vision.firebasestorage.app --format=json`; lecture Firebase Rules API de `projects/mina-vision/releases/firebase.storage`.
+- exit: `0` pour la description du bucket ; la lecture de release retourne HTTP `404`.
+- proof: le bucket `gs://mina-vision.firebasestorage.app` est présent, créé à `2026-08-02T08:52:11Z`, emplacement `US-CENTRAL1`, type `region`, classe par défaut `REGIONAL`, et politique de soft-delete de `604800` secondes. La règle Firebase Storage n'est pas encore publiée. Cette entrée constate une création cloud observée; Mina n'a créé, modifié ni déployé aucune ressource dans cette vérification.
+- remaining: obtenir l'autorisation explicite avant de créer une clé de service locale ou un endpoint de jeton, de déployer `storage`/`firestore` rules, puis de créer une session/document/objet de recette éphémère.
