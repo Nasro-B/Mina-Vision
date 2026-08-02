@@ -13,6 +13,7 @@ describe('provider-scoped configuration schema', () => {
       baseUrl: 'http://127.0.0.1:1234/v1',
       model: 'google/gemma-4-e2b',
       visionModel: 'google/gemma-4-e2b',
+      visionEnabled: false,
       embeddingModel: 'text-embedding-nomic-embed-text-v1.5',
       timeoutMs: 240_000,
     });
@@ -24,6 +25,12 @@ describe('provider-scoped configuration schema', () => {
       providers: { gemini: { enabled: false }, deepseek: { enabled: false }, lmStudio: { enabled: true } },
     });
     expect(() => parseConfig({ MINA_INFERENCE_MODE: 'cloud-only' })).toThrow('MINA_INFERENCE_MODE');
+  });
+
+  it('requires an explicit opt-in before exposing local camera vision', () => {
+    expect(parseConfig({}).providers.lmStudio.visionEnabled).toBe(false);
+    expect(parseConfig({ LM_STUDIO_VISION_ENABLED: 'true' }).providers.lmStudio.visionEnabled).toBe(true);
+    expect(() => parseConfig({ LM_STUDIO_VISION_ENABLED: 'yes' })).toThrow('LM_STUDIO_VISION_ENABLED');
   });
 
   it('describes a configured cloud provider without returning its key', () => {

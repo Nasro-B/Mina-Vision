@@ -62,6 +62,13 @@ describe('configuration application service', () => {
     });
   });
 
+  it('round-trips the explicit local vision opt-in as a non-sensitive setting', async () => {
+    const service = createConfigService({ env: {}, secretStore: secrets() });
+
+    await expect(service.updateNonSensitive({ LM_STUDIO_VISION_ENABLED: true }))
+      .resolves.toMatchObject({ providers: { lmStudio: { visionEnabled: true } } });
+  });
+
   it('exposes the telegram owner chat id config block, null by default', async () => {
     const service = createConfigService({ env: {}, secretStore: secrets() });
     expect((await service.snapshot()).telegram).toEqual({ ownerChatId: null });

@@ -37,7 +37,7 @@ export function createCameraVisionRuntime({ config, geminiClient, openAiClientFa
     }
   }
 
-  if (config.providers?.lmStudio?.enabled && config.providers.lmStudio.model) {
+  if (config.providers?.lmStudio?.enabled && config.providers.lmStudio.visionEnabled && config.providers.lmStudio.visionModel) {
     providers.push(createOpenAiCompatibleCameraVision({
       id: 'lm-studio-camera-vision',
       apiKey: 'lm-studio',

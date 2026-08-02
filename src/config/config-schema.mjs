@@ -105,6 +105,7 @@ export function parseConfig(env = {}) {
         baseUrl: loopbackUrl(env.LM_STUDIO_BASE_URL),
         model: env.LM_STUDIO_TEXT_MODEL?.trim() || 'google/gemma-4-e2b',
         visionModel: env.LM_STUDIO_VISION_MODEL?.trim() || env.LM_STUDIO_TEXT_MODEL?.trim() || 'google/gemma-4-e2b',
+        visionEnabled: booleanValue(env.LM_STUDIO_VISION_ENABLED, false, 'LM_STUDIO_VISION_ENABLED'),
         embeddingModel: env.LM_STUDIO_EMBEDDING_MODEL?.trim() || 'text-embedding-nomic-embed-text-v1.5',
         timeoutMs: positiveInteger(env.LM_STUDIO_TIMEOUT_MS, 240_000, 'LM_STUDIO_TIMEOUT_MS'),
       },

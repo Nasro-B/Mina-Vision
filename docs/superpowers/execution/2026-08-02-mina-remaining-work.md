@@ -1,12 +1,13 @@
 # Mina Vision — tâches restantes de réconciliation
 
-> État au 2026-08-02 09:43 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
+> État au 2026-08-02 10:08 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
 
 ## Clos avec preuve récente
 
-- [x] Validation complète après le correctif Firebase : `418` fichiers / `3 383` tests unitaires, `18` fichiers / `49` tests d'intégration et les deux smoke Electron passés.
+- [x] Validation complète après le garde-fou vision : `418` fichiers / `3 388` tests unitaires, `18` fichiers / `49` tests d'intégration et les deux smoke Electron passés.
 - [x] Firebase local : projet et app Android inventoriés en lecture seule ; règles testées dans Auth/Firestore/Storage Emulator sur loopback. Le diagnostic refuse aussi, avant signature, un compte de service d'un autre projet.
 - [x] LM Studio local : génération texte et embedding Mina passés avec Gemma et Nomic chargés.
+- [x] Garde-fou vision locale : Gemma image est désactivé par défaut et ne peut être réactivé qu'après une sonde image réussie ; les captures webcam PC et caméra téléphone ne sont pas supprimées.
 - [x] Indexation initiale Mina Code : corpus réel de `935` fichiers indexé en `23 481 ms`, sous l'objectif historique `<30 s`.
 - [x] Avatar VRM : explicitement hors périmètre ; aucun asset, modèle, dépendance ou distribution VRM ne doit être ajouté.
 
@@ -14,7 +15,7 @@
 
 ### Runtime local
 
-- [ ] **Vision locale Mina** — un JPEG synthétique valide a fait crasher Gemma via la route Mina. Ne pas promouvoir la vision avant une sonde image réussie avec un modèle stable. L'unique autre modèle vision inventorié pèse `7,95 GiB` pour `7,74 GiB` libres lors de la mesure : aucun changement de modèle ou de configuration n'est autorisé par ce tableau.
+- [ ] **Vision Mina par webcam PC et caméra téléphone** — les deux captures sont présentes dans le code (`getUserMedia` côté PC, flux Android signé côté téléphone), mais aucune recette matérielle n'a été exécutée. Gemma a de nouveau crashé sur un JPEG synthétique 1×1 même avec `4096` tokens et un seul flux (`18446744072635812000`); `LM_STUDIO_VISION_ENABLED=false` empêche désormais cette route locale de recevoir une image. Réactiver seulement après une sonde image réussie avec un modèle stable, puis tester la permission webcam et un téléphone Android autorisé. L'unique autre modèle vision inventorié pèse `7,95 GiB` : il n'a pas été chargé.
 - [ ] **Voix locale complète hors réseau** — la recette requiert microphone → STT local → modèle → TTS, réseau désactivé. Kokoro n'était pas présent dans le cache local et la mémoire libre mesurée est `1,87 GiB`; aucun téléchargement ni chargement n'a été lancé.
 - [ ] **Packaging voix locale** — décision de distribution eSpeak/Kokoro requise avant publication de ce chemin.
 

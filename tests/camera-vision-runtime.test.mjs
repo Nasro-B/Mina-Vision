@@ -39,6 +39,7 @@ describe('camera vision runtime', () => {
         providers: {
           lmStudio: {
             enabled: true,
+            visionEnabled: true,
             baseUrl: 'http://127.0.0.1:1234/v1',
             model: 'local-text',
             visionModel: 'google/gemma-4-e2b',
@@ -52,6 +53,25 @@ describe('camera vision runtime', () => {
       text: 'Vision locale.', providerId: 'lm-studio-camera-vision', modelId: 'google/gemma-4-e2b',
     });
     expect(localCreate).toHaveBeenCalledWith(expect.objectContaining({ max_tokens: 640 }));
+  });
+
+  it('does not expose local camera vision until it has been explicitly enabled', () => {
+    const runtime = createCameraVisionRuntime({
+      config: {
+        inference: { mode: 'local-only', offline: true },
+        providers: {
+          lmStudio: {
+            enabled: true,
+            visionEnabled: false,
+            baseUrl: 'http://127.0.0.1:1234/v1',
+            model: 'local-text',
+            visionModel: 'google/gemma-4-e2b',
+          },
+        },
+      },
+    });
+
+    expect(runtime.providers).not.toContain('lm-studio-camera-vision');
   });
 
   it('does not register a text-only Modal endpoint as a camera vision provider', () => {

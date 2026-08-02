@@ -37,15 +37,15 @@ export async function probeLmStudio({ config, fetchImpl = fetch, signal, timeout
   const textModel = models.find(({ key }) => key === config.model);
   const visionModel = models.find(({ key }) => key === config.visionModel);
   const embeddingModel = models.find(({ key }) => key === config.embeddingModel);
+  const visionEnabled = config.visionEnabled === true;
   const state = {
     text: { model: config.model, loaded: loaded(textModel) && textModel?.type === 'llm' },
-    vision: {
-      model: config.visionModel,
-      loaded: loaded(visionModel) && visionModel?.type === 'llm' && visionModel?.capabilities?.vision === true,
-    },
+    vision: visionEnabled
+      ? { model: config.visionModel, enabled: true, loaded: loaded(visionModel) && visionModel?.type === 'llm' && visionModel?.capabilities?.vision === true }
+      : { model: config.visionModel, enabled: false, loaded: false, reason: 'lm_studio_vision_disabled' },
     embedding: { model: config.embeddingModel, loaded: loaded(embeddingModel) && embeddingModel?.type === 'embedding' },
   };
-  const ready = Object.values(state).every(({ loaded: isLoaded }) => isLoaded);
+  const ready = state.text.loaded && state.embedding.loaded && (!visionEnabled || state.vision.loaded);
   return Object.freeze({
     ready,
     ...(!ready ? { reason: 'lm_studio_models_not_ready' } : {}),

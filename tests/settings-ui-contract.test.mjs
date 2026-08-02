@@ -7,6 +7,10 @@ function fakeSecretStore() {
 }
 
 describe('settings UI contract: renderer reads exactly what the controller exposes', () => {
+  it('makes the local vision opt-in editable without exposing a secret', () => {
+    expect(NON_SENSITIVE_CONFIG_KEYS).toContain('LM_STUDIO_VISION_ENABLED');
+  });
+
   it('lists every SMS/httpSMS key the renderer needs to render an input for, as editable', () => {
     for (const key of ['HTTPSMS_BASE_URL', 'HTTPSMS_FROM_NUMBER', 'HTTPSMS_SMS_MODE',
       'SMS_SEND_MODE', 'SMS_ALLOWLIST', 'SMS_QUIET_HOURS_START', 'SMS_QUIET_HOURS_END', 'SMS_MAX_PER_MINUTE', 'SMS_MAX_PER_DAY']) {

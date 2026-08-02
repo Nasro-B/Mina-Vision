@@ -5,6 +5,7 @@ const config = Object.freeze({
   baseUrl: 'http://127.0.0.1:1234/v1',
   model: 'google/gemma-4-e2b',
   visionModel: 'google/gemma-4-e2b',
+  visionEnabled: true,
   embeddingModel: 'text-embedding-nomic-embed-text-v1.5',
 });
 
@@ -44,6 +45,16 @@ describe('LM Studio live health probe', () => {
       config,
       fetchImpl: async () => Response.json(nativeModels({ loaded: false, vision: false })),
     })).resolves.toMatchObject({ ready: false, reason: 'lm_studio_models_not_ready' });
+  });
+
+  it('keeps text and embedding ready while camera vision is deliberately disabled', async () => {
+    await expect(probeLmStudio({
+      config: { ...config, visionEnabled: false },
+      fetchImpl: async () => Response.json(nativeModels()),
+    })).resolves.toMatchObject({
+      ready: true,
+      vision: { model: config.visionModel, enabled: false, loaded: false, reason: 'lm_studio_vision_disabled' },
+    });
   });
 
   it('rejects a non-loopback LM Studio URL before opening a socket', async () => {
