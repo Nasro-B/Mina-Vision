@@ -15,6 +15,14 @@ describe('createCustomTokenMinter', () => {
     expect(() => createCustomTokenMinter({ serviceAccount, uid: '' })).toThrow('token_minter_uid_invalid');
   });
 
+  it('refuse un compte de service rattaché à un autre projet Firebase', () => {
+    expect(() => createCustomTokenMinter({
+      serviceAccount: { ...serviceAccount, project_id: 'mina-vission' },
+      uid: 'mina-owner-pc',
+      expectedProjectId: 'mina-vision',
+    })).toThrow('token_minter_project_mismatch');
+  });
+
   it('frappe un JWT RS256 au format custom token (iss/sub/aud/uid/iat/exp) signé vérifiable', async () => {
     const mint = createCustomTokenMinter({ serviceAccount, uid: 'mina-owner-pc', clock });
     const token = await mint();

@@ -1,11 +1,11 @@
 # Mina Vision — tâches restantes de réconciliation
 
-> État au 2026-08-02 08:51 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
+> État au 2026-08-02 09:39 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
 
 ## Clos avec preuve récente
 
-- [x] Tests unitaires après la décision VRM : `417` fichiers / `3 378` tests passés.
-- [x] Firebase local : projet et app Android inventoriés en lecture seule ; configuration locale et règles testées dans Auth/Firestore/Storage Emulator sur loopback.
+- [x] Validation complète après le correctif Firebase : `418` fichiers / `3 383` tests unitaires, `18` fichiers / `49` tests d'intégration et les deux smoke Electron passés.
+- [x] Firebase local : projet et app Android inventoriés en lecture seule ; règles testées dans Auth/Firestore/Storage Emulator sur loopback. Le diagnostic refuse aussi, avant signature, un compte de service d'un autre projet.
 - [x] LM Studio local : génération texte et embedding Mina passés avec Gemma et Nomic chargés.
 - [x] Indexation initiale Mina Code : corpus réel de `935` fichiers indexé en `23 481 ms`, sous l'objectif historique `<30 s`.
 - [x] Avatar VRM : explicitement hors périmètre ; aucun asset, modèle, dépendance ou distribution VRM ne doit être ajouté.
@@ -27,7 +27,7 @@
 
 ### Preuves externes ou physiques
 
-- [ ] **Firebase cloud** — autorisation explicite immédiate requise avant toute création de session/document distant ou déploiement de règles. Aucun test local Emulator ne vaut preuve cloud.
+- [ ] **Firebase cloud** — lecture seule vérifiée le `2026-08-02 09:30` : la base Firestore `(default)` existe (`FIRESTORE_NATIVE`, `eur3`) et publie `cloud.firestore`, mais son hash de règles diffère du fichier local ; ce fait ne prouve pas un écart de comportement. Aucun bucket Storage n'est listé et la release `firebase.storage` retourne `404`. Le compte `firebase-adminsdk-fbsvc@mina-vision.iam.gserviceaccount.com` existe, mais le fichier local actuel appartient à `mina-vission` et est refusé. Il faut décider puis autoriser explicitement : initialisation du bucket (emplacement/coût), nouvelle clé ou endpoint du compte `mina-vision`, déploiement éventuel des règles et recette cloud avec écritures éphémères.
 - [ ] **Android utilisateur** — parcours application, permissions caméra/micro, SMS et Telegram sur appareil autorisé. Le test instrumentation isolé passé ne prouve pas ce parcours.
 - [ ] **Google Home** — SDK signé, relais autorisé et recette sur lumière non critique, supervisée.
 - [ ] **Mail fournisseurs** — comptes de test dédiés, consentement OAuth/TLS et opérations réversibles réelles par fournisseur.

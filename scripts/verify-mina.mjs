@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { createHealthService } from '../src/diagnostics/health-service.mjs';
 import { capabilityFromReadiness } from '../src/diagnostics/capability-readiness.mjs';
+import { probeFirebaseBackupConfiguration } from '../src/diagnostics/firebase-health.mjs';
 import { probeLmStudio } from '../src/diagnostics/lm-studio-health.mjs';
 import { loadConfig } from '../src/config.mjs';
 import { parseAuthorizedAdbTransports } from '../src/devices/adb-devices.mjs';
@@ -59,9 +60,15 @@ const probes = {
   },
   mailAccounts: async () => ({ ready: false, reason: 'mail_accounts_not_yet_configurable_from_cli' }),
   firebase: async () => ({
-    ready: Boolean(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_STORAGE_BUCKET),
+    ...await probeFirebaseBackupConfiguration({
+      projectId: process.env.FIREBASE_PROJECT_ID?.trim(),
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET?.trim(),
+      googleServicesPath: process.env.MINA_GOOGLE_SERVICES?.trim() || path.join(ROOT, 'env', 'google-services.json'),
+      serviceAccountPath: process.env.MINA_FIREBASE_SERVICE_ACCOUNT?.trim()
+        || path.join(ROOT, 'env', 'mina-vission-5355334a72f5.json'),
+      tokenEndpoint: process.env.MINA_BACKUP_TOKEN_ENDPOINT?.trim() || null,
+    }),
     optional: true,
-    reason: process.env.FIREBASE_PROJECT_ID ? undefined : 'firebase_unconfigured',
   }),
 };
 

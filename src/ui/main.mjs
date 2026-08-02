@@ -2668,6 +2668,7 @@ app.whenReady().then(async () => {
         mintCustomToken ??= createCustomTokenMinter({
           serviceAccount: JSON.parse(await readFile(serviceAccountPath, 'utf8')),
           uid: backupOwnerUid,
+          expectedProjectId: process.env.FIREBASE_PROJECT_ID?.trim() || null,
         });
         return mintCustomToken();
       };

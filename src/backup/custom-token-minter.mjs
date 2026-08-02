@@ -13,12 +13,19 @@ const IDENTITY_TOOLKIT_AUDIENCE = 'https://identitytoolkit.googleapis.com/google
 
 const base64url = (input) => Buffer.from(input).toString('base64url');
 
-export function createCustomTokenMinter({ serviceAccount, uid, clock = () => Date.now(), ttlSeconds = 3_600 } = {}) {
+export function createCustomTokenMinter({
+  serviceAccount,
+  uid,
+  expectedProjectId = null,
+  clock = () => Date.now(),
+  ttlSeconds = 3_600,
+} = {}) {
   const email = serviceAccount?.client_email;
   const privateKey = serviceAccount?.private_key;
   if (typeof email !== 'string' || !email.includes('@')) throw new TypeError('token_minter_client_email_invalid');
   if (typeof privateKey !== 'string' || !privateKey.includes('BEGIN PRIVATE KEY')) throw new TypeError('token_minter_private_key_invalid');
   if (typeof uid !== 'string' || uid.length < 1 || uid.length > 128) throw new TypeError('token_minter_uid_invalid');
+  if (expectedProjectId && serviceAccount?.project_id !== expectedProjectId) throw new Error('token_minter_project_mismatch');
   const boundedTtl = Math.min(Math.max(Number(ttlSeconds) || 3_600, 60), 3_600);
 
   return async function mintCustomToken() {
