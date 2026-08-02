@@ -1,11 +1,12 @@
 # Mina Vision — tâches restantes de réconciliation
 
-> État au 2026-08-02 10:49 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
+> État au 2026-08-02 11:23 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
 
 ## Clos avec preuve récente
 
-- [x] Validation complète après le garde-fou voix : `419` fichiers / `3 390` tests unitaires, `18` fichiers / `49` tests d'intégration et les deux smoke Electron passés.
+- [x] Validation complète actuelle : `419` fichiers / `3 391` tests unitaires, `18` fichiers / `49` tests d'intégration et les deux smoke Electron passés.
 - [x] Firebase local : projet et app Android inventoriés en lecture seule ; règles testées dans Auth/Firestore/Storage Emulator sur loopback. Le diagnostic refuse aussi, avant signature, un compte de service d'un autre projet.
+- [x] Firebase cloud : une clé de compte de service Mina Vision est configurée uniquement dans `env/` ignoré ; la release Storage active refuse l’anonyme. Une recette réelle avec UID temporaire a vérifié custom token, Firestore valide/refus invalide, Storage propriétaire/refus inter-propriétaire, puis sauvegarde chiffrée et restauration. La recette a supprimé ses objets et son utilisateur ; le listing Storage final est vide. La sonde locale reste volontairement `firebase_cloud_unverified`, car elle ne fait aucun appel cloud implicite.
 - [x] LM Studio local : génération texte et embedding Mina passés avec Gemma et Nomic chargés.
 - [x] TTS locale hors réseau : Kokoro a effectué un warm-up puis une synthèse française PCM à `24 000 Hz` avec `MINA_OFFLINE=true`, sans microphone ni téléchargement.
 - [x] Garde-fou vision locale : Gemma image est désactivé par défaut et ne peut être réactivé qu'après une sonde image réussie ; les captures webcam PC et caméra téléphone ne sont pas supprimées.
@@ -29,7 +30,6 @@
 
 ### Preuves externes ou physiques
 
-- [ ] **Firebase cloud** — la base Firestore `(default)` existe (`FIRESTORE_NATIVE`, `eur3`) et sa release actuelle `cloud.firestore` n'a pas été modifiée. Le bucket `gs://mina-vision.firebasestorage.app` existe (`US-CENTRAL1`, `REGIONAL`, rétention douce `7` jours) et les règles Storage sont maintenant publiées : release `firebase.storage/mina-vision.firebasestorage.app`, SHA local/distant identique, lecture anonyme refusée (`403`). Le compte `firebase-adminsdk-fbsvc@mina-vision.iam.gserviceaccount.com` existe, mais aucun fichier local de ce projet n'est présent : le seul compte de service local déclare `mina-vission` et Mina le refuse. Il reste une clé locale ignorée ou un endpoint de jeton du compte `mina-vision`, puis une recette cloud Auth/Firestore/Storage éphémère autorisée.
 - [ ] **Android utilisateur** — parcours application, permissions caméra/micro, SMS et Telegram sur appareil autorisé. Le test instrumentation isolé passé ne prouve pas ce parcours.
 - [ ] **Google Home** — SDK signé, relais autorisé et recette sur lumière non critique, supervisée.
 - [ ] **Mail fournisseurs** — comptes de test dédiés, consentement OAuth/TLS et opérations réversibles réelles par fournisseur.
@@ -40,5 +40,5 @@
 
 1. Décider le périmètre chat natif, le contrat grounding et le contrat de pièces jointes.
 2. Fournir ou autoriser les prérequis locaux voix/vision ; effectuer ensuite les sondes dédiées.
-3. Donner un feu vert explicite, action par action, pour Firebase cloud, Android, Home, mail et Sandbox.
+3. Donner un feu vert explicite, action par action, pour Android, Home, mail et Sandbox.
 4. Rejouer `npm run verify:release` après toute nouvelle vague de code et actualiser ce tableau avec les sorties réellement observées.

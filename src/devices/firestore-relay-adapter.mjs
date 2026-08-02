@@ -64,6 +64,7 @@ export function firebaseConfigFromGoogleServices(googleServices, packageName = '
   return Object.freeze({
     apiKey,
     appId: client.client_info.mobilesdk_app_id,
+    authDomain: `${googleServices.project_info.project_id}.firebaseapp.com`,
     projectId: googleServices.project_info.project_id,
     messagingSenderId: googleServices.project_info.project_number,
     storageBucket: googleServices.project_info.storage_bucket,

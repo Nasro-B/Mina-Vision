@@ -120,4 +120,24 @@ describe('encrypted backup and atomic restore', () => {
 
     expect(target.committed).toEqual([]);
   });
+
+  it('restores when the remote adapter rejects a trailing slash namespace prefix', async () => {
+    const remote = createRemote();
+    const originalListObjects = remote.listObjects;
+    remote.listObjects = vi.fn(async (prefix) => {
+      if (prefix.endsWith('/')) throw new Error('firebase_object_key_invalid');
+      return originalListObjects(prefix);
+    });
+    const { backup, restore } = services(remote);
+    await backup.backup({
+      snapshotId: 'valid-tombstone-prefix',
+      records: [{ id: 'event-1', type: 'memory_event', payload: { content: SECRET } }],
+      tombstones: [],
+    });
+    const target = createTarget();
+
+    await expect(restore.restore({ snapshotId: 'valid-tombstone-prefix', target }))
+      .resolves.toEqual({ restored: 1, forgotten: 0 });
+    expect(target.committed[0].payload.content).toBe(SECRET);
+  });
 });

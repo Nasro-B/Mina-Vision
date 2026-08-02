@@ -24,12 +24,13 @@ Firebase remplit deux rôles strictement séparés dans Mina Vision : **transpor
 - `.env.example` ne documente que des identifiants publics Firebase vides — jamais de clé de service.
 - `firebase.json` et `.firebaserc` ciblent explicitement le projet `mina-vision` et les règles versionnées `firebase/firestore.rules` / `firebase.storage.rules`.
 - La sauvegarde exige le `google-services.json` du même projet et soit `MINA_FIREBASE_SERVICE_ACCOUNT` (fichier ignoré, `project_id` strictement égal à `FIREBASE_PROJECT_ID`), soit `MINA_BACKUP_TOKEN_ENDPOINT`. Un compte d'un autre projet est refusé avant toute signature (`firebase_service_account_project_mismatch`).
+- `google-services.json` ne porte pas l’origine web Auth : Mina dérive le `authDomain` public requis sous la forme `${project_id}.firebaseapp.com` avant d’initialiser le SDK client.
 - Une configuration locale cohérente reste `firebase_cloud_unverified` : elle ne prouve ni l'authentification ni une écriture distante.
 - Pour une recette locale sans écrire dans le cloud : `npm run test:firebase:emulator`. Elle démarre Auth, Firestore et Storage sur loopback, vérifie les refus des règles Firestore/Storage puis détruit ses données éphémères. Firebase CLI 15 requiert un JDK 21 ou supérieur pour l’émulateur Firestore.
 - Un déploiement de règles est une action distante distincte : `firebase deploy --only firestore:rules,storage`. Il ne doit être exécuté qu’après validation explicite de la configuration du projet et des règles à publier.
-- Aucun test de ce dépôt n'effectue d'appel Firebase réel. Tous les tests (unitaires et d'intégration) utilisent un backend factice injecté.
+- Les tests automatisés n’effectuent aucun appel Firebase réel. Une preuve supervisée du `2026-08-02` a utilisé un UID temporaire aléatoire par custom token, vérifié Auth, des écritures Firestore valide et invalide, un aller-retour Storage propriétaire, puis la sauvegarde/restauration chiffrée ; son document, ses objets et son utilisateur Auth temporaire ont ensuite été supprimés. Une lecture seule du bucket était vide après la recette.
 - Firebase reste **entièrement optionnel** : `npm run rebuild:native`, l'assemblage Android (`assembleDebug`) et les tests unitaires fonctionnent sans `google-services.json`.
-- Aucun test live n'est exécuté avant que Nasro ait créé explicitement le projet Firebase et fourni sa configuration.
+- Toute recette live supplémentaire exige un projet explicitement configuré, des identifiants temporaires isolés et un nettoyage.
 
 ## Panne ou indisponibilité
 

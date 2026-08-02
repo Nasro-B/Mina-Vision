@@ -211,6 +211,7 @@ describe('configuration Firebase depuis google-services.json', () => {
     expect(firebaseConfigFromGoogleServices(googleServices)).toEqual({
       apiKey: 'CLE-CLIENT-ANDROID',
       appId: '1:000000000000:android:abc',
+      authDomain: 'mina-vision.firebaseapp.com',
       projectId: 'mina-vision',
       messagingSenderId: '000000000000',
       storageBucket: 'mina-vision.firebasestorage.app',

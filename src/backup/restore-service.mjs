@@ -48,7 +48,7 @@ export function createRestoreService({ remote, backupKey } = {}) {
       });
       (entry.kind === 'record' ? records : tombstones).push(value);
     }
-    for (const objectKey of await remote.listObjects('tombstones/')) {
+    for (const objectKey of await remote.listObjects('tombstones')) {
       const bytes = await remote.getObject(objectKey);
       if (!bytes) continue;
       const wrapper = JSON.parse(bytes.toString('utf8'));
