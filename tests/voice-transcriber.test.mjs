@@ -26,11 +26,21 @@ describe('createVoiceTranscriber', () => {
     expect(loaded).toBe(1); // pipeline chargé UNE fois puis réutilisé
   });
 
-  it('hors-ligne : refuse de télécharger le modèle en douce', async () => {
+  it('hors-ligne : utilise un pipeline déjà présent sans autoriser le réseau', async () => {
+    let receivedPolicy = null;
     const transcribe = createVoiceTranscriber({
-      enabled: true, offline: true, decodeAudio: decodeOk, loadPipeline: pipelineOf('x'),
+      enabled: true,
+      offline: true,
+      decodeAudio: decodeOk,
+      loadPipeline: async (_model, policy) => {
+        receivedPolicy = policy;
+        if (policy?.localFilesOnly !== true) throw new Error('stt_remote_model_forbidden');
+        return async () => ({ text: 'transcription locale' });
+      },
     });
-    await expect(transcribe({ audio: Buffer.from([1]) })).rejects.toThrow('stt_modele_absent_mode_hors_ligne');
+
+    await expect(transcribe({ audio: Buffer.from([1]) })).resolves.toBe('transcription locale');
+    expect(receivedPolicy).toEqual({ localFilesOnly: true });
   });
 
   it('échec de chargement : réessaiera au prochain appel (pas de poison définitif)', async () => {

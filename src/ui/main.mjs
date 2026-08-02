@@ -2754,7 +2754,8 @@ app.whenReady().then(async () => {
       });
       // C3 — transcription LOCALE des notes vocales : m4a décodé par l'AudioContext du renderer
       // (pont IPC ci-dessous), Whisper local via transformers.js. Opt-in par MINA_STT_ENABLED=true
-      // (premier usage : téléchargement unique du modèle, refusé si MINA_OFFLINE). Désactivé =>
+      // (premier usage : téléchargement unique du modèle; MINA_OFFLINE ne lit que le cache local).
+      // Désactivé =>
       // null => la perception garde sa note honnête « transcription hors-ligne non activée ».
       const decodeAudioViaRenderer = ({ bytesBase64, mimeType }) => new Promise((resolve, reject) => {
         const requestId = randomUUID();
@@ -2776,9 +2777,9 @@ app.whenReady().then(async () => {
         offline: process.env.MINA_OFFLINE === 'true',
         model: process.env.MINA_STT_MODEL?.trim() || undefined,
         decodeAudio: decodeAudioViaRenderer,
-        loadPipeline: async (model) => {
+        loadPipeline: async (model, { localFilesOnly = false } = {}) => {
           const { pipeline } = await import('@huggingface/transformers');
-          const asr = await pipeline('automatic-speech-recognition', model);
+          const asr = await pipeline('automatic-speech-recognition', model, { local_files_only: localFilesOnly });
           return async (pcm) => asr(pcm);
         },
         logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'stt_local', entry) },

@@ -1,12 +1,13 @@
 # Mina Vision — tâches restantes de réconciliation
 
-> État au 2026-08-02 10:17 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
+> État au 2026-08-02 10:35 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
 
 ## Clos avec preuve récente
 
-- [x] Validation complète après le garde-fou vision : `418` fichiers / `3 388` tests unitaires, `18` fichiers / `49` tests d'intégration et les deux smoke Electron passés.
+- [x] Validation complète après le garde-fou voix : `419` fichiers / `3 390` tests unitaires, `18` fichiers / `49` tests d'intégration et les deux smoke Electron passés.
 - [x] Firebase local : projet et app Android inventoriés en lecture seule ; règles testées dans Auth/Firestore/Storage Emulator sur loopback. Le diagnostic refuse aussi, avant signature, un compte de service d'un autre projet.
 - [x] LM Studio local : génération texte et embedding Mina passés avec Gemma et Nomic chargés.
+- [x] TTS locale hors réseau : Kokoro a effectué un warm-up puis une synthèse française PCM à `24 000 Hz` avec `MINA_OFFLINE=true`, sans microphone ni téléchargement.
 - [x] Garde-fou vision locale : Gemma image est désactivé par défaut et ne peut être réactivé qu'après une sonde image réussie ; les captures webcam PC et caméra téléphone ne sont pas supprimées.
 - [x] Indexation initiale Mina Code : corpus réel de `935` fichiers indexé en `23 481 ms`, sous l'objectif historique `<30 s`.
 - [x] Avatar VRM : explicitement hors périmètre ; aucun asset, modèle, dépendance ou distribution VRM ne doit être ajouté.
@@ -16,7 +17,7 @@
 ### Runtime local
 
 - [ ] **Vision Mina par webcam PC et caméra téléphone** — les deux captures sont présentes dans le code (`getUserMedia` côté PC, flux Android signé côté téléphone), mais aucune recette matérielle n'a été exécutée. Gemma a de nouveau crashé sur un JPEG synthétique 1×1 même avec `4096` tokens et un seul flux (`18446744072635812000`); `LM_STUDIO_VISION_ENABLED=false` empêche désormais cette route locale de recevoir une image. Réactiver seulement après une sonde image réussie avec un modèle stable, puis tester la permission webcam et un téléphone Android autorisé. L'unique autre modèle vision inventorié est GLM‑4.6V Flash (`7,95 GiB`); son estimation à `4096`/`1` est `7,83 Gio` alors que la mémoire libre observée est `0,68 Gio`, donc il n'a pas été chargé.
-- [ ] **Voix locale complète hors réseau** — la recette requiert microphone → STT local → modèle → TTS, réseau désactivé. Kokoro n'est pas présent dans le cache local; le dernier relevé mémoire, avec Gemma chargé, est `0,68 Gio` libres. Aucun téléchargement, chargement de Kokoro ni test microphone n'a été lancé.
+- [ ] **Voix locale complète hors réseau** — Kokoro TTS est maintenant prouvé localement hors réseau. Il reste microphone → STT local → Gemma → Kokoro, réseau désactivé. `MINA_STT_ENABLED=false` et aucun cache Whisper/Xenova n'a été trouvé dans les emplacements configurés/attendus ; le code ne lira désormais qu'un modèle STT déjà local en mode hors-ligne. Aucun téléchargement, transcription réelle ni test microphone n'a été lancé.
 - [ ] **Packaging voix locale** — décision de distribution eSpeak/Kokoro requise avant publication de ce chemin.
 
 ### Contrats produit à choisir avant code

@@ -6,7 +6,7 @@
 //   • désactivé (par défaut) => null, et la perception garde sa note « transcription hors-ligne
 //     non activée » — jamais un semblant ;
 //   • premier usage : le modèle Whisper est téléchargé UNE fois dans le cache local par
-//     transformers.js — refusé si MINA_OFFLINE=true (on ne télécharge pas en douce hors-ligne) ;
+//     transformers.js. En mode hors-ligne, seuls les fichiers déjà présents sont admis ;
 //   • échec de décodage/transcription => erreur propagée, la perception la journalise et retombe
 //     sur la note honnête.
 
@@ -17,7 +17,7 @@ export function createVoiceTranscriber({
   offline = false,
   model = DEFAULT_MODEL,
   decodeAudio, // async ({ bytesBase64, mimeType }) => { pcm: Float32Array, sampleRate: number }
-  loadPipeline, // async (model) => (pcm|{...}) => { text } — chargé UNE fois puis réutilisé
+  loadPipeline, // async (model, { localFilesOnly }) => (pcm|{...}) => { text } — chargé UNE fois puis réutilisé
   logger = null,
 } = {}) {
   if (!enabled) return null; // la perception affiche alors l'état honnête « non activée »
@@ -28,9 +28,8 @@ export function createVoiceTranscriber({
   let pipelinePromise = null;
   const pipelineOnce = () => {
     pipelinePromise ??= (async () => {
-      if (offline) throw new Error('stt_modele_absent_mode_hors_ligne');
       const started = Date.now();
-      const pipeline = await loadPipeline(model);
+      const pipeline = await loadPipeline(model, { localFilesOnly: offline });
       logger?.append?.({ event: 'stt_local_charge', model, loadMs: Date.now() - started });
       return pipeline;
     })();
