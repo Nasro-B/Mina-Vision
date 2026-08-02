@@ -17,6 +17,7 @@ export function createLmStudioProvider({
 } = {}) {
   if (!model) throw new TypeError('lm_studio_model_required');
   const root = baseURL.replace(/\/$/u, '');
+  const nativeModelsUrl = new URL('/api/v1/models', `${root}/`).href;
   let lastHealth = Object.freeze({ available: false, reason: 'not_probed' });
 
   async function request(url, options = {}, externalSignal) {
@@ -46,11 +47,15 @@ export function createLmStudioProvider({
 
   async function probe({ signal } = {}) {
     try {
-      const response = await request(`${root}/models`, {}, signal);
+      const response = await request(nativeModelsUrl, {}, signal);
       if (!response.ok) throw new Error(`http_${response.status}`);
       const body = await response.json();
-      const models = (body.data ?? []).map(({ id }) => id).filter(Boolean);
-      lastHealth = Object.freeze({ available: true, models: Object.freeze(models) });
+      const models = (body.models ?? [])
+        .filter(({ key, type, loaded_instances: instances }) => key && type === 'llm' && Array.isArray(instances) && instances.length > 0)
+        .map(({ key }) => key);
+      lastHealth = models.includes(model)
+        ? Object.freeze({ available: true, models: Object.freeze(models) })
+        : Object.freeze({ available: false, reason: `local_model_unavailable:${model}` });
     } catch (error) {
       lastHealth = Object.freeze({ available: false, reason: error.message });
     }
@@ -61,6 +66,7 @@ export function createLmStudioProvider({
     const state = await probe({ signal });
     if (!state.available) {
       if (['local_runtime_aborted', 'local_runtime_timeout'].includes(state.reason)) throw new Error(state.reason);
+      if (state.reason?.startsWith('local_model_unavailable:')) throw new Error(state.reason);
       throw new Error('local_runtime_unavailable');
     }
     if (!state.models.includes(model)) throw new Error(`local_model_unavailable:${model}`);
