@@ -424,3 +424,11 @@
 - capacity: la seule autre vision locale inventoriée (`zai-org/glm-4.6v-flash`) pèse `7.95 GiB`; la mémoire physique libre mesurée était `7.74 GiB` avant surcharge. Elle n'a pas été chargée ni configurée.
 - manual/live: aucune caméra, photo utilisateur, microphone, fournisseur cloud ou fichier persistant n'a été utilisé; le JPEG de sonde est resté en mémoire.
 - remaining: la génération texte/embedding est prouvée localement et Gemma est rechargé; la vision reste dégradée tant qu'un modèle vision stable adapté à la capacité machine n'est pas disponible et validé sur une sonde dédiée.
+
+## 2026-08-02 08:51 | decision/product | avatar VRM explicitement hors périmètre
+
+- source: décision explicite de Nasro : « pas de Avatar VRM ».
+- files: `src/ui/main.mjs`, `tests/main-domain-composition-contract.test.mjs` et ce journal.
+- proof: le catalogue runtime conserve `avatar.visage` à `unavailable`, avec la raison exacte `vrm_avatar_out_of_scope`; le contrat ciblé passe (`1` fichier / `3` tests).
+- effect: les mentions historiques d'un asset VRM sous licence ou d'un choix d'asset VRM ne sont plus des tâches ouvertes. Aucun modèle, asset, dépendance ou distribution VRM ne sera ajouté.
+- remaining: aucun travail VRM. Une éventuelle autre technologie d'avatar exigerait une nouvelle décision produit explicite.
