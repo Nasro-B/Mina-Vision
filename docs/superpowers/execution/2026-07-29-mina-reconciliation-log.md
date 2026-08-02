@@ -485,3 +485,11 @@
 - STT: la configuration actuelle est `MINA_STT_ENABLED=false`, modèle `Xenova/whisper-small`. Aucun fichier Whisper/Xenova n'a été trouvé dans les emplacements de cache configurés ou attendus; aucune transcription réelle, aucun téléchargement et aucun microphone n'ont été utilisés.
 - gates: `npm run verify:release` passe : `419` fichiers / `3 390` tests unitaires, `18` / `49` intégration, smoke Electron et SQLite/Electron. Le diagnostic runtime conserve correctement la vision Gemma désactivée et Firebase dégradé pour le compte de service inter-projet.
 - remaining: la bouche TTS locale est prouvée. Il reste à provisionner explicitement Whisper ou un autre modèle STT local, activer le STT, puis réaliser une recette microphone → STT local → Gemma → Kokoro avec le réseau désactivé. Le cache TTS actuel sous `node_modules` demeure aussi un sujet de packaging, distinct de la preuve runtime.
+
+## 2026-08-02 10:49 | deploy/firebase | règles Storage publiées et refus anonyme prouvé
+
+- command: pré-vol Firebase CLI sur `mina.vision.ai@gmail.com` / projet `mina-vision`; `firebase deploy --only storage --project mina-vision --non-interactive`; lectures Firebase Rules API et requête anonyme `GET /v0/b/mina-vision.firebasestorage.app/o`.
+- deploy: la CLI a compilé `firebase.storage.rules`, activé/vérifié `firebasestorage.googleapis.com`, puis publié la release Storage. La release active est `projects/mina-vision/releases/firebase.storage/mina-vision.firebasestorage.app`, ruleset `82df4019-5889-4a38-b72c-3589c359c014`, mise à jour `2026-08-02T09:46:54.693393Z`.
+- proof: le SHA-256 distant et local est exactement `4A7B7E46E9DE1CA3382497B7C1BA2B8A17510983DBC027010E111A7A95D65B53`; la lecture anonyme de la liste d'objets retourne `403 Permission denied`. Aucun objet Storage ni utilisateur Auth n'a été créé. Firestore n'a pas été modifié.
+- credentials: l'inventaire local des JSON ignore les secrets et ne trouve aucun compte de service `mina-vision`; le seul JSON de service présent déclare `mina-vission` et reste refusé par Mina. Aucune clé n'a été créée.
+- remaining: fournir ou autoriser la création d'une clé locale ignorée du compte `firebase-adminsdk-fbsvc@mina-vision.iam.gserviceaccount.com`, ou fournir un endpoint de jeton équivalent, puis une recette cloud éphémère Auth/Firestore/Storage. La release Firestore existante reste inchangée.
