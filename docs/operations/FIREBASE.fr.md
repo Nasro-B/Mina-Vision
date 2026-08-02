@@ -22,6 +22,9 @@ Firebase remplit deux rôles strictement séparés dans Mina Vision : **transpor
 ## Configuration
 
 - `.env.example` ne documente que des identifiants publics Firebase vides — jamais de clé de service.
+- `firebase.json` et `.firebaserc` ciblent explicitement le projet `mina-vision` et les règles versionnées `firebase/firestore.rules` / `firebase.storage.rules`.
+- Pour une recette locale sans écrire dans le cloud : `firebase emulators:exec --only auth,firestore,storage "<commande de test>"`. Firebase CLI 15 requiert un JDK 21 ou supérieur pour l’émulateur Firestore.
+- Un déploiement de règles est une action distante distincte : `firebase deploy --only firestore:rules,storage`. Il ne doit être exécuté qu’après validation explicite de la configuration du projet et des règles à publier.
 - Aucun test de ce dépôt n'effectue d'appel Firebase réel. Tous les tests (unitaires et d'intégration) utilisent un backend factice injecté.
 - Firebase reste **entièrement optionnel** : `npm run rebuild:native`, l'assemblage Android (`assembleDebug`) et les tests unitaires fonctionnent sans `google-services.json`.
 - Aucun test live n'est exécuté avant que Nasro ait créé explicitement le projet Firebase et fourni sa configuration.
