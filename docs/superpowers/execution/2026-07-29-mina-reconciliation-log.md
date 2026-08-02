@@ -406,3 +406,21 @@
 - gates: `npm run test:unit` a passé `417` fichiers / `3377` tests; `npm run test:integration` a passé `18` fichiers / `49` tests; les smoke Electron et SQLite/Electron ont passé; `git diff --check` a passé.
 - manual/live: aucune règle, base, utilisateur Auth, document Firestore, bucket ou fichier cloud n'a été créé, modifié ou supprimé.
 - remaining: installer/mettre à disposition un JDK 21 pour l'Emulator, puis obtenir l'autorisation explicite juste avant un test cloud qui crée une session/document ou un déploiement de règles. L'état des règles cloud et des fournisseurs Auth n'est pas affirmé sans cette lecture ou ce test dédié.
+
+## 2026-08-02 08:34 | test/firebase | Emulator et règles locales exécutés de bout en bout
+
+- files: `scripts/firebase-emulator-smoke.mjs`, `scripts/run-firebase-emulator-smoke.ps1`, `package.json`, `tests/firebase-deployment-config.test.mjs` et les deux guides Firebase.
+- prerequisite: Eclipse Temurin JDK `21.0.12.8` a été installé via winget; le hash du MSI a été vérifié par winget. Le runner choisit explicitement un JDK 21 pour éviter le Java 17 hérité du processus courant.
+- TDD: la première recette locale a rejeté correctement l'écriture Firestore invalide, mais l'assertion ne reconnaissait pas le code Storage réel `storage/unauthorized`; après correction minimale de l'assertion, la même recette a passé. Le corpus Firebase ciblé a passé `5` fichiers / `20` tests.
+- live local: `npm run test:firebase:emulator` a démarré Auth, Firestore et Storage sur `127.0.0.1`, puis a confirmé `{"firestore":"rules_enforced","storage":"rules_enforced","network":"loopback_only"}`. La donnée relay valide et l'objet du propriétaire ont été supprimés dans le `finally`; le contenu de l'Emulator reste éphémère à l'arrêt.
+- manual/live: aucune ressource Firebase distante n'a été lue, créée, modifiée ou supprimée par cette recette; aucune règle cloud n'a été déployée.
+- remaining: une preuve cloud reste distincte et doit être autorisée immédiatement avant de créer une session/document distant ou de déployer les règles. Le projet, l'app et la base ont seulement été inventoriés en lecture seule dans l'entrée précédente.
+
+## 2026-08-02 08:34 | runtime/vision | Gemma texte récupéré, vision locale crashée de façon reproductible
+
+- files: aucun fichier source modifié; modèles LM Studio et observation locale uniquement.
+- command: `lms load google/gemma-4-e2b --yes`; `lms load text-embedding-nomic-embed-text-v1.5 --yes`; sonde Mina `local-only` sur JPEG synthétique 1×1; rechargement Gemma; sonde texte Mina; `lms ps`; `npm run verify`.
+- proof: Gemma et Nomic ont été chargés et le diagnostic Mina a vu les trois modèles configurés disponibles. La route vision Mina a échoué sur une seule image synthétique avec `camera_vision_all_providers_failed` puis `The model has crashed without additional information` et le code de sortie `18446744072635812000`; Gemma avait disparu de `lms ps`. Après rechargement, la même intégration Mina texte a retourné exactement `TEXT_LOCAL_OK` (usage final `25` / `134` / `159`). Aucun second essai vision n'a été lancé.
+- capacity: la seule autre vision locale inventoriée (`zai-org/glm-4.6v-flash`) pèse `7.95 GiB`; la mémoire physique libre mesurée était `7.74 GiB` avant surcharge. Elle n'a pas été chargée ni configurée.
+- manual/live: aucune caméra, photo utilisateur, microphone, fournisseur cloud ou fichier persistant n'a été utilisé; le JPEG de sonde est resté en mémoire.
+- remaining: la génération texte/embedding est prouvée localement et Gemma est rechargé; la vision reste dégradée tant qu'un modèle vision stable adapté à la capacité machine n'est pas disponible et validé sur une sonde dédiée.

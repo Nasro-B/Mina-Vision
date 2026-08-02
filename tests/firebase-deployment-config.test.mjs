@@ -21,4 +21,16 @@ describe('Firebase deployment configuration', () => {
       singleProjectMode: true,
     });
   });
+
+  it('wires a JDK 21 loopback-only emulator recipe', async () => {
+    const packageJson = await readJson('../package.json');
+    const runner = await readFile(new URL('../scripts/run-firebase-emulator-smoke.ps1', import.meta.url), 'utf8');
+    const smoke = await readFile(new URL('../scripts/firebase-emulator-smoke.mjs', import.meta.url), 'utf8');
+
+    expect(packageJson.scripts['test:firebase:emulator']).toBe('powershell -NoProfile -File scripts/run-firebase-emulator-smoke.ps1');
+    expect(runner).toContain("-like 'jdk-21*'");
+    expect(runner).toContain("--only 'auth,firestore,storage'");
+    expect(smoke).toContain("host: '127.0.0.1'");
+    expect(smoke).toContain('firebase_emulator_environment_required');
+  });
 });
