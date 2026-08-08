@@ -154,7 +154,7 @@
 - StoredVoiceAttachment has mediaId, mime, sizeBytes, sha256, chunkCount, chunkBytes, durationMs and withDeliveryPlan(eventIds).
 - ChatRepository.beginVoiceCapture(threadId) creates the sink. ChatRepository.enqueueVoice(capture) returns mediaId after every event/outbox row exists.
 
-- [ ] **Step 1: Write failing encrypted-storage tests**
+- [x] **Step 1: Write failing encrypted-storage tests**
 
     @Test
     fun appendPersistsCiphertextOnlyAndClearsCallerBuffer() = runTest {
@@ -184,13 +184,13 @@
         assertEquals(emptyList<File>(), root.listFiles()?.toList() ?: emptyList())
     }
 
-- [ ] **Step 2: Run the new tests red**
+- [x] **Step 2: Run the new tests red**
 
     Run: android\gradlew.bat :core:chat:testDebugUnitTest --tests "*EncryptedAttachmentStoreTest" --tests "*ChatRepositoryTest"
 
     Expected: compilation fails because the attachment store and voice repository APIs do not exist.
 
-- [ ] **Step 3: Implement ciphertext-only store and outbox bridge**
+- [x] **Step 3: Implement ciphertext-only store and outbox bridge**
 
     Use context.noBackupFilesDir/mina-chat-attachments. A capture directory has only manifest.bin and chunk-000000.bin names. Every append uses AES/GCM/NoPadding with a fresh 12-byte nonce and AAD mina-voice-v1|mediaId|index. The manifest uses AAD mina-voice-v1|mediaId|manifest and stores threadId, key epoch, digest, sizes, duration and optional immutable event IDs as ciphertext.
 
@@ -310,7 +310,7 @@
 
     Replace incoming temporary-file playback with PcmVoicePlayer. It accepts only the canonical MIME and writes to AudioTrack MODE_STREAM. It fills the returned ByteArray in finally. A legacy audio/mp4 bubble displays honest unavailable legacy playback and never writes a temporary file.
 
-- [ ] **Step 4: Run Android tests green**
+- [x] **Step 4: Run Android tests green**
 
     Run: android\gradlew.bat :feature:voice:testDebugUnitTest :feature:chat:testDebugUnitTest :feature:voice:assembleDebugAndroidTest
 

@@ -96,7 +96,7 @@ interface ChatDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun enqueue(row: OutboxRow): Long
 
-    @Query("SELECT * FROM chat_outbox WHERE next_attempt_at_ms <= :nowMs ORDER BY queued_at_ms ASC LIMIT :limit")
+    @Query("SELECT * FROM chat_outbox WHERE next_attempt_at_ms <= :nowMs ORDER BY queued_at_ms ASC, event_id ASC LIMIT :limit")
     suspend fun dueOutbox(nowMs: Long, limit: Int): List<OutboxRow>
 
     @Query("SELECT COUNT(*) FROM chat_outbox")

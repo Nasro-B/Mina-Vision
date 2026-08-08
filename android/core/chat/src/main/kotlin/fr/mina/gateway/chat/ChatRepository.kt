@@ -7,9 +7,12 @@ import fr.mina.gateway.protocol.ChatPayloadCodec
 import fr.mina.gateway.protocol.MediaAssembler
 import fr.mina.gateway.protocol.MediaChunker
 import fr.mina.gateway.protocol.MonotonicUlid
+import fr.mina.gateway.protocol.VoicePcmFormat
 import org.json.JSONObject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.security.PublicKey
 import java.util.Base64
 import javax.crypto.Cipher
@@ -66,6 +69,8 @@ class ChatRepository(
     private val verifyKey: PublicKey? = null,
     /** Le PC appairé sait-il TRAITER les pièces jointes (payload v2) ? Négocié au handshake. */
     private val peerAcceptsMedia: () -> Boolean = { true },
+    /** Capture PCM chiffrée hors Room ; absente dans les tests/consommateurs non audio. */
+    private val attachmentStore: EncryptedAttachmentStore? = null,
 ) {
     companion object {
         private const val TTL_MS = 30L * 24 * 60 * 60 * 1_000
@@ -74,6 +79,9 @@ class ChatRepository(
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val TAG_BITS = 128
     }
+
+    /** Sérialise la réservation et la reprise des ULID d'une même note vocale. */
+    private val voiceEnqueueMutex = Mutex()
 
     /**
      * Compose, chiffre et met en file un message sortant. Retourne l'identifiant durable :
@@ -105,13 +113,78 @@ class ChatRepository(
         return piece.mediaId
     }
 
+    /** Ouvre une capture PCM dont les paquets sont chiffrés avant toute écriture locale. */
+    fun beginVoiceCapture(threadId: String): EncryptedVoiceAttachmentSink =
+        attachmentStore?.createVoiceCapture(threadId)
+            ?: throw IllegalStateException("chat_capture_indisponible")
+
+    /**
+     * Transforme une capture déjà chiffrée en méta puis chunks E2EE. Les ULID sont écrits dans le
+     * manifeste AVANT le premier événement ; une reprise après erreur ne peut donc pas en créer de
+     * nouveaux pour les mêmes morceaux.
+     */
+    suspend fun enqueueVoice(capture: StoredVoiceAttachment): String = voiceEnqueueMutex.withLock {
+        if (!peerAcceptsMedia()) throw IllegalStateException("chat_pc_sans_pieces_jointes")
+        require(capture.mime == VoicePcmFormat.MIME) { "voice_mime_invalide" }
+
+        val plannedCapture = if (capture.deliveryEventIds.isEmpty()) {
+            capture.withDeliveryPlan(List(capture.chunkCount + 1) { ulid.next() })
+        } else {
+            require(capture.deliveryEventIds.size == capture.chunkCount + 1) { "voice_plan_livraison_invalide" }
+            capture
+        }
+        val missingEventIds = LinkedHashSet<String>()
+        for (eventId in plannedCapture.deliveryEventIds) {
+            if (dao.findEvent(eventId) == null) missingEventIds += eventId
+        }
+        require(dao.outboxSize() + missingEventIds.size < MAX_OUTBOX) { "chat_outbox_pleine" }
+
+        val meta = MediaChunker.encodeMeta(
+            mediaId = plannedCapture.mediaId,
+            mime = plannedCapture.mime,
+            sizeBytes = plannedCapture.sizeBytes,
+            sha256 = plannedCapture.sha256,
+            chunkCount = plannedCapture.chunkCount,
+            chunkBytes = plannedCapture.chunkBytes,
+            extraMeta = mapOf("durationMs" to plannedCapture.durationMs),
+        )
+        try {
+            val metaEventId = plannedCapture.deliveryEventIds.first()
+            if (metaEventId in missingEventIds) {
+                sealAndEnqueue(plannedCapture.threadId, "message", meta, eventId = metaEventId)
+            }
+        } finally {
+            meta.fill(0)
+        }
+
+        for (index in 0 until plannedCapture.chunkCount) {
+            val eventId = plannedCapture.deliveryEventIds[index + 1]
+            if (eventId !in missingEventIds) continue
+            val chunk = plannedCapture.readChunk(index)
+            var payload: ByteArray? = null
+            try {
+                payload = MediaChunker.encodeChunk(plannedCapture.mediaId, index, chunk)
+                sealAndEnqueue(plannedCapture.threadId, "stream", payload, eventId = eventId)
+            } finally {
+                chunk.fill(0)
+                payload?.fill(0)
+            }
+        }
+        plannedCapture.deletePersistedCapture()
+        plannedCapture.mediaId
+    }
+
     /** Chiffre+signe un payload (octets déjà encodés) et le met en file. Cœur commun texte/média. */
-    private suspend fun sealAndEnqueue(threadId: String, routingClass: String, payload: ByteArray): String {
+    private suspend fun sealAndEnqueue(
+        threadId: String,
+        routingClass: String,
+        payload: ByteArray,
+        eventId: String = ulid.next(),
+    ): String {
         require(dao.outboxSize() < MAX_OUTBOX) { "chat_outbox_pleine" }
         val epoch = currentEpoch()
-        val epochKey = epochKeyProvider(epoch) ?: throw IllegalStateException("chat_coffre_verrouille")
+        val epochKey = epochKeyProvider(epoch)?.copyOf() ?: throw IllegalStateException("chat_coffre_verrouille")
         val createdAt = now()
-        val eventId = ulid.next()
         val sequence = (dao.readThread(threadId).maxOfOrNull { it.deviceSequence } ?: 0L) + 1
 
         val header = ChatEvent(
@@ -131,31 +204,39 @@ class ChatRepository(
         )
 
         val nonce = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(epochKey, "AES"), GCMParameterSpec(TAG_BITS, nonce))
-        cipher.updateAAD(ChatBinaryCodec.encodeHeader(header))
-        val sealed = cipher.doFinal(payload)
-        val encoder = Base64.getEncoder()
+        var sealed: ByteArray? = null
+        try {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(epochKey, "AES"), GCMParameterSpec(TAG_BITS, nonce))
+            cipher.updateAAD(ChatBinaryCodec.encodeHeader(header))
+            val ciphertext = cipher.doFinal(payload)
+            sealed = ciphertext
+            val encoder = Base64.getEncoder()
 
-        val sealedEvent = header.copy(
-            payloadCiphertext = encoder.encodeToString(sealed.copyOfRange(0, sealed.size - 16)),
-            nonce = encoder.encodeToString(nonce),
-            authTag = encoder.encodeToString(sealed.copyOfRange(sealed.size - 16, sealed.size)),
-        )
-        val signed = sealedEvent.copy(signature = signEvent?.invoke(sealedEvent) ?: "")
+            val sealedEvent = header.copy(
+                payloadCiphertext = encoder.encodeToString(ciphertext.copyOfRange(0, ciphertext.size - 16)),
+                nonce = encoder.encodeToString(nonce),
+                authTag = encoder.encodeToString(ciphertext.copyOfRange(ciphertext.size - 16, ciphertext.size)),
+            )
+            val signed = sealedEvent.copy(signature = signEvent?.invoke(sealedEvent) ?: "")
 
-        dao.enqueueOutgoing(
-            event = signed.toRow(deliveryState = DeliveryState.LOCAL_PENDING, fromAssistant = false),
-            outbox = OutboxRow(
-                eventId = eventId,
-                threadId = threadId,
-                queuedAtMs = createdAt,
-                attemptCount = 0,
-                nextAttemptAtMs = createdAt,
-                lastError = null,
-            ),
-        )
-        return eventId
+            dao.enqueueOutgoing(
+                event = signed.toRow(deliveryState = DeliveryState.LOCAL_PENDING, fromAssistant = false),
+                outbox = OutboxRow(
+                    eventId = eventId,
+                    threadId = threadId,
+                    queuedAtMs = createdAt,
+                    attemptCount = 0,
+                    nextAttemptAtMs = createdAt,
+                    lastError = null,
+                ),
+            )
+            return eventId
+        } finally {
+            epochKey.fill(0)
+            nonce.fill(0)
+            sealed?.fill(0)
+        }
     }
 
     /** Ingère un événement reçu — la déduplication par eventId rend l'appel idempotent. */

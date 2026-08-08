@@ -10,6 +10,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.io.File
 import java.security.KeyFactory
 import java.security.PublicKey
 import java.security.spec.X509EncodedKeySpec
@@ -30,6 +31,12 @@ class ChatEngine private constructor(context: Context) {
     private val database = Room.databaseBuilder(appContext, ChatDatabase::class.java, ChatDatabase.NAME)
         .build()
 
+    private val attachmentStore = EncryptedAttachmentStore(
+        root = File(appContext.noBackupFilesDir, "mina-chat-attachments"),
+        epochKeyProvider = { epoch -> vault.epochKey(epoch) },
+        currentEpoch = { vault.currentEpoch() },
+    )
+
     val deviceId: String = fr.mina.gateway.transport.DeviceIdentityStore(appContext).deviceId()
 
     val repository = ChatRepository(
@@ -39,6 +46,7 @@ class ChatEngine private constructor(context: Context) {
         currentEpoch = { vault.currentEpoch() },
         signEvent = { event -> signer.sign(event) },
         peerAcceptsMedia = { settings.pcSupportsMedia() },
+        attachmentStore = attachmentStore,
     )
 
     /** Clé publique du PC telle qu'enregistrée à l'appairage — null tant qu'il n'y a pas d'appairage. */

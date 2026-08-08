@@ -2,6 +2,7 @@ package fr.mina.gateway.chat
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import fr.mina.gateway.protocol.VoicePcmFormat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -14,6 +15,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
+import java.io.IOException
+import java.nio.file.Files
 import java.security.SecureRandom
 
 /**
@@ -184,6 +188,45 @@ class ChatRepositoryTest {
     }
 
     @Test
+    fun `la meme reprise de note vocale ne duplique pas les event ids`() = runTest {
+        val root = Files.createTempDirectory("mina-voice-retry-test-").toFile()
+        try {
+            val failingDao = FailingOutgoingDao(db.chatDao())
+            val store = EncryptedAttachmentStore(
+                root = root,
+                epochKeyProvider = { epoch -> if (epoch == 1) epochKey.copyOf() else null },
+                currentEpoch = { 1 },
+            )
+            val repo = ChatRepository(
+                dao = failingDao,
+                deviceId = "device-samsung",
+                now = { clock },
+                epochKeyProvider = { epoch -> if (locked || epoch != 1) null else epochKey },
+                attachmentStore = store,
+            )
+            val capture = repo.beginVoiceCapture("thread-main")
+            capture.append(ByteArray(VoicePcmFormat.CHUNK_BYTES) { 1 }, VoicePcmFormat.CHUNK_BYTES)
+            capture.append(ByteArray(64) { 2 }, 64)
+            val completed = capture.complete(durationMs = 1_000)
+
+            failingDao.failAfterSuccessfulOutgoingWrites = 1
+            val error = runCatching { repo.enqueueVoice(completed) }.exceptionOrNull()
+            assertTrue(error is IOException)
+            assertEquals(3, completed.deliveryEventIds.size)
+            assertEquals(1, root.listFiles()?.size)
+
+            failingDao.failAfterSuccessfulOutgoingWrites = null
+            repo.enqueueVoice(completed)
+
+            assertEquals(3, db.chatDao().readThread("thread-main").map { it.eventId }.distinct().size)
+            assertEquals(3, db.chatDao().dueOutbox(Long.MAX_VALUE, 10).map { it.eventId }.distinct().size)
+            assertEquals(0, root.listFiles()?.size)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun `W6 - media recu du PC - chunks masques du fil, bulle media presente, octets reassembles`() = runTest {
         // Simule la réception PC : on fabrique méta + chunks avec le chunker (payload v2), on les
         // scelle comme le PC (même AES-GCM/AAD via sendMedia du dépôt n'est pas utilisable ici car
@@ -225,5 +268,33 @@ class ChatRepositoryTest {
         db.chatDao().rescheduleOutbox(eventId, attempts = 1, nextAtMs = clock + 60_000, error = "hors_ligne")
         assertTrue(db.chatDao().dueOutbox(clock, limit = 10).isEmpty())
         assertEquals(1, db.chatDao().dueOutbox(clock + 60_000, limit = 10).size)
+    }
+
+    @Test
+    fun `l outbox ordonne les evenements de la meme milliseconde par event id`() = runTest {
+        db.chatDao().enqueue(OutboxRow("01ZZZZZZZZZZZZZZZZZZZZZZZZ", "thread-main", clock, 0, clock, null))
+        db.chatDao().enqueue(OutboxRow("01000000000000000000000000", "thread-main", clock, 0, clock, null))
+
+        assertEquals(
+            listOf("01000000000000000000000000", "01ZZZZZZZZZZZZZZZZZZZZZZZZ"),
+            db.chatDao().dueOutbox(clock, 10).map { it.eventId },
+        )
+    }
+
+    private class FailingOutgoingDao(
+        private val delegate: ChatDao,
+    ) : ChatDao by delegate {
+        var failAfterSuccessfulOutgoingWrites: Int? = null
+        private var successfulOutgoingWrites = 0
+
+        override suspend fun enqueueOutgoing(event: ChatEventRow, outbox: OutboxRow) {
+            delegate.enqueueOutgoing(event, outbox)
+            successfulOutgoingWrites += 1
+            if (failAfterSuccessfulOutgoingWrites != null &&
+                successfulOutgoingWrites > failAfterSuccessfulOutgoingWrites!!
+            ) {
+                throw IOException("injected_outgoing_write_failure")
+            }
+        }
     }
 }
