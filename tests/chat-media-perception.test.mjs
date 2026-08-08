@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createMediaPerception } from '../src/chat/media-perception.mjs';
 
 function harness(overrides = {}) {
@@ -49,6 +49,25 @@ describe('createMediaPerception', () => {
     const result = await perception.perceive({ deviceId: 'device-abc', eventId: 'evt-3', mediaId: 'm3', mime: 'image/jpeg', sizeBytes: 512 });
     expect(result.perceived).toBe(false);
     expect(remembered[0].assistantMessage).toMatch(/Analyse visuelle indisponible/);
+  });
+
+  it('image : utilise l’OCR local si la vision échoue et étiquette honnêtement le texte détecté', async () => {
+    const ocrRecognize = vi.fn(async () => ({
+      text: 'Rendez-vous à 14 h',
+      blocks: [{ text: 'Rendez-vous à 14 h', box: [8, 12, 190, 36], confidence: 0.94 }],
+      modelId: 'tesseract:eng',
+    }));
+    const { perception, remembered, notified } = harness({
+      visionAnalyze: async () => { throw new Error('vision_indisponible'); },
+      ocrRecognize,
+    });
+
+    const result = await perception.perceive({ deviceId: 'device-abc', eventId: 'evt-ocr', mediaId: 'm-ocr', mime: 'image/jpeg', sizeBytes: 2_048 });
+
+    expect(result).toMatchObject({ perceived: true, caption: 'Rendez-vous à 14 h', source: 'ocr' });
+    expect(remembered[0].assistantMessage).toBe('Texte détecté localement : Rendez-vous à 14 h');
+    expect(notified[0]).toMatchObject({ type: 'chat_media_received', kind: 'image', caption: 'Rendez-vous à 14 h', source: 'ocr' });
+    expect(ocrRecognize).toHaveBeenCalledWith(expect.objectContaining({ mimeType: 'image/jpeg' }));
   });
 
   it('note vocale : transcription utilisée quand présente', async () => {

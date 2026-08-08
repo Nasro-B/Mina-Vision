@@ -110,6 +110,7 @@ import { createMediaAssembler } from '../chat/media-assembler.mjs';
 import { createMediaStore } from '../chat/media-store.mjs';
 import { createMediaPerception } from '../chat/media-perception.mjs';
 import { createMediaPurge } from '../chat/media-purge.mjs';
+import { createTesseractOcrProvider } from '../providers/tesseract-ocr.mjs';
 import { createVoiceTranscriber } from '../chat/voice-transcriber.mjs';
 import { createCallPolicy } from '../telephony/call-policy.mjs';
 import { createChatResponder } from '../devices/chat-responder.mjs';
@@ -2788,6 +2789,9 @@ app.whenReady().then(async () => {
       // W7 — perception des médias : à la complétion, Mina « voit » l'image (fournisseur de vision
       // réutilisé de la caméra) et retient l'échange en mémoire. Honnête : si la vision/STT n'est
       // pas configurée ou échoue, la note le dit, jamais une légende inventée.
+      // Dernier recours image : Tesseract local, sans réseau ni téléchargement ; il ne démarre
+      // qu'après un échec/une indisponibilité de la vision.
+      const chatMediaOcr = createTesseractOcrProvider();
       const chatMediaPerception = createMediaPerception({
         loadMedia: (mediaId) => chatMediaStore.load(mediaId),
         rememberExchange: (entry) => memoryController.rememberChatExchange(entry),
@@ -2798,6 +2802,7 @@ app.whenReady().then(async () => {
           }
           return cameraVision.analyze({ image, mimeType, prompt });
         },
+        ocrRecognize: ({ image, mimeType }) => chatMediaOcr.recognize({ image, mimeType }),
         transcribe: voiceTranscriber,
         notify: (event) => send('mina:event', event),
         logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_media', entry) },

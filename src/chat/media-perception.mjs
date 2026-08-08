@@ -29,6 +29,7 @@ export function createMediaPerception({
   loadMedia,
   rememberExchange,
   visionAnalyze = null,
+  ocrRecognize = null,
   transcribe = null,
   notify = null,
   logger = null,
@@ -51,13 +52,31 @@ export function createMediaPerception({
 
     let caption = null;
     let understood = false;
+    let source = null;
     try {
-      if (kind === 'image' && typeof visionAnalyze === 'function') {
-        caption = await callText(visionAnalyze, { image: media.bytes, mimeType: media.mime, prompt: VISION_PROMPT });
-        understood = caption.length > 0;
+      if (kind === 'image') {
+        if (typeof visionAnalyze === 'function') {
+          try {
+            caption = await callText(visionAnalyze, { image: media.bytes, mimeType: media.mime, prompt: VISION_PROMPT });
+            understood = caption.length > 0;
+            if (understood) source = 'vision';
+          } catch (error) {
+            logger?.append?.({ event: 'chat_media_perception_echec', mediaId, kind, source: 'vision', error: String(error?.message ?? error).slice(0, 200) });
+          }
+        }
+        if (!understood && typeof ocrRecognize === 'function') {
+          try {
+            caption = await callText(ocrRecognize, { image: media.bytes, mimeType: media.mime });
+            understood = caption.length > 0;
+            if (understood) source = 'ocr';
+          } catch (error) {
+            logger?.append?.({ event: 'chat_media_perception_echec', mediaId, kind, source: 'ocr', error: String(error?.message ?? error).slice(0, 200) });
+          }
+        }
       } else if (kind === 'voice' && typeof transcribe === 'function') {
         caption = await callText(transcribe, { audio: media.bytes, mimeType: media.mime });
         understood = caption.length > 0;
+        if (understood) source = 'transcription';
       }
     } catch (error) {
       // L'analyse a le droit d'échouer (identifiants manquants, réseau, modèle non provisionné) :
@@ -69,16 +88,17 @@ export function createMediaPerception({
       if (Buffer.isBuffer(media.bytes)) media.bytes.fill(0);
     }
 
-    const assistant = buildAssistantNote(kind, understood, caption);
+    const assistant = buildAssistantNote(kind, understood, caption, source);
     await tryRemember({ deviceId, eventId, kind, sizeBytes, mime, assistant });
     logger?.append?.({ event: 'chat_media_perception', mediaId, kind, understood });
-    notify?.({ type: 'chat_media_received', mediaId, mime, kind, caption: understood ? caption : null, readable: true });
-    return Object.freeze({ mediaId, kind, perceived: understood, caption: understood ? caption : null });
+    notify?.({ type: 'chat_media_received', mediaId, mime, kind, caption: understood ? caption : null, source: understood ? source : null, readable: true });
+    return Object.freeze({ mediaId, kind, perceived: understood, caption: understood ? caption : null, source: understood ? source : null });
   }
 
-  function buildAssistantNote(kind, understood, caption) {
+  function buildAssistantNote(kind, understood, caption, source) {
     if (kind === 'image') {
-      return understood ? `Je vois : ${caption}` : 'Image reçue et gardée. Analyse visuelle indisponible pour l’instant.';
+      if (!understood) return 'Image reçue et gardée. Analyse visuelle indisponible pour l’instant.';
+      return source === 'ocr' ? `Texte détecté localement : ${caption}` : `Je vois : ${caption}`;
     }
     if (kind === 'voice') {
       return understood ? `Note vocale : « ${caption} »` : 'Note vocale reçue et gardée. Transcription hors-ligne non activée.';
