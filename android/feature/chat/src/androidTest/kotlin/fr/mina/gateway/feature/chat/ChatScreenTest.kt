@@ -4,11 +4,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.center
+import androidx.compose.ui.test.down
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.up
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import fr.mina.gateway.chat.LinkState
+import fr.mina.gateway.feature.voice.VoiceCaptureMode
+import fr.mina.gateway.feature.voice.VoiceNoteUiState
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -42,7 +49,16 @@ class ChatScreenTest {
                     onDraftChange = { state = state.copy(draft = it) },
                     onSend = { sends += 1 },
                     onSendImage = {},
-                    onSendVoice = {},
+                    voice = VoiceNoteUiState(),
+                    onBeginVoiceNote = {},
+                    onStopVoiceNote = {},
+                    onCancelVoice = {},
+                    onBeginPushToTalk = {},
+                    onEndPushToTalk = {},
+                    onRetryVoice = {},
+                    onVoicePermissionDenied = {},
+                    onVoiceHostStopped = {},
+                    hasRecordPermission = { true },
                     onRetry = {},
                     onDismissError = {},
                     onUnpair = {},
@@ -53,5 +69,53 @@ class ChatScreenTest {
         compose.onNodeWithText("Envoyer").performClick()
         compose.runOnIdle { assertEquals(1, sends) }
         compose.onNodeWithText("brouillon a conserver").assertIsDisplayed()
+    }
+
+    @Test
+    fun pushToTalkBeginsOnPressAndStopsOnRelease() {
+        var voice by mutableStateOf(VoiceNoteUiState())
+        var starts = 0
+        var stops = 0
+
+        compose.setContent {
+            MinaChatTheme {
+                ChatScreen(
+                    messages = emptyList(),
+                    state = ChatUiState(true, LinkState.ONLINE, 0, null, null, "", false),
+                    onDraftChange = {},
+                    onSend = {},
+                    onSendImage = {},
+                    voice = voice,
+                    onBeginVoiceNote = {},
+                    onStopVoiceNote = {},
+                    onCancelVoice = {},
+                    onBeginPushToTalk = {
+                        starts += 1
+                        voice = voice.copy(mode = VoiceCaptureMode.PUSH_TO_TALK)
+                    },
+                    onEndPushToTalk = {
+                        stops += 1
+                        voice = voice.copy(mode = null)
+                    },
+                    onRetryVoice = {},
+                    onVoicePermissionDenied = {},
+                    onVoiceHostStopped = {},
+                    hasRecordPermission = { true },
+                    onRetry = {},
+                    onDismissError = {},
+                    onUnpair = {},
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Maintenir pour parler").performTouchInput {
+            down(center)
+            up()
+        }
+
+        compose.runOnIdle {
+            assertEquals(1, starts)
+            assertEquals(1, stops)
+        }
     }
 }

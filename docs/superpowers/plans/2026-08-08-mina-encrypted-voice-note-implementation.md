@@ -229,17 +229,17 @@
 - Create: android/feature/voice/src/main/kotlin/fr/mina/gateway/feature/voice/PcmVoicePlayer.kt
 - Create: android/feature/voice/src/test/kotlin/fr/mina/gateway/feature/voice/VoiceNoteRecorderTest.kt
 - Create: android/feature/voice/src/test/kotlin/fr/mina/gateway/feature/voice/VoiceNoteViewModelTest.kt
-- Create: android/feature/voice/src/androidTest/kotlin/fr/mina/gateway/feature/voice/VoiceNoteControlsTest.kt
 - Delete: android/feature/chat/src/main/kotlin/fr/mina/gateway/feature/chat/VoiceNoteRecorder.kt
+- Modify: android/feature/chat/src/androidTest/kotlin/fr/mina/gateway/feature/chat/ChatScreenTest.kt (PTT : le composable est dans ce module)
 - Modify: android/feature/chat/src/main/kotlin/fr/mina/gateway/feature/chat/ChatScreen.kt
 - Modify: android/feature/chat/src/main/kotlin/fr/mina/gateway/feature/chat/ChatViewModel.kt
 
 **Interfaces:**
-- VoiceNoteRecorder.start(sink), stop(), cancel() expose only Idle, Recording, Completed and Failed.
+- VoiceNoteRecorder.start(sink), stop(), cancel() exposent Idle, Recording, Completed, Failed et DiscardedTooShort.
 - VoiceNoteViewModel.beginNote(), beginPushToTalk(), endPushToTalk(), cancel(), onHostStopped() and retryPendingSend() own UI state.
 - PcmVoicePlayer.play(bytes) uses AudioTrack MODE_STREAM and fills bytes in finally.
 
-- [ ] **Step 1: Write failing recorder and UI tests**
+- [x] **Step 1: Write failing recorder and UI tests**
 
     @Test
     fun focusRefusedDoesNotStartAudioRecord() = runTest {
@@ -275,17 +275,15 @@
     }
     composeTestRule.onNodeWithText("Note vocale en file").assertExists()
 
-- [ ] **Step 2: Run tests red**
+- [x] **Step 2: Run tests red**
 
-    Run: android\gradlew.bat :feature:voice:testDebugUnitTest --tests "*VoiceNoteRecorderTest" --tests "*VoiceNoteViewModelTest"
+    Résultats réellement observés avant les corrections :
+    - `:feature:chat:assembleDebugAndroidTest` a échoué car les nouveaux paramètres de `ChatScreen` n'existaient pas encore.
+    - le test `focus loss during startup does not open a capture` a échoué avant l'ajout de l'état d'ouverture atomique.
 
-    Expected: compilation fails because VoiceNoteRecorder and VoiceNoteViewModel do not exist.
+    L'hypothèse initiale « classes inexistantes » n'a pas été rejouée : les classes étaient déjà présentes dans l'arbre de travail au moment de la reprise.
 
-    Run: android\gradlew.bat :feature:voice:assembleDebugAndroidTest
-
-    Expected: Compose test source cannot compile until the controls exist.
-
-- [ ] **Step 3: Implement foreground audio lifecycle**
+- [x] **Step 3: Implement foreground audio lifecycle**
 
     val minBuffer = AudioRecord.getMinBufferSize(
         VoicePcmFormat.SAMPLE_RATE_HZ,
@@ -314,7 +312,7 @@
 
     Run: android\gradlew.bat :feature:voice:testDebugUnitTest :feature:chat:testDebugUnitTest :feature:voice:assembleDebugAndroidTest
 
-    Expected: BUILD SUCCESSFUL. Instrumentation APK compilation is not a physical-device claim.
+    Résultat : `:feature:voice:testDebugUnitTest :feature:chat:testDebugUnitTest :feature:voice:assembleDebugAndroidTest :feature:chat:assembleDebugAndroidTest` = `BUILD SUCCESSFUL` (1 min 55 s). L'assemblage d'APK de test n'est pas une validation sur appareil physique.
 
 - [ ] **Step 5: Commit**
 

@@ -14,6 +14,8 @@ android {
 
     buildFeatures { compose = true }
 
+    testOptions { unitTests.isIncludeAndroidResources = true }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -37,4 +39,5 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     testImplementation("junit:junit:4.13.2")
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation("org.robolectric:robolectric:4.16")
 }

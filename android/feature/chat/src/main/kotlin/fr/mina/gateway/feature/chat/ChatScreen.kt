@@ -35,35 +35,52 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalContext
 import fr.mina.gateway.feature.voice.DictationState
+import fr.mina.gateway.feature.voice.PcmVoicePlayer
+import fr.mina.gateway.feature.voice.VoiceCaptureMode
 import fr.mina.gateway.feature.voice.VoiceDictation
+import fr.mina.gateway.feature.voice.VoiceNoteUiState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.mina.gateway.chat.ChatMessage
 import fr.mina.gateway.chat.DeliveryState
 import fr.mina.gateway.chat.LinkState
+import fr.mina.gateway.protocol.VoicePcmFormat
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -72,6 +89,8 @@ import java.util.Locale
 fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val voice by viewModel.voiceState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     MinaChatTheme {
         if (!state.paired) {
             PairingScreen(
@@ -87,7 +106,19 @@ fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
                 onDraftChange = viewModel::updateDraft,
                 onSend = viewModel::sendDraft,
                 onSendImage = viewModel::sendImage,
-                onSendVoice = viewModel::sendVoice,
+                voice = voice,
+                onBeginVoiceNote = viewModel::beginVoiceNote,
+                onStopVoiceNote = viewModel::stopVoiceNote,
+                onCancelVoice = viewModel::cancelVoiceNote,
+                onBeginPushToTalk = viewModel::beginPushToTalk,
+                onEndPushToTalk = viewModel::endPushToTalk,
+                onRetryVoice = viewModel::retryPendingVoice,
+                onVoicePermissionDenied = viewModel::voicePermissionDenied,
+                onVoiceHostStopped = viewModel::onVoiceHostStopped,
+                hasRecordPermission = {
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                        PackageManager.PERMISSION_GRANTED
+                },
                 loadMedia = viewModel::loadMedia,
                 onRetry = viewModel::retryLink,
                 onDismissError = viewModel::dismissSendError,
@@ -105,7 +136,16 @@ fun ChatScreen(
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onSendImage: (android.net.Uri) -> Unit,
-    onSendVoice: (ByteArray) -> Unit,
+    voice: VoiceNoteUiState,
+    onBeginVoiceNote: () -> Unit,
+    onStopVoiceNote: () -> Unit,
+    onCancelVoice: () -> Unit,
+    onBeginPushToTalk: () -> Unit,
+    onEndPushToTalk: () -> Unit,
+    onRetryVoice: () -> Unit,
+    onVoicePermissionDenied: () -> Unit,
+    onVoiceHostStopped: () -> Unit,
+    hasRecordPermission: () -> Boolean,
     loadMedia: suspend (String) -> Pair<ByteArray, String>? = { null },
     onRetry: () -> Unit,
     onDismissError: () -> Unit,
@@ -157,7 +197,16 @@ fun ChatScreen(
                 onDraftChange = onDraftChange,
                 onSend = onSend,
                 onSendImage = onSendImage,
-                onSendVoice = onSendVoice,
+                voice = voice,
+                onBeginVoiceNote = onBeginVoiceNote,
+                onStopVoiceNote = onStopVoiceNote,
+                onCancelVoice = onCancelVoice,
+                onBeginPushToTalk = onBeginPushToTalk,
+                onEndPushToTalk = onEndPushToTalk,
+                onRetryVoice = onRetryVoice,
+                onVoicePermissionDenied = onVoicePermissionDenied,
+                onVoiceHostStopped = onVoiceHostStopped,
+                hasRecordPermission = hasRecordPermission,
             )
         }
     }
@@ -312,13 +361,9 @@ private fun MediaImage(message: ChatMessage, loadMedia: suspend (String) -> Pair
     }
 }
 
-/**
- * W6 — note vocale reçue : lecture via un fichier TEMPORAIRE du cache, supprimé dès la fin de
- * lecture (MediaPlayer exige un descripteur ; l'audio ne reste jamais en clair au repos).
- */
+/** W6 — la note PCM canonique reste en mémoire et est lue directement par AudioTrack. */
 @Composable
 private fun MediaVoice(message: ChatMessage, loadMedia: suspend (String) -> Pair<ByteArray, String>?) {
-    val context = LocalContext.current
     var playing by remember(message.mediaId) { mutableStateOf(false) }
     var note by remember(message.mediaId) { mutableStateOf<String?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -329,18 +374,24 @@ private fun MediaVoice(message: ChatMessage, loadMedia: suspend (String) -> Pair
             scope.launch {
                 val media = loadMedia(id)
                 if (media == null) { note = "Note vocale incomplète ou illisible."; return@launch }
-                runCatching {
-                    val temp = java.io.File.createTempFile("mina-voice-recue-", ".m4a", context.cacheDir)
-                    temp.writeBytes(media.first)
-                    val player = android.media.MediaPlayer()
-                    player.setDataSource(temp.absolutePath)
-                    player.setOnCompletionListener { it.release(); temp.delete(); playing = false }
-                    player.setOnErrorListener { p, _, _ -> p.release(); temp.delete(); playing = false; note = "Lecture impossible."; true }
-                    player.prepare()
+                val bytes = media.first
+                if (!VoicePcmFormat.isCanonicalMime(media.second)) {
+                    bytes.fill(0)
+                    note = "Cette note utilise un ancien format audio indisponible sur cette version."
+                    return@launch
+                }
+                try {
                     playing = true
                     note = null
-                    player.start()
-                }.onFailure { note = "Lecture impossible : ${it.message ?: "échec"}." }
+                    withContext(Dispatchers.IO) { PcmVoicePlayer.create().play(bytes) }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    note = "Lecture impossible : ${error.message ?: "échec"}."
+                } finally {
+                    bytes.fill(0)
+                    playing = false
+                }
             }
         }) { Text(if (playing) "▶ Lecture…" else "▶ Écouter la note vocale") }
     }
@@ -402,6 +453,12 @@ private fun ErrorStrip(text: String, onDismiss: () -> Unit) {
     }
 }
 
+private enum class MicrophoneAction {
+    DICTATION,
+    NOTE,
+    PUSH_TO_TALK,
+}
+
 @Composable
 private fun Composer(
     draft: String,
@@ -409,38 +466,88 @@ private fun Composer(
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onSendImage: (android.net.Uri) -> Unit,
-    onSendVoice: (ByteArray) -> Unit,
+    voice: VoiceNoteUiState,
+    onBeginVoiceNote: () -> Unit,
+    onStopVoiceNote: () -> Unit,
+    onCancelVoice: () -> Unit,
+    onBeginPushToTalk: () -> Unit,
+    onEndPushToTalk: () -> Unit,
+    onRetryVoice: () -> Unit,
+    onVoicePermissionDenied: () -> Unit,
+    onVoiceHostStopped: () -> Unit,
+    hasRecordPermission: () -> Boolean,
 ) {
     var dictationNote by remember { mutableStateOf<String?>(null) }
     var listening by remember { mutableStateOf(false) }
-    var recording by remember { mutableStateOf(false) }
+    var requestedMicrophoneAction by remember { mutableStateOf<MicrophoneAction?>(null) }
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val dictation = remember { VoiceDictation(context) }
-    val recorder = remember { VoiceNoteRecorder(context) }
-    DisposableEffect(Unit) { onDispose { dictation.stop(); recorder.cancel() } }
-
-    // Sélecteur de photo « moderne » (PickVisualMedia) : aucune permission de stockage requise,
-    // l'utilisateur choisit une image, elle est préparée (redimensionnée, EXIF retiré) puis envoyée.
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) onSendImage(uri)
+    val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val action = requestedMicrophoneAction
+        requestedMicrophoneAction = null
+        when (action) {
+            MicrophoneAction.DICTATION -> {
+                if (!granted) {
+                    dictationNote = "Permission micro refusée : la dictée reste indisponible."
+                } else {
+                    listening = true
+                    dictation.start { state ->
+                        handleDictation(state, onDraftChange, { listening = it }, { dictationNote = it })
+                    }
+                }
+            }
+            MicrophoneAction.NOTE -> if (!granted) onVoicePermissionDenied() else onBeginVoiceNote()
+            MicrophoneAction.PUSH_TO_TALK -> {
+                if (!granted) onVoicePermissionDenied()
+                else dictationNote = "Maintenez le bouton PTT pour enregistrer une note vocale."
+            }
+            null -> Unit
+        }
     }
+    val requestMicrophone = { action: MicrophoneAction ->
+        if (hasRecordPermission()) {
+            when (action) {
+                MicrophoneAction.DICTATION -> {
+                    listening = true
+                    dictation.start { state ->
+                        handleDictation(state, onDraftChange, { listening = it }, { dictationNote = it })
+                    }
+                }
+                MicrophoneAction.NOTE -> onBeginVoiceNote()
+                MicrophoneAction.PUSH_TO_TALK -> onBeginPushToTalk()
+            }
+        } else {
+            requestedMicrophoneAction = action
+            microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+    val currentVoice by rememberUpdatedState(voice)
+    val currentListening by rememberUpdatedState(listening)
+    val currentHasRecordPermission by rememberUpdatedState(hasRecordPermission)
+    val currentRequestMicrophone by rememberUpdatedState(requestMicrophone)
+    val currentBeginPushToTalk by rememberUpdatedState(onBeginPushToTalk)
+    val currentEndPushToTalk by rememberUpdatedState(onEndPushToTalk)
+    val currentCancelVoice by rememberUpdatedState(onCancelVoice)
 
-    // La permission micro est demandée au moment du besoin, jamais au lancement : Mina n'écoute
-    // que si Nasro appuie sur le micro.
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) dictationNote = "Permission micro refusée : la dictée reste indisponible."
-        else {
-            listening = true
-            dictation.start { state -> handleDictation(state, onDraftChange, { listening = it }, { dictationNote = it }) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                dictation.stop()
+                listening = false
+                onVoiceHostStopped()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            dictation.stop()
+            onVoiceHostStopped()
         }
     }
 
-    // Permission distincte pour la NOTE VOCALE (envoi de l'audio lui-même, pas de la dictée texte).
-    val recordPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) { dictationNote = "Permission micro refusée : note vocale impossible."; return@rememberLauncherForActivityResult }
-        dictationNote = null
-        runCatching { recorder.start(); recording = true }
-            .onFailure { dictationNote = "Micro indisponible : ${it.message ?: "échec"}." }
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) onSendImage(uri)
     }
 
     Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
@@ -454,33 +561,82 @@ private fun Composer(
                 Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.size(6.dp))
             }
+            voice.note?.let { note ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        note,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (voice.canRetry) TextButton(onClick = onRetryVoice) { Text("Réessayer") }
+                }
+                Spacer(Modifier.size(6.dp))
+            }
             Row(verticalAlignment = Alignment.Bottom) {
                 TextButton(
                     onClick = { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                    enabled = !recording,
+                    enabled = !voice.isRecording,
                     modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = "Envoyer une photo" },
                 ) { Text("Photo") }
                 Spacer(Modifier.size(4.dp))
                 TextButton(
                     onClick = {
-                        if (recording) {
-                            recording = false
-                            val bytes = recorder.stop()
-                            if (bytes == null) {
-                                dictationNote = "Note vocale trop courte ou vide — rien envoyé."
-                            } else {
-                                dictationNote = null
-                                onSendVoice(bytes)
-                            }
-                            return@TextButton
+                        when (voice.mode) {
+                            VoiceCaptureMode.NOTE -> onStopVoiceNote()
+                            VoiceCaptureMode.PUSH_TO_TALK -> onCancelVoice()
+                            null -> if (!listening) requestMicrophone(MicrophoneAction.NOTE)
                         }
-                        if (listening) return@TextButton // dictée en cours : pas de double usage du micro
-                        recordPermission.launch(Manifest.permission.RECORD_AUDIO)
                     },
                     modifier = Modifier.heightIn(min = 56.dp).semantics {
-                        contentDescription = if (recording) "Terminer et envoyer la note vocale" else "Enregistrer une note vocale"
+                        contentDescription = if (voice.mode == VoiceCaptureMode.NOTE) {
+                            "Terminer et envoyer la note vocale"
+                        } else {
+                            "Enregistrer une note vocale"
+                        }
                     },
-                ) { Text(if (recording) "● Fin" else "Vocale") }
+                ) { Text(if (voice.mode == VoiceCaptureMode.NOTE) "● Arrêter" else "Vocale") }
+                if (voice.mode == VoiceCaptureMode.NOTE) {
+                    TextButton(
+                        onClick = onCancelVoice,
+                        modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = "Annuler la note vocale" },
+                    ) { Text("Annuler") }
+                }
+                Spacer(Modifier.size(4.dp))
+                Surface(
+                    color = if (voice.isRecording || listening) {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    },
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier
+                        .heightIn(min = 56.dp)
+                        .semantics { contentDescription = "Maintenir pour parler" }
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                if (!currentVoice.isRecording && !currentListening) {
+                                    if (currentHasRecordPermission()) {
+                                        currentBeginPushToTalk()
+                                        if (waitForUpOrCancellation() == null) {
+                                            currentCancelVoice()
+                                        } else {
+                                            currentEndPushToTalk()
+                                        }
+                                    } else {
+                                        currentRequestMicrophone(MicrophoneAction.PUSH_TO_TALK)
+                                    }
+                                }
+                            }
+                        },
+                ) {
+                    Text(
+                        "PTT",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
                 Spacer(Modifier.size(4.dp))
                 OutlinedTextField(
                     value = draft,
@@ -496,6 +652,7 @@ private fun Composer(
                 Spacer(Modifier.size(8.dp))
                 TextButton(
                     onClick = {
+                        if (voice.isRecording) return@TextButton
                         if (listening) {
                             dictation.stop()
                             listening = false
@@ -507,8 +664,9 @@ private fun Composer(
                             return@TextButton
                         }
                         dictationNote = null
-                        micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                        requestMicrophone(MicrophoneAction.DICTATION)
                     },
+                    enabled = !voice.isRecording,
                     modifier = Modifier.heightIn(min = 56.dp).semantics {
                         contentDescription = if (listening) "Arrêter la dictée" else "Dicter le message"
                     },

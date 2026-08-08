@@ -7,6 +7,11 @@ import fr.mina.gateway.chat.ChatEngine
 import fr.mina.gateway.chat.ChatMessage
 import fr.mina.gateway.chat.ChatSettings
 import fr.mina.gateway.chat.LinkState
+import fr.mina.gateway.chat.StoredVoiceAttachment
+import fr.mina.gateway.feature.voice.VoiceNoteGateway
+import fr.mina.gateway.feature.voice.VoiceNoteRecorder
+import fr.mina.gateway.feature.voice.VoiceNoteUiState
+import fr.mina.gateway.feature.voice.VoiceNoteViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +33,20 @@ data class ChatUiState(
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val engine = ChatEngine.get(application)
+    private val voice = VoiceNoteViewModel(
+        controller = VoiceNoteRecorder.create(application),
+        gateway = object : VoiceNoteGateway {
+            override fun beginCapture() = engine.repository.beginVoiceCapture(MAIN_THREAD_ID)
+
+            override suspend fun enqueue(capture: StoredVoiceAttachment): String =
+                engine.repository.enqueueVoice(capture)
+
+            override fun kickSync() = engine.start()
+        },
+        scope = viewModelScope,
+    )
+
+    val voiceState: StateFlow<VoiceNoteUiState> = voice.state
 
     val messages: StateFlow<List<ChatMessage>> = engine.repository.observeThread(MAIN_THREAD_ID)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -103,16 +122,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Envoie une note vocale (m4a déjà capturée) en pièce jointe chiffrée, comme une image. */
-    fun sendVoice(bytes: ByteArray) {
-        viewModelScope.launch {
-            runCatching { engine.repository.sendMedia(MAIN_THREAD_ID, bytes, "audio/mp4", emptyMap()) }
-                .onFailure { sendError.value = humanReason(it) }
-                .onSuccess { sendError.value = null }
-            engine.start()
-            refreshPending()
-        }
-    }
+    fun beginVoiceNote() = voice.beginNote()
+
+    fun stopVoiceNote() = voice.stopNote()
+
+    fun cancelVoiceNote() = voice.cancel()
+
+    fun beginPushToTalk() = voice.beginPushToTalk()
+
+    fun endPushToTalk() = voice.endPushToTalk()
+
+    fun retryPendingVoice() = voice.retryPendingSend()
+
+    fun voicePermissionDenied() = voice.onPermissionDenied()
+
+    fun onVoiceHostStopped() = voice.onHostStopped()
 
     /**
      * W6 — octets d'un média reçu, réassemblés en mémoire depuis les lignes chiffrées du fil.
@@ -144,6 +168,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun defaultPort(): Int = ChatSettings.DEFAULT_PORT
 
     fun pairedHost(): String = engine.settings.host().orEmpty()
+
+    override fun onCleared() {
+        voice.close()
+        super.onCleared()
+    }
 
     private fun refreshPending() {
         viewModelScope.launch { pending.value = engine.repository.pendingCount() }
