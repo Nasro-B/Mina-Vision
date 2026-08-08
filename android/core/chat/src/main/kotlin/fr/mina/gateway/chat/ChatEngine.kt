@@ -141,6 +141,14 @@ class ChatEngine private constructor(context: Context) {
 
     fun relayError(): String? = relay?.lastError
 
+    /**
+     * Le réveil FCM ne devient actif qu'avec les claims Firebase owner/device de la session déjà
+     * établie. L'ancien relais anonyme ne fournit pas ces claims et est donc refusé ici.
+     */
+    fun resolveFcmSyncTarget(onResolved: (FcmSyncTarget?) -> Unit) {
+        FirebaseFcmSession.resolve(deviceId, onResolved)
+    }
+
     val linkState: StateFlow<LinkState> get() = link.state
 
     fun lastLinkError(): String? = link.lastError()
