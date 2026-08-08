@@ -216,7 +216,7 @@
 
     Expected: BUILD SUCCESSFUL. The retry test proves stable event IDs and the source test proves no clear audio artifact.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
     git add android/core/chat
     git commit -m "feat(voice): persist captured PCM as encrypted chunks"
