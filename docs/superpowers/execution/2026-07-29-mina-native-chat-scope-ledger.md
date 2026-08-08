@@ -47,7 +47,7 @@ Le plan historique les décrit comme livrées. Le contrôle 2026-08-08 a cependa
 | 17 — pièces jointes/caméra/documents | 11 | 0 | 11 | non commencée sur ces livrables |
 | 18 — notifications privées/confidentialité | 7 | 0 | 7 | partielle : défauts privés durcis sous le namespace réel, chemins littéraux toujours absents |
 | 19 — approbations APK biométriques | 13 | 0 | 13 | non commencée sur ces livrables |
-| 20 — notes vocales/PTT | 7 | 0 | 7 | non commencée sur ces livrables |
+| 20 — notes vocales/PTT | 7 | 0 | 7 | non conforme : le recorder M4A temporaire sous feature/chat ne satisfait pas le chiffrement PCM chunk par chunk ; plan d'exécution du 8 août ajouté |
 | 21 — voix live LAN/VPN | 7 | 0 | 7 | non commencée sur ces livrables |
 | 22 — révocation/réparation | 8 | 0 | 8 | non commencée sur ces livrables |
 | 23 — budgets/santé/diagnostics | 2 | 0 | 2 | non commencée sur ces livrables |
@@ -149,7 +149,7 @@ physique reste non exécutée : aucun appareil n'était présent dans `adb devic
 
 - Les coordinateurs de fond restants : `FcmRegistrationCoordinator.kt`, `HuaweiRealtimeCoordinator.kt`.
 - Le shell Compose : `MinaApplication.kt`, le `ChatScreen.kt` et le test de navigation aux chemins historiques restent absents ; `MinaApp.kt`, `MinaNavigation.kt`, `MinaTheme.kt` et les écrans sous le namespace réel `feature.chat` existent avec les preuves ci-dessus.
-- Les médias, notes vocales et live : les chemins `attachments/*`, `VoiceNote*`, `LiveAudioCapture.kt`, `LiveVoiceSession.kt`, `LiveVoiceScreen.kt`, `src/voice/native-chat-live-bridge.mjs`.
+- Les médias, notes vocales et live : le recorder existant `feature/chat/VoiceNoteRecorder.kt` écrit un M4A temporaire en clair et ne compte donc pas comme Task 20 ; les implémentations cibles sous `feature/voice`, `LiveAudioCapture.kt`, `LiveVoiceSession.kt`, `LiveVoiceScreen.kt` et `src/voice/native-chat-live-bridge.mjs` sont absentes.
 - Les approbations et la révocation : `approval-store.mjs`, `app-approval-adapter.mjs`, `chat-device-revocation.mjs`, `chat-repair-service.mjs`, `chat-thread-purge.mjs`.
 - Les gates : `scripts/verify-native-chat-release.mjs`, les tests `native-chat-*` listés en tâche 24, la recette manuelle et les runbooks/data map requis.
 
