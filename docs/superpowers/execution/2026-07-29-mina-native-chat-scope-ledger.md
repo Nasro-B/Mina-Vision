@@ -34,7 +34,7 @@ Cette mesure ne déduit pas l’état fonctionnel d’un fichier présent. Elle 
 
 ## Tâches 0–12
 
-Le plan historique les décrit comme livrées. Ce ledger ne les re-certifie pas comme release complète : les preuves runtime/Firebase/appareils physiques ne sont pas rejouées ici. Les tâches 13–25 ci-dessous restent le périmètre qui empêche de présenter le chat natif complet comme achevé.
+Le plan historique les décrit comme livrées. Le contrôle 2026-08-08 a cependant ajouté les règles owner/device locales de Task 10 (`335d8e9`), prouvées seulement dans les émulateurs : Functions owner/App Check et adaptateurs owner-scopés des Tasks 11–12 restent absents. Ce ledger ne re-certifie donc pas les tâches 0–12 comme release complète ; les tâches 13–25 ci-dessous restent le périmètre qui empêche de présenter le chat natif complet comme achevé.
 
 ## Tâches 13–25 — inventaire exact des chemins `Create:`
 
