@@ -314,7 +314,7 @@
 
     Résultat : `:feature:voice:testDebugUnitTest :feature:chat:testDebugUnitTest :feature:voice:assembleDebugAndroidTest :feature:chat:assembleDebugAndroidTest` = `BUILD SUCCESSFUL` (1 min 55 s). L'assemblage d'APK de test n'est pas une validation sur appareil physique.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
     git add android/feature/voice android/feature/chat
     git commit -m "feat(voice): capture and queue encrypted PCM notes"
@@ -399,7 +399,7 @@
 
     Résultat : 8 fichiers / 75 tests verts. Cela prouve les contrats locaux direct/relais, pas un runtime Firebase déployé.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
     git add src/chat src/devices src/ui/main.mjs tests
     git commit -m "feat(voice): process encrypted PCM notes once on PC"
@@ -410,7 +410,7 @@
 - Modify: docs/superpowers/execution/2026-07-29-mina-native-chat-scope-ledger.md
 - Modify: docs/superpowers/execution/2026-08-02-mina-remaining-work.md seulement si une affirmation d'état courant devient factuellement fausse.
 
-- [ ] **Step 1: Run full automated gates**
+- [x] **Step 1: Run full automated gates**
 
     Run: android\gradlew.bat :core:protocol:testDebugUnitTest :core:chat:testDebugUnitTest :feature:voice:testDebugUnitTest :feature:chat:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --no-daemon --max-workers=1 --console=plain
 
@@ -420,7 +420,10 @@
 
     Expected: all listed tests pass.
 
-- [ ] **Step 2: Run source and diff safety checks**
+    Résultat 2026-08-09 : la gate Android a fini avec `BUILD SUCCESSFUL in 4m 27s`
+    (`343` tâches actionnables) et la gate PC avec `8` fichiers / `75` tests verts.
+
+- [x] **Step 2: Run source and diff safety checks**
 
     Run: rg -n "createTempFile|MediaRecorder|\\.m4a|\\.wav|\\.pcm" android/feature/chat android/feature/voice android/core/chat
 
@@ -430,6 +433,11 @@
 
     Expected: no whitespace error.
 
+    Résultat 2026-08-09 : aucune correspondance pour les APIs/fichiers audio temporaires
+    `createTempFile|MediaPlayer|setOutputFile|setOutputFormat|setAudioEncoder|.m4a|.wav|.pcm`.
+    Le seul usage de `MediaRecorder` est sa constante `AudioSource.VOICE_RECOGNITION` pour
+    `AudioRecord`; le contrôle `git diff --check` est vert.
+
 - [ ] **Step 3: Perform physical validation only with an attached device**
 
     Run: adb devices -l
@@ -438,7 +446,10 @@
 
     On a connected test phone, manually deny RECORD_AUDIO, accept then cancel, record below 300 ms, release PTT, background the app while recording, induce audio focus loss, send with PC off, restart PC and verify one transcription and one response. Do not reinstall the user's reference APK or overwrite its local secret configuration.
 
-- [ ] **Step 4: Update evidence-based ledger and commit**
+    Résultat 2026-08-09 : `adb devices -l` n'a retourné aucune ligne appareil. La validation
+    physique n'a donc pas été exécutée.
+
+- [x] **Step 4: Update evidence-based ledger and commit**
 
     Mark Task 20 partial only after the source scan and automated gates are green. Keep Task 21 unchecked. If adb has no device row, state exactly that physical validation is pending.
 

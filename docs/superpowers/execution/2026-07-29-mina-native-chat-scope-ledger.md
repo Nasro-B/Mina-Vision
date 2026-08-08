@@ -1,6 +1,6 @@
 # Mina Vision — Ledger de périmètre du chat natif
 
-> **Statut : option A autorisée, implémentation incomplète.** Nasro a choisi le chat natif complet. Ce ledger remesure le périmètre disque au 2026-08-08 13:01 ; il ne transforme pas la présence d’un fichier en validation fonctionnelle.
+> **Statut : option A autorisée, implémentation incomplète.** Nasro a choisi le chat natif complet. Ce ledger remesure le périmètre disque au 2026-08-09 00:44 ; il ne transforme pas la présence d’un fichier en validation fonctionnelle.
 
 ## Méthode et résultat brut
 
@@ -47,7 +47,7 @@ Le plan historique les décrit comme livrées. Le contrôle 2026-08-08 a cependa
 | 17 — pièces jointes/caméra/documents | 11 | 0 | 11 | non commencée sur ces livrables |
 | 18 — notifications privées/confidentialité | 7 | 0 | 7 | partielle : défauts privés durcis sous le namespace réel, chemins littéraux toujours absents |
 | 19 — approbations APK biométriques | 13 | 0 | 13 | non commencée sur ces livrables |
-| 20 — notes vocales/PTT | 7 | 0 | 7 | non conforme : le recorder M4A temporaire sous feature/chat ne satisfait pas le chiffrement PCM chunk par chunk ; plan d'exécution du 8 août ajouté |
+| 20 — notes vocales/PTT | 7 | 0 | 7 | partielle : migration PCM chiffrée sous les namespaces réels, hors des chemins littéraux historiques ; validation physique en attente |
 | 21 — voix live LAN/VPN | 7 | 0 | 7 | non commencée sur ces livrables |
 | 22 — révocation/réparation | 8 | 0 | 8 | non commencée sur ces livrables |
 | 23 — budgets/santé/diagnostics | 2 | 0 | 2 | non commencée sur ces livrables |
@@ -61,6 +61,30 @@ Les neuf chemins littéralement présents sont :
 - Tâche 15 : `android/app/src/main/kotlin/fr/mina/gateway/ui/MinaApp.kt`, `android/app/src/main/kotlin/fr/mina/gateway/ui/MinaNavigation.kt`, `android/app/src/main/kotlin/fr/mina/gateway/ui/MinaTheme.kt`.
 
 Ils ne suffisent pas à valider leurs tâches complètes, car les autres livrables déclarés de ces tâches sont absents.
+
+### État partiel vérifié de la tâche 20
+
+La remesure du 2026-08-09 confirme les comptes `102` chemins `Create:` déclarés, `9`
+présents et `93` absents. Les sept chemins `Create:` historiques de la tâche 20 restent
+donc littéralement absents ; ils utilisent le namespace `fr.mina.gateway.voice`, alors que
+les chemins réellement compilés sont :
+
+- `android/feature/voice/src/main/kotlin/fr/mina/gateway/feature/voice/VoiceNoteRecorder.kt`,
+  `VoiceNoteViewModel.kt` et `PcmVoicePlayer.kt` ;
+- `android/feature/chat/src/main/kotlin/fr/mina/gateway/feature/chat/ChatScreen.kt` et
+  `ChatViewModel.kt` ;
+- `src/chat/voice-pcm.mjs`, `voice-transcriber.mjs`, `chat-media-handler.mjs`, puis
+  `src/devices/chat-server.mjs`, `chat-relay.mjs` et `chat-channel.mjs` pour le traitement PC.
+
+Preuves automatisées réellement obtenues le 2026-08-09 :
+
+- `android\\gradlew.bat :core:protocol:testDebugUnitTest :core:chat:testDebugUnitTest :feature:voice:testDebugUnitTest :feature:chat:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --no-daemon --max-workers=1 --console=plain` a fini par `BUILD SUCCESSFUL in 4m 27s` (`343` tâches actionnables).
+- `npx vitest run tests/voice-pcm.test.mjs tests/media-chunker.test.mjs tests/voice-transcriber.test.mjs tests/chat-media-handler.test.mjs tests/chat-server.test.mjs tests/chat-relay.test.mjs tests/chat-channel.test.mjs tests/chat-media-perception.test.mjs --no-file-parallelism` a fini avec `8` fichiers et `75` tests verts.
+- Le scan `createTempFile|MediaPlayer|setOutputFile|setOutputFormat|setAudioEncoder|\\.m4a|\\.wav|\\.pcm` dans `android/feature/chat`, `android/feature/voice` et `android/core/chat` n'a retourné aucune correspondance. Un scan séparé de `MediaRecorder` retourne seulement son import et `MediaRecorder.AudioSource.VOICE_RECOGNITION`, constante utilisée pour construire `AudioRecord`.
+- `adb devices -l` a retourné seulement `List of devices attached` : aucun appareil n'était attaché et aucune recette physique, installation ou réinstallation APK n'a été exécutée.
+
+Cette preuve rend la migration notes/PTT partielle ; elle ne valide pas les chemins
+historiques absents, une recette physique, ni la tâche 21 de voix live LAN/VPN.
 
 ### Écart de namespace et preuve fonctionnelle de la tâche 15
 
@@ -149,7 +173,7 @@ physique reste non exécutée : aucun appareil n'était présent dans `adb devic
 
 - Les coordinateurs de fond restants : `FcmRegistrationCoordinator.kt`, `HuaweiRealtimeCoordinator.kt`.
 - Le shell Compose : `MinaApplication.kt`, le `ChatScreen.kt` et le test de navigation aux chemins historiques restent absents ; `MinaApp.kt`, `MinaNavigation.kt`, `MinaTheme.kt` et les écrans sous le namespace réel `feature.chat` existent avec les preuves ci-dessus.
-- Les médias, notes vocales et live : le recorder existant `feature/chat/VoiceNoteRecorder.kt` écrit un M4A temporaire en clair et ne compte donc pas comme Task 20 ; les implémentations cibles sous `feature/voice`, `LiveAudioCapture.kt`, `LiveVoiceSession.kt`, `LiveVoiceScreen.kt` et `src/voice/native-chat-live-bridge.mjs` sont absentes.
+- Les médias, notes vocales et live : la migration notes/PTT partielle est sous `feature/voice` et `feature/chat`, avec les preuves automatisées ci-dessus. Les sept chemins historiques de la tâche 20 et `LiveAudioCapture.kt`, `LiveVoiceSession.kt`, `LiveVoiceScreen.kt`, `src/voice/native-chat-live-bridge.mjs` sont absents ; aucune validation sur appareil n'a été obtenue. La tâche 21 reste non commencée sur ses livrables littéraux.
 - Les approbations et la révocation : `approval-store.mjs`, `app-approval-adapter.mjs`, `chat-device-revocation.mjs`, `chat-repair-service.mjs`, `chat-thread-purge.mjs`.
 - Les gates : `scripts/verify-native-chat-release.mjs`, les tests `native-chat-*` listés en tâche 24, la recette manuelle et les runbooks/data map requis.
 
