@@ -126,13 +126,24 @@ ci-dessous sont dans les modules réellement utilisés et ne changent pas le com
   statique ; son test inspecte la notification Android réelle sous Robolectric.
 - [x] `ChatActivity` active `FLAG_SECURE` au démarrage ; un test Robolectric vérifie le flag de la
   fenêtre.
-- [ ] coordonnateur de consentement explicite après appairage, DataStore des réglages, purge des
-  buffers au verrouillage/révocation et tests de navigation PendingIntent restent ouverts.
+- [x] le coordonnateur de permission ne rend `POST_NOTIFICATIONS` demandable qu'après appairage
+  sur Android 13+ et uniquement depuis le bouton visible Réglages. API 29–32 reste
+  `not_required` ; les états `denied` et `denied_permanently` n'ouvrent aucun prompt automatique.
+- [x] les defaults non sensibles de confidentialité et les marqueurs de tentative/refus observé
+  sont modélisés dans le DataStore `mina-chat-privacy`. Le test JVM couvre les defaults et la
+  politique pure ; la persistance DataStore et le dialogue système ne sont pas encore exécutés sur
+  appareil.
+- [ ] aperçu opt-in avec avertissement, purge des buffers au verrouillage/révocation, tests de
+  navigation PendingIntent et instrumentation physique restent ouverts.
 
 Preuves de cette tranche : les trois tests rouges ont d'abord échoué par référence absente ou
 signature non conforme, puis `:app:testDebugUnitTest` ciblant `ChatNotifierTest`,
 `ChatWindowPrivacyTest` et `GatewayRuntimePermissionsTest` a fini avec `BUILD SUCCESSFUL`.
-L'instrumentation physique reste non exécutée : aucun appareil n'était présent dans `adb devices -l`.
+Le complément de consentement a aussi démarré rouge avec les références de
+`NotificationPermissionCoordinator` absentes, puis `:core:chat:testDebugUnitTest` et
+`:feature:chat:testDebugUnitTest`, `:feature:chat:assembleDebugAndroidTest` et
+`:app:testDebugUnitTest :app:lintDebug :app:assembleDebug` ont fini verts. L'instrumentation
+physique reste non exécutée : aucun appareil n'était présent dans `adb devices -l`.
 
 ## Absences déterminantes vérifiées
 
