@@ -59,7 +59,7 @@ export function createChatServer({
   logger = null,
   ulid = createMonotonicUlid(),
   ledger = createChatLedger({ clock }),
-  /** Handler des payloads média (pièces jointes/chunks). Absent → média acquitté mais ignoré (honnête). */
+  /** Handler des payloads média (pièces jointes/chunks). Absent → payload v2 laissé sans ACK. */
   handleMedia = null,
 } = {}) {
   if (!identity?.privateKey || !identity?.publicKeySpki) throw new TypeError('chat_server_identite_requise');
@@ -131,7 +131,7 @@ export function createChatServer({
 
     // Négociation de capacité (W2) : le PC annonce les versions de payload qu'il sait TRAITER.
     // Média (v2) seulement si handleMedia est réellement câblé — sinon le téléphone l'apprend et
-    // refuse d'envoyer une pièce jointe qui serait acquittée puis silencieusement perdue.
+    // ne tente pas d'envoyer une pièce jointe que le PC ne peut pas traiter.
     const payloadVersions = handleMedia ? [1, 2] : [1];
     socket.send(JSON.stringify({ type: 'epoch', ...wrapped, pcPublicKeySpki: identity.publicKeySpki, payloadVersions }));
     note('chat_app_session_ouverte', { deviceId, keyEpoch, payloadVersions });
@@ -184,24 +184,32 @@ export function createChatServer({
       return;
     }
 
-    // Accusé AVANT de réfléchir : le téléphone peut vider sa file et cesser de réémettre.
-    socket.send(JSON.stringify({ type: 'ack', eventId: event.eventId }));
-    registry.touch(session.deviceId);
-
     // PAYLOAD MÉDIA (pièce jointe / chunk) : assemblé/stocké par l'appelant, jamais de réponse texte
     // par chunk. Le texte v1 continue exactement comme avant, juste en dessous.
     if (payload.version === 2) {
       note('chat_app_media_recu', { deviceId: session.deviceId, eventId: event.eventId, type: payload.type });
+      if (typeof handleMedia !== 'function') {
+        note('chat_app_media_indisponible', { deviceId: session.deviceId, eventId: event.eventId });
+        return;
+      }
       try {
-        await handleMedia?.({
+        await handleMedia({
           deviceId: session.deviceId, threadId: event.threadId, eventId: event.eventId,
           type: payload.type, meta: payload.meta, binary: payload.binary,
         });
       } catch (error) {
         note('chat_app_media_refuse', { deviceId: session.deviceId, eventId: event.eventId, reason: String(error?.message ?? error).slice(0, 120) });
+        return;
       }
+      // Le téléphone ne purge l'outbox qu'après assemblage/stockage/perception réussis.
+      socket.send(JSON.stringify({ type: 'ack', eventId: event.eventId }));
+      registry.touch(session.deviceId);
       return;
     }
+
+    // Accusé AVANT de réfléchir : le téléphone peut vider sa file et cesser de réémettre.
+    socket.send(JSON.stringify({ type: 'ack', eventId: event.eventId }));
+    registry.touch(session.deviceId);
 
     const text = payload.text;
     note('chat_app_message_recu', {

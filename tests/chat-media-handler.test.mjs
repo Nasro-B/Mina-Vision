@@ -2,13 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 import { createChatMediaHandler } from '../src/chat/chat-media-handler.mjs';
 import { createMediaAssembler } from '../src/chat/media-assembler.mjs';
 import { chunkMedia } from '../src/chat/media-chunker.mjs';
+import { createChatLedger } from '../src/devices/chat-ledger.mjs';
 
 describe('chat media handler (réception → assemblage → stockage chiffré)', () => {
   it('reçoit meta + chunks (via le vrai chunker/assembleur), stocke le média complet et notifie', async () => {
     const original = Buffer.from('contenu image de test assez long pour au moins deux chunks distincts.', 'utf8');
     const { eventType, meta, chunks } = chunkMedia(original, { mime: 'image/jpeg', chunkBytes: 16 });
 
-    const store = { save: vi.fn(async () => ({ stored: true })) };
+    const saved = [];
+    const store = {
+      save: vi.fn(async (_mediaId, _mime, bytes) => {
+        saved.push(Buffer.from(bytes));
+        return { stored: true };
+      }),
+    };
     const onComplete = vi.fn(async () => {});
     const handle = createChatMediaHandler({ assembler: createMediaAssembler(), store, onComplete });
 
@@ -23,7 +30,8 @@ describe('chat media handler (réception → assemblage → stockage chiffré)',
     const [mediaId, mime, bytes] = store.save.mock.calls[0];
     expect(mediaId).toBe(meta.mediaId);
     expect(mime).toBe('image/jpeg');
-    expect(bytes.equals(original)).toBe(true);
+    expect(saved[0].equals(original)).toBe(true);
+    expect(bytes.every((value) => value === 0)).toBe(true);
     expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ mediaId: meta.mediaId, mime: 'image/jpeg' }));
   });
 
@@ -38,6 +46,41 @@ describe('chat media handler (réception → assemblage → stockage chiffré)',
     await expect(handle({ deviceId: 'd1', type: 'media.chunk', meta: { mediaId: meta.mediaId, index: 1 }, binary: chunks[1].binary }))
       .rejects.toThrow(/digest_mismatch/u);
     expect(store.save).not.toHaveBeenCalled();
+  });
+
+  it('une redélivrance du même média ne stocke ni ne perçoit deux fois', async () => {
+    const original = Buffer.from('note vocale identique', 'utf8');
+    const { eventType, meta, chunks } = chunkMedia(original, {
+      mime: 'audio/mp4',
+      chunkBytes: 16,
+      makeId: () => 'media-once',
+    });
+    const ledger = createChatLedger();
+    const store = { save: vi.fn(async () => ({ stored: true })) };
+    const onComplete = vi.fn(async () => {});
+    const handle = createChatMediaHandler({
+      assembler: createMediaAssembler(),
+      store,
+      onComplete,
+      completeOnce: (mediaId, work) => ledger.once(`media:${mediaId}`, work),
+    });
+    const deliver = async () => {
+      await handle({ deviceId: 'd1', type: eventType, meta });
+      for (const chunk of chunks) {
+        await handle({
+          deviceId: 'd1',
+          type: 'media.chunk',
+          meta: { mediaId: meta.mediaId, index: chunk.index },
+          binary: chunk.binary,
+        });
+      }
+    };
+
+    await deliver();
+    await deliver();
+
+    expect(store.save).toHaveBeenCalledOnce();
+    expect(onComplete).toHaveBeenCalledOnce();
   });
 
   it('rejette un type de payload média inconnu', async () => {

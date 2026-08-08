@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createVoiceTranscriber } from '../src/chat/voice-transcriber.mjs';
+import { VOICE_PCM_MIME } from '../src/chat/voice-pcm.mjs';
 
 const decodeOk = async () => ({ pcm: new Float32Array([0.1, 0.2]), sampleRate: 16_000 });
 const pipelineOf = (text) => async () => async () => ({ text });
@@ -24,6 +25,22 @@ describe('createVoiceTranscriber', () => {
     expect(await transcribe({ audio: Buffer.from([1, 2, 3]), mimeType: 'audio/mp4' })).toBe('bonjour Mina');
     expect(await transcribe({ audio: Buffer.from([4, 5, 6]), mimeType: 'audio/mp4' })).toBe('bonjour Mina');
     expect(loaded).toBe(1); // pipeline chargé UNE fois puis réutilisé
+  });
+
+  it('transcrit le PCM canonique sans demander de décodage au renderer', async () => {
+    const decodeAudio = vi.fn();
+    const pipeline = vi.fn(async (pcm, options) => ({ text: `${pcm.length}:${options.sampleRate}` }));
+    const transcribe = createVoiceTranscriber({
+      enabled: true,
+      decodeAudio,
+      loadPipeline: async () => pipeline,
+    });
+
+    await expect(transcribe({
+      audio: Buffer.from([0x00, 0x80, 0xff, 0x7f]),
+      mimeType: VOICE_PCM_MIME,
+    })).resolves.toBe('2:16000');
+    expect(decodeAudio).not.toHaveBeenCalled();
   });
 
   it('hors-ligne : utilise un pipeline déjà présent sans autoriser le réseau', async () => {

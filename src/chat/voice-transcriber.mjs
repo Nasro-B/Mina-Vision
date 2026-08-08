@@ -10,6 +10,8 @@
 //   • échec de décodage/transcription => erreur propagée, la perception la journalise et retombe
 //     sur la note honnête.
 
+import { VOICE_SAMPLE_RATE_HZ, isVoicePcmMime, pcm16leToFloat32 } from './voice-pcm.mjs';
+
 const DEFAULT_MODEL = 'Xenova/whisper-small';
 
 export function createVoiceTranscriber({
@@ -40,7 +42,10 @@ export function createVoiceTranscriber({
 
   return async function transcribe({ audio, mimeType } = {}) {
     if (!Buffer.isBuffer(audio) || audio.length < 1) throw new Error('stt_audio_invalide');
-    const { pcm, sampleRate } = await decodeAudio({ bytesBase64: audio.toString('base64'), mimeType: String(mimeType ?? 'audio/mp4') });
+    const resolvedMime = String(mimeType ?? 'audio/mp4');
+    const { pcm, sampleRate } = isVoicePcmMime(resolvedMime)
+      ? { pcm: pcm16leToFloat32(audio), sampleRate: VOICE_SAMPLE_RATE_HZ }
+      : await decodeAudio({ bytesBase64: audio.toString('base64'), mimeType: resolvedMime });
     if (!pcm || !Number.isFinite(sampleRate) || sampleRate < 8_000) throw new Error('stt_decodage_invalide');
     const pipeline = await pipelineOnce();
     const result = await pipeline(pcm instanceof Float32Array ? pcm : Float32Array.from(pcm), { sampleRate });

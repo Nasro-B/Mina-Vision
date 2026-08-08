@@ -339,7 +339,7 @@
 - createChatMediaHandler uses completeOnce(mediaId, work), where work returns the string complete after onComplete resolves.
 - createChatRelay receives handleMedia and supplies the same object shape as createChatServer.
 
-- [ ] **Step 1: Write failing PC tests**
+- [x] **Step 1: Write failing PC tests**
 
     it('transcribes verified PCM without renderer IPC', async () => {
       const decodeAudio = vi.fn();
@@ -373,13 +373,13 @@
       await expect(nextMessage(socket)).resolves.toMatchObject({ type: 'ack' });
     });
 
-- [ ] **Step 2: Run tests red**
+- [x] **Step 2: Run tests red**
 
     Run: npx vitest run tests/voice-transcriber.test.mjs tests/chat-media-handler.test.mjs tests/chat-server.test.mjs tests/chat-relay.test.mjs tests/chat-channel.test.mjs
 
-    Expected: FAIL because relay decodes v2 as UTF-8 text, completion is not ledgered and PCM needs renderer IPC.
+    Résultat observé : 5 échecs ciblés et 37 tests existants verts : ACK direct anticipé, relais ne routant pas v2, traitement/perception doublé, et PCM passant encore par le décodeur renderer.
 
-- [ ] **Step 3: Implement a single verified media path**
+- [x] **Step 3: Implement a single verified media path**
 
     const decoded = isVoicePcmMime(mimeType)
       ? { pcm: pcm16leToFloat32(audio), sampleRate: 16_000 }
@@ -393,11 +393,11 @@
 
     Keep renderer decode IPC in ui/main.mjs exclusively for compressed legacy audio. Canonical PCM remains inside the PC process after digest verification.
 
-- [ ] **Step 4: Run PC tests green**
+- [x] **Step 4: Run PC tests green**
 
     Run: npx vitest run tests/voice-pcm.test.mjs tests/voice-transcriber.test.mjs tests/chat-media-handler.test.mjs tests/chat-server.test.mjs tests/chat-relay.test.mjs tests/chat-channel.test.mjs tests/chat-media-perception.test.mjs
 
-    Expected: all focused tests pass. This proves local direct/relay contracts, not a deployed Firebase runtime.
+    Résultat : 8 fichiers / 75 tests verts. Cela prouve les contrats locaux direct/relais, pas un runtime Firebase déployé.
 
 - [ ] **Step 5: Commit**
 

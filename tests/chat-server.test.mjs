@@ -2,11 +2,12 @@ import {
   createPrivateKey, createPublicKey, createSign, generateKeyPairSync, randomBytes,
 } from 'node:crypto';
 import WebSocket from 'ws';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createChatServer } from '../src/devices/chat-server.mjs';
 import { createChatDeviceRegistry } from '../src/devices/chat-device-registry.mjs';
 import { createChatCrypto, deriveDeviceWrapKey, unwrapEpochKey } from '../src/devices/chat-crypto.mjs';
 import { createMonotonicUlid } from '../src/contracts/event-id.mjs';
+import { encodeChatPayloadV2 } from '../src/contracts/chat-payload.mjs';
 
 const keyPair = () => {
   const pair = generateKeyPairSync('ec', {
@@ -54,6 +55,31 @@ const nextMessage = (socket) => new Promise((resolve, reject) => {
     resolve(message);
   });
 });
+
+const noMessageFor = (socket, timeoutMs = 30) => new Promise((resolve) => {
+  if (socket.inbox.length > 0) {
+    resolve(false);
+    return;
+  }
+  const waiter = () => {
+    clearTimeout(timer);
+    resolve(false);
+  };
+  const timer = setTimeout(() => {
+    const index = socket.waiters.indexOf(waiter);
+    if (index >= 0) socket.waiters.splice(index, 1);
+    resolve(true);
+  }, timeoutMs);
+  socket.waiters.push(waiter);
+});
+
+const deferred = () => {
+  let resolve;
+  return {
+    promise: new Promise((done) => { resolve = done; }),
+    resolve,
+  };
+};
 
 let running = null;
 let openSockets = [];
@@ -251,6 +277,48 @@ describe('serveur du canal mina_app', () => {
     // Le clair n'apparaît nulle part dans ce qui transite.
     expect(JSON.stringify(reply)).not.toContain('Mina a lu');
     expect(deviceCrypto.verifyAndDecrypt(reply)).toBe('Mina a lu « bonjour Mina »');
+  });
+
+  it('attend le traitement média vérifié avant l\'ACK direct', async () => {
+    const processing = deferred();
+    const handleMedia = vi.fn(() => processing.promise);
+    const respond = vi.fn(async () => 'réponse texte interdite');
+    const registry = createChatDeviceRegistry();
+    const { port, pc } = await startServer({ registry, handleMedia, respond });
+    const { code } = registry.openPairing();
+    const session = await handshake({ port, pc, registry, pairingCode: code });
+    const deviceCrypto = createChatCrypto({
+      signingPrivateKey: session.device.privateKey,
+      verifyPublicKey: pc.publicKey,
+      epochKey: session.epochKey,
+    });
+    const createdAtMs = Date.now();
+    const event = deviceCrypto.encryptAndSign({
+      header: {
+        version: 2,
+        eventId: createMonotonicUlid()(),
+        threadId: 'thread-main',
+        senderDeviceId: session.deviceId,
+        deviceSequence: 1,
+        keyEpoch: session.answer.keyEpoch,
+        routingClass: 'message',
+        createdAtMs,
+        expiresAtMs: createdAtMs + 60_000,
+      },
+      plaintext: encodeChatPayloadV2({
+        type: 'media.chunk',
+        meta: { mediaId: 'media-ack', index: 0 },
+        binary: Buffer.from([1, 2]),
+      }),
+    });
+
+    session.socket.send(JSON.stringify(event));
+    expect(await noMessageFor(session.socket)).toBe(true);
+    expect(handleMedia).toHaveBeenCalledWith(expect.objectContaining({ type: 'media.chunk' }));
+    expect(respond).not.toHaveBeenCalled();
+
+    processing.resolve();
+    expect(await nextMessage(session.socket)).toMatchObject({ type: 'ack', eventId: event.eventId });
   });
 
   it('dit que Mina n\'a pas pu répondre au lieu d\'inventer une réponse', async () => {

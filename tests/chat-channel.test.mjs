@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createChatChannel } from '../src/devices/chat-channel.mjs';
 import { loadOrCreatePcChatIdentity, readPcChatPublicKey } from '../src/devices/pc-chat-identity.mjs';
 
@@ -138,5 +138,32 @@ describe('canal mina_app côté PC', () => {
     expect(code).toMatch(/^\d{6}$/u);
     await channel.stop();
     expect(store.saved()).toBeNull();
+  });
+
+  it('compose une seule instance média avec une déduplication durable par mediaId', async () => {
+    let completeOnce = null;
+    const createMediaHandler = vi.fn(({ completeOnce: once }) => {
+      completeOnce = once;
+      return async () => ({ complete: true });
+    });
+    const firestore = {
+      watch: vi.fn(() => () => {}),
+      put: vi.fn(async () => {}),
+      remove: vi.fn(async () => {}),
+    };
+    const { channel } = await startChannel({
+      firestore,
+      publicKeyFromSpki: () => { throw new Error('non appele dans ce test'); },
+      createMediaHandler,
+    });
+
+    await channel.start();
+
+    expect(createMediaHandler).toHaveBeenCalledOnce();
+    const work = vi.fn(async () => 'complete');
+    expect(await completeOnce('media-once', work)).toMatchObject({ answer: 'complete', replayed: false });
+    expect(await completeOnce('media-once', work)).toMatchObject({ answer: 'complete', replayed: true });
+    expect(work).toHaveBeenCalledOnce();
+    await channel.stop();
   });
 });

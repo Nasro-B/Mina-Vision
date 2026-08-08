@@ -7,6 +7,7 @@ import { firebaseConfigFromGoogleServices } from '../src/devices/firestore-relay
 import { createChatLedger } from '../src/devices/chat-ledger.mjs';
 import { createChatCrypto } from '../src/devices/chat-crypto.mjs';
 import { createMonotonicUlid } from '../src/contracts/event-id.mjs';
+import { encodeChatPayloadV2 } from '../src/contracts/chat-payload.mjs';
 
 const keyPair = () => {
   const pair = generateKeyPairSync('ec', {
@@ -47,6 +48,7 @@ const buildRelay = (overrides = {}) => {
   const registry = overrides.registry ?? {
     isApproved: (id) => id === 'device-samsung',
     publicKeyOf: () => device.publicKeySpki,
+    keyEpoch: () => 1,
   };
   const relay = createChatRelay({
     firestore,
@@ -55,6 +57,7 @@ const buildRelay = (overrides = {}) => {
     epochKeyFor: () => epochKey,
     ledger: overrides.ledger ?? createChatLedger(),
     respond: overrides.respond ?? (async ({ text }) => `écho ${text}`),
+    handleMedia: overrides.handleMedia ?? null,
     publicKeyFromSpki,
     ulid: createMonotonicUlid(),
   });
@@ -116,6 +119,48 @@ describe('relais Firebase du canal mina_app', () => {
     expect(firestore.stored.has(document.eventId)).toBe(false);
   });
 
+  it('envoie un chunk média vérifié au même handler et ne génère pas de réponse texte', async () => {
+    const handleMedia = vi.fn(async () => {});
+    const respond = vi.fn(async () => 'réponse texte interdite');
+    const { relay, firestore, device, epochKey } = buildRelay({ handleMedia, respond });
+    relay.start();
+    const document = relayedEvent({
+      device,
+      epochKey,
+      plaintext: encodeChatPayloadV2({
+        type: 'media.chunk',
+        meta: { mediaId: 'media-relay', index: 0 },
+        binary: Buffer.from([1, 2]),
+      }),
+    });
+
+    await firestore.deliver([document]);
+
+    expect(handleMedia).toHaveBeenCalledWith(expect.objectContaining({ type: 'media.chunk' }));
+    expect(respond).not.toHaveBeenCalled();
+    expect(firestore.remove).toHaveBeenCalledWith(document.eventId);
+  });
+
+  it('conserve un document média quand son traitement échoue pour permettre une redélivrance', async () => {
+    const handleMedia = vi.fn(async () => { throw new Error('media_temporairement_indisponible'); });
+    const { relay, firestore, device, epochKey } = buildRelay({ handleMedia });
+    relay.start();
+    const document = relayedEvent({
+      device,
+      epochKey,
+      plaintext: encodeChatPayloadV2({
+        type: 'media.chunk',
+        meta: { mediaId: 'media-retry', index: 0 },
+        binary: Buffer.from([1, 2]),
+      }),
+    });
+
+    await firestore.deliver([document]);
+
+    expect(handleMedia).toHaveBeenCalledOnce();
+    expect(firestore.remove).not.toHaveBeenCalledWith(document.eventId);
+  });
+
   it('refuse un document signé par un appareil étranger — Firebase n\'est pas de confiance', async () => {
     const { relay, firestore, epochKey } = buildRelay();
     relay.start();
@@ -142,6 +187,28 @@ describe('relais Firebase du canal mina_app', () => {
     await firestore.deliver([relayedEvent({
       device, epochKey, overrides: { createdAtMs: stale, expiresAtMs: stale + 1_000 },
     })]);
+    expect(relay.status()).toMatchObject({ handled: 0, rejected: 1 });
+  });
+
+  it('refuse une époque de clé périmée comme le chemin direct', async () => {
+    const respond = vi.fn(async () => 'réponse interdite');
+    let knownKey = null;
+    const { relay, firestore, device, epochKey } = buildRelay({
+      registry: {
+        isApproved: () => true,
+        publicKeyOf: () => knownKey,
+        keyEpoch: () => 2,
+      },
+      respond,
+    });
+    knownKey = device.publicKeySpki;
+    relay.start();
+    const document = relayedEvent({ device, epochKey, overrides: { keyEpoch: 1 } });
+
+    await firestore.deliver([document]);
+
+    expect(respond).not.toHaveBeenCalled();
+    expect(firestore.remove).toHaveBeenCalledWith(document.eventId);
     expect(relay.status()).toMatchObject({ handled: 0, rejected: 1 });
   });
 

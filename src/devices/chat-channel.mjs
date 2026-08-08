@@ -30,7 +30,9 @@ export function createChatChannel({
   firestore = null,
   publicKeyFromSpki = null,
   respond,
-  /** Handler des payloads média (pièces jointes/notes vocales). Optionnel : absent, ils sont ignorés. */
+  /** Factory du handler média, composée une seule fois avec le ledger partagé direct/Firebase. */
+  createMediaHandler = null,
+  /** Compatibilité appelants existants : handler média déjà composé. */
   handleMedia = null,
   port,
   host,
@@ -44,6 +46,7 @@ export function createChatChannel({
   const ledger = createChatLedger({ store: ledgerStore, clock });
   let relay = null;
   let server = null;
+  let mediaHandler = null;
   let listening = null;
   let lastError = null;
 
@@ -82,14 +85,17 @@ export function createChatChannel({
         lastError = 'identité PC indisponible';
         return null;
       }
+      mediaHandler ??= createMediaHandler?.({
+        completeOnce: (mediaId, work) => ledger.once(`media:${mediaId}`, work),
+      }) ?? handleMedia;
       server = createChatServer({
-        identity, registry, respond, epochKeyFor, port, host, clock, logger, ledger, handleMedia,
+        identity, registry, respond, epochKeyFor, port, host, clock, logger, ledger, handleMedia: mediaHandler,
       });
       // Le relais Firebase est INDÉPENDANT du direct : il démarre même si le port local est
       // pris, sinon un PC mal configuré perdrait aussi le chemin de secours.
       if (firestore && publicKeyFromSpki && !relay) {
         relay = createChatRelay({
-          firestore, identity, registry, epochKeyFor, ledger, respond, publicKeyFromSpki, clock, logger,
+          firestore, identity, registry, epochKeyFor, ledger, respond, handleMedia: mediaHandler, publicKeyFromSpki, clock, logger,
         });
         relay.start();
       }

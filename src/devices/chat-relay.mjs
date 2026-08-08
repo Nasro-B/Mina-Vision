@@ -13,6 +13,7 @@
 
 import { createHash } from 'node:crypto';
 import { parseChatEvent } from '../contracts/chat.mjs';
+import { decodeChatPayload } from '../contracts/chat-payload.mjs';
 import { createChatCrypto } from './chat-crypto.mjs';
 import { createMonotonicUlid } from '../contracts/event-id.mjs';
 
@@ -27,6 +28,7 @@ const MAX_BACKLOG = 200;
  * @param {(epoch: number) => Buffer} options.epochKeyFor
  * @param {object} options.ledger ledger partagé avec le chemin direct
  * @param {(input: object) => Promise<string>} options.respond
+ * @param {(input: object) => Promise<object>} [options.handleMedia]
  */
 export function createChatRelay({
   firestore,
@@ -35,6 +37,7 @@ export function createChatRelay({
   epochKeyFor,
   ledger,
   respond,
+  handleMedia = null,
   publicKeyFromSpki,
   clock = Date.now,
   logger = null,
@@ -77,6 +80,13 @@ export function createChatRelay({
       await firestore.remove(event.eventId).catch(() => {});
       return;
     }
+    if (typeof registry.keyEpoch === 'function' && event.keyEpoch !== registry.keyEpoch()) {
+      rejected += 1;
+      lastError = 'epoque_perimee';
+      note('chat_relay_evenement_refuse', { eventId: event.eventId, reason: 'epoque_perimee' });
+      await firestore.remove(event.eventId).catch(() => {});
+      return;
+    }
     if (event.expiresAtMs <= clock()) {
       rejected += 1;
       note('chat_relay_evenement_expire', { eventId: event.eventId });
@@ -91,10 +101,10 @@ export function createChatRelay({
       epochKey: Buffer.from(epochKeyFor(event.keyEpoch)),
     });
 
-    let text;
+    let payload;
     try {
-      // Vérification AVANT déchiffrement : un document injecté dans Firestore n'a aucune chance.
-      text = crypto.verifyAndDecrypt(event);
+      // Vérification AVANT déchiffrement : texte v1 et binaire v2 passent par le même contrat.
+      payload = decodeChatPayload(crypto.verifyAndDecryptBytes(event));
     } catch (error) {
       rejected += 1;
       lastError = error.message;
@@ -102,6 +112,34 @@ export function createChatRelay({
       await firestore.remove(event.eventId).catch(() => {});
       return;
     }
+
+    if (payload.version === 2) {
+      if (typeof handleMedia !== 'function') {
+        lastError = 'chat_media_indisponible';
+        note('chat_relay_media_indisponible', { eventId: event.eventId, type: payload.type });
+        return;
+      }
+      try {
+        await handleMedia({
+          deviceId: event.senderDeviceId,
+          threadId: event.threadId,
+          eventId: event.eventId,
+          type: payload.type,
+          meta: payload.meta,
+          binary: payload.binary,
+        });
+      } catch (error) {
+        lastError = error.message;
+        note('chat_relay_media_echec', { eventId: event.eventId, reason: String(error?.message ?? error).slice(0, 120) });
+        return;
+      }
+      // Supprimé seulement APRÈS traitement réussi ; un échec garde le document pour reprise.
+      await firestore.remove(event.eventId).catch(() => {});
+      handled += 1;
+      return;
+    }
+
+    const text = payload.text;
 
     note('chat_relay_message_recu', {
       deviceId: event.senderDeviceId,
