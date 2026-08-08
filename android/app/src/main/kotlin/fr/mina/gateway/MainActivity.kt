@@ -3,7 +3,6 @@ package fr.mina.gateway
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -57,6 +56,7 @@ import fr.mina.gateway.chat.ChatSettings
 import fr.mina.gateway.messaging.MessagingExecutors
 import fr.mina.gateway.messaging.MinaGatewayService
 import fr.mina.gateway.messaging.TelegramGateway
+import fr.mina.gateway.messaging.gatewayRuntimePermissions
 import fr.mina.gateway.messaging.storage.AndroidKeystoreFieldCipher
 import fr.mina.gateway.messaging.storage.EncryptedOwnerIdentityStore
 import fr.mina.gateway.messaging.storage.MessagingDatabase
@@ -211,12 +211,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestMessagingPermissions() {
-        val requested = buildList {
-            add(Manifest.permission.RECEIVE_SMS)
-            add(Manifest.permission.SEND_SMS)
-            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-        val missing = requested
+        val missing = gatewayRuntimePermissions()
             .filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), SMS_PERMISSION_REQUEST)
         else startGatewayService()

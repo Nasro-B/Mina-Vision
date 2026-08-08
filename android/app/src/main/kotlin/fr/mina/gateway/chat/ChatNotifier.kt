@@ -32,7 +32,7 @@ object ChatNotifier {
         context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
     }
 
-    fun notifyReply(context: Context, preview: String) {
+    fun notifyReply(context: Context) {
         // Permission refusée : on ne notifie pas, et on ne prétend pas l'avoir fait.
         if (context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED

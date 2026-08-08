@@ -45,7 +45,7 @@ Le plan historique les décrit comme livrées. Le contrôle 2026-08-08 a cependa
 | 15 — shell Compose | 9 | 3 | 6 | shell partiel : trois chemins littéraux et des écrans sous le namespace réel `feature.chat` |
 | 16 — texte/streaming Compose | 10 | 0 | 10 | partielle : correctifs sous le namespace réel `feature.chat`, chemins littéraux toujours absents |
 | 17 — pièces jointes/caméra/documents | 11 | 0 | 11 | non commencée sur ces livrables |
-| 18 — notifications privées/confidentialité | 7 | 0 | 7 | non commencée sur ces livrables |
+| 18 — notifications privées/confidentialité | 7 | 0 | 7 | partielle : défauts privés durcis sous le namespace réel, chemins littéraux toujours absents |
 | 19 — approbations APK biométriques | 13 | 0 | 13 | non commencée sur ces livrables |
 | 20 — notes vocales/PTT | 7 | 0 | 7 | non commencée sur ces livrables |
 | 21 — voix live LAN/VPN | 7 | 0 | 7 | non commencée sur ces livrables |
@@ -114,6 +114,25 @@ Preuves locales de cette tranche :
 - non exécuté : l'instrumentation physique `:feature:chat:connectedDebugAndroidTest`. La commande
   `adb devices -l` ne listait aucun appareil le 2026-08-08 ; aucun résultat appareil ne lui est
   attribué.
+
+### État partiel vérifié de la tâche 18
+
+Les chemins littéraux historiques de la tâche 18 restent absents de la remesure : les correctifs
+ci-dessous sont dans les modules réellement utilisés et ne changent pas le compte `9/93`.
+
+- [x] le démarrage de la passerelle ne demande plus `POST_NOTIFICATIONS` avec les permissions SMS ;
+  cette permission ne conditionne donc plus le démarrage de la passerelle.
+- [x] `ChatNotifier` ne reçoit plus de plaintext en paramètre et construit une notification privée
+  statique ; son test inspecte la notification Android réelle sous Robolectric.
+- [x] `ChatActivity` active `FLAG_SECURE` au démarrage ; un test Robolectric vérifie le flag de la
+  fenêtre.
+- [ ] coordonnateur de consentement explicite après appairage, DataStore des réglages, purge des
+  buffers au verrouillage/révocation et tests de navigation PendingIntent restent ouverts.
+
+Preuves de cette tranche : les trois tests rouges ont d'abord échoué par référence absente ou
+signature non conforme, puis `:app:testDebugUnitTest` ciblant `ChatNotifierTest`,
+`ChatWindowPrivacyTest` et `GatewayRuntimePermissionsTest` a fini avec `BUILD SUCCESSFUL`.
+L'instrumentation physique reste non exécutée : aucun appareil n'était présent dans `adb devices -l`.
 
 ## Absences déterminantes vérifiées
 

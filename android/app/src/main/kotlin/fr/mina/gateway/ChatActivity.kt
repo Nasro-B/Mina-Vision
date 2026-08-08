@@ -24,6 +24,7 @@ import androidx.fragment.app.FragmentActivity
 import fr.mina.gateway.chat.ChatEngine
 import fr.mina.gateway.chat.ChatNotifier
 import fr.mina.gateway.chat.ChatSettings
+import fr.mina.gateway.chat.ChatWindowPrivacy
 import fr.mina.gateway.feature.chat.ChatRoute
 import fr.mina.gateway.feature.chat.MinaChatTheme
 
@@ -35,11 +36,12 @@ class ChatActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        ChatWindowPrivacy.apply(window)
         ChatNotifier.ensureChannel(this)
         // Notification seulement quand l'écran n'est PAS devant les yeux : prévenir pour un
         // message déjà visible serait du bruit.
-        ChatEngine.get(this).onAssistantMessage = { message ->
-            if (!visible) ChatNotifier.notifyReply(applicationContext, message.text)
+        ChatEngine.get(this).onAssistantMessage = {
+            if (!visible) ChatNotifier.notifyReply(applicationContext)
         }
         val lockEnabled = ChatSettings(this).biometricLockEnabled()
         val canAuth = canAuthenticateBiometric(this)
