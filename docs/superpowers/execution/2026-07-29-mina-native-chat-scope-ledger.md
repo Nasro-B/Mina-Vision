@@ -43,7 +43,7 @@ Le plan historique les décrit comme livrées. Le contrôle 2026-08-08 a cependa
 | 13 — FCM, WorkManager, Huawei | 9 | 4 | 5 | incomplète |
 | 14 — historique, ACK, cursors, GC | 8 | 2 | 6 | incomplète |
 | 15 — shell Compose | 9 | 3 | 6 | shell partiel : trois chemins littéraux et des écrans sous le namespace réel `feature.chat` |
-| 16 — texte/streaming Compose | 10 | 0 | 10 | non commencée sur ces livrables |
+| 16 — texte/streaming Compose | 10 | 0 | 10 | partielle : correctifs sous le namespace réel `feature.chat`, chemins littéraux toujours absents |
 | 17 — pièces jointes/caméra/documents | 11 | 0 | 11 | non commencée sur ces livrables |
 | 18 — notifications privées/confidentialité | 7 | 0 | 7 | non commencée sur ces livrables |
 | 19 — approbations APK biométriques | 13 | 0 | 13 | non commencée sur ces livrables |
@@ -83,6 +83,37 @@ Preuves obtenues le 2026-08-08 :
 - `android\\gradlew.bat :app:testDebugUnitTest` : 12 tests verts.
 - `android\\gradlew.bat :feature:chat:connectedDebugAndroidTest` : 3 tests Compose verts sur le Huawei `MAR-LX1A` ; le paquet de test temporaire a ensuite été retiré.
 - `android\\gradlew.bat :app:lintDebug :app:assembleDebug` : vert ; APK généré sans réinstallation.
+
+### État partiel vérifié de la tâche 16
+
+Les dix chemins `Create:` historiques de la tâche 16 restent littéralement absents : la remesure
+du 2026-08-08 donne toujours `102` chemins déclarés, `9` présents et `93` absents pour les tâches
+13–25. Cela ne masque pas le travail effectué dans le module réellement compilé
+`fr.mina.gateway.feature.chat` :
+
+- [x] `ChatRepository.sendText` trim les bornes sans modifier les retours à la ligne internes et
+  refuse un texte de plus de 32 KiB UTF-8 avant toute écriture Room.
+- [x] `ChatDraftController` conserve le brouillon après un échec de persistance, interdit le
+  double envoi pendant la transaction et n'efface que le brouillon effectivement persisté.
+- [x] `ChatScreen` source le brouillon et l'état d'envoi depuis le ViewModel ; le clic ne vide
+  plus localement le champ avant la confirmation du dépôt.
+- [ ] pagination bornée, gestion complète des fils, streaming ordonné/final, retry/cancel/stop,
+  recherche locale et test d'intégration PC↔Android restent ouverts.
+
+Preuves locales de cette tranche :
+
+- rouge attendu : `:core:chat:testDebugUnitTest --tests fr.mina.gateway.chat.ChatRepositoryTest`
+  a produit deux échecs ciblés (normalisation multiline et limite UTF-8) avant l'implémentation ;
+  `:feature:chat:testDebugUnitTest --tests fr.mina.gateway.feature.chat.ChatDraftControllerTest`
+  a échoué sur la référence absente au contrôleur.
+- vert : `:core:chat:testDebugUnitTest :feature:chat:testDebugUnitTest` a fini avec
+  `BUILD SUCCESSFUL`.
+- vert : `:feature:chat:assembleDebugAndroidTest` a compilé l'APK de test avec
+  `BUILD SUCCESSFUL`, sans installation.
+- vert : `:app:lintDebug :app:assembleDebug` a fini avec `BUILD SUCCESSFUL`, sans installation.
+- non exécuté : l'instrumentation physique `:feature:chat:connectedDebugAndroidTest`. La commande
+  `adb devices -l` ne listait aucun appareil le 2026-08-08 ; aucun résultat appareil ne lui est
+  attribué.
 
 ## Absences déterminantes vérifiées
 

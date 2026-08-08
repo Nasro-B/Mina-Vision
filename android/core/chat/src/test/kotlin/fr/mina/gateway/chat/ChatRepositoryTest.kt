@@ -114,6 +114,26 @@ class ChatRepositoryTest {
     }
 
     @Test
+    fun `normalise les bornes sans modifier les retours a la ligne internes`() = runTest {
+        repository.sendText("thread-main", "\n  premiere ligne\nseconde ligne  \n")
+
+        assertEquals(
+            "premiere ligne\nseconde ligne",
+            repository.observeThread("thread-main").first().single().text,
+        )
+    }
+
+    @Test
+    fun `refuse un texte dont UTF-8 depasse 32 KiB avant ecriture`() = runTest {
+        val tooLong = "é".repeat(16_385) // 32 770 octets UTF-8
+
+        val error = runCatching { repository.sendText("thread-main", tooLong) }.exceptionOrNull()
+
+        assertEquals("chat_message_trop_long", error?.message)
+        assertEquals(0, repository.pendingCount())
+    }
+
+    @Test
     fun `refuse d ecrire quand le coffre est verrouille`() = runTest {
         locked = true
         val error = runCatching { repository.sendText("thread-main", "bonjour") }.exceptionOrNull()

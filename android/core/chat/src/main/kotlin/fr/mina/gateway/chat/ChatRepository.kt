@@ -70,6 +70,7 @@ class ChatRepository(
     companion object {
         private const val TTL_MS = 30L * 24 * 60 * 60 * 1_000
         private const val MAX_OUTBOX = 5_000
+        private const val MAX_TEXT_UTF8_BYTES = 32 * 1_024
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val TAG_BITS = 128
     }
@@ -79,9 +80,12 @@ class ChatRepository(
      * l'appelant peut suivre son état sans jamais manipuler le clair.
      */
     suspend fun sendText(threadId: String, text: String): String {
-        require(text.isNotBlank()) { "chat_message_vide" }
+        val normalized = text.trim()
+        require(normalized.isNotEmpty()) { "chat_message_vide" }
+        val plaintext = normalized.toByteArray(Charsets.UTF_8)
+        require(plaintext.size <= MAX_TEXT_UTF8_BYTES) { "chat_message_trop_long" }
         // Le texte v1 reste des octets UTF-8 bruts (jamais de payload v2) — contrat inchangé.
-        return sealAndEnqueue(threadId, "message", text.toByteArray(Charsets.UTF_8))
+        return sealAndEnqueue(threadId, "message", plaintext)
     }
 
     /**

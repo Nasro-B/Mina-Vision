@@ -22,6 +22,8 @@ data class ChatUiState(
     val pendingCount: Int,
     val linkError: String?,
     val sendError: String?,
+    val draft: String,
+    val sending: Boolean,
 )
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
@@ -33,24 +35,33 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val pending = MutableStateFlow(0)
     private val sendError = MutableStateFlow<String?>(null)
     private val paired = MutableStateFlow(engine.settings.isPaired())
+    private val draftController = ChatDraftController()
+    private val draft = MutableStateFlow(draftController.draft)
+    private val sending = MutableStateFlow(draftController.sending)
+    private val composer = kotlinx.coroutines.flow.combine(draft, sending) { currentDraft, isSending ->
+        currentDraft to isSending
+    }
 
     val uiState: StateFlow<ChatUiState> = kotlinx.coroutines.flow.combine(
         engine.linkState,
         pending,
         sendError,
         paired,
-    ) { link, count, error, isPaired ->
+        composer,
+    ) { link, count, error, isPaired, currentComposer ->
         ChatUiState(
             paired = isPaired,
             link = link,
             pendingCount = count,
             linkError = engine.lastLinkError(),
             sendError = error,
+            draft = currentComposer.first,
+            sending = currentComposer.second,
         )
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        ChatUiState(engine.settings.isPaired(), LinkState.OFFLINE, 0, null, null),
+        ChatUiState(engine.settings.isPaired(), LinkState.OFFLINE, 0, null, null, "", false),
     )
 
     init {
@@ -58,12 +69,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         refreshPending()
     }
 
-    fun send(text: String) {
-        if (text.isBlank()) return
+    fun updateDraft(text: String) {
+        draftController.update(text)
+        draft.value = draftController.draft
+    }
+
+    fun sendDraft() {
+        val submitted = draftController.beginSend() ?: return
+        sending.value = draftController.sending
         viewModelScope.launch {
-            runCatching { engine.repository.sendText(MAIN_THREAD_ID, text.trim()) }
-                .onFailure { sendError.value = humanReason(it) }
+            val result = runCatching { engine.repository.sendText(MAIN_THREAD_ID, submitted) }
+            result.onFailure { sendError.value = humanReason(it) }
                 .onSuccess { sendError.value = null }
+            draftController.finishSend(submitted, persisted = result.isSuccess)
+            draft.value = draftController.draft
+            sending.value = draftController.sending
             refreshPending()
         }
     }
@@ -133,6 +153,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private fun humanReason(error: Throwable): String = when (error.message) {
         "chat_coffre_verrouille" -> "Mémoire verrouillée : déverrouillez-la pour écrire."
         "chat_message_vide" -> "Message vide."
+        "chat_message_trop_long" -> "Message trop long (maximum 32 KiB)."
         "chat_outbox_pleine" -> "Trop de messages en attente. Rallumez le PC pour les envoyer."
         "chat_hote_vide" -> "Adresse du PC manquante."
         "chat_port_invalide" -> "Port invalide (1 à 65535)."

@@ -84,7 +84,8 @@ fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
             ChatScreen(
                 messages = messages,
                 state = state,
-                onSend = viewModel::send,
+                onDraftChange = viewModel::updateDraft,
+                onSend = viewModel::sendDraft,
                 onSendImage = viewModel::sendImage,
                 onSendVoice = viewModel::sendVoice,
                 loadMedia = viewModel::loadMedia,
@@ -101,7 +102,8 @@ fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
 fun ChatScreen(
     messages: List<ChatMessage>,
     state: ChatUiState,
-    onSend: (String) -> Unit,
+    onDraftChange: (String) -> Unit,
+    onSend: () -> Unit,
     onSendImage: (android.net.Uri) -> Unit,
     onSendVoice: (ByteArray) -> Unit,
     loadMedia: suspend (String) -> Pair<ByteArray, String>? = { null },
@@ -149,7 +151,14 @@ fun ChatScreen(
                 ErrorStrip(text = error, onDismiss = onDismissError)
             }
 
-            Composer(onSend = onSend, onSendImage = onSendImage, onSendVoice = onSendVoice)
+            Composer(
+                draft = state.draft,
+                sending = state.sending,
+                onDraftChange = onDraftChange,
+                onSend = onSend,
+                onSendImage = onSendImage,
+                onSendVoice = onSendVoice,
+            )
         }
     }
 }
@@ -395,11 +404,13 @@ private fun ErrorStrip(text: String, onDismiss: () -> Unit) {
 
 @Composable
 private fun Composer(
-    onSend: (String) -> Unit,
+    draft: String,
+    sending: Boolean,
+    onDraftChange: (String) -> Unit,
+    onSend: () -> Unit,
     onSendImage: (android.net.Uri) -> Unit,
     onSendVoice: (ByteArray) -> Unit,
 ) {
-    var draft by remember { mutableStateOf("") }
     var dictationNote by remember { mutableStateOf<String?>(null) }
     var listening by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
@@ -420,7 +431,7 @@ private fun Composer(
         if (!granted) dictationNote = "Permission micro refusée : la dictée reste indisponible."
         else {
             listening = true
-            dictation.start { state -> handleDictation(state, { draft = it }, { listening = it }, { dictationNote = it }) }
+            dictation.start { state -> handleDictation(state, onDraftChange, { listening = it }, { dictationNote = it }) }
         }
     }
 
@@ -473,13 +484,13 @@ private fun Composer(
                 Spacer(Modifier.size(4.dp))
                 OutlinedTextField(
                     value = draft,
-                    onValueChange = { draft = it },
+                    onValueChange = onDraftChange,
                     modifier = Modifier.weight(1f).heightIn(min = 56.dp),
                     label = { Text(if (listening) "Dictée en cours…" else "Message à Mina") },
                     maxLines = 5,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = {
-                        if (draft.isNotBlank()) { onSend(draft); draft = "" }
+                        if (draft.isNotBlank() && !sending) onSend()
                     }),
                 )
                 Spacer(Modifier.size(8.dp))
@@ -504,10 +515,10 @@ private fun Composer(
                 ) { Text(if (listening) "Stop" else "Micro") }
                 Spacer(Modifier.size(4.dp))
                 Button(
-                    onClick = { if (draft.isNotBlank()) { onSend(draft); draft = "" } },
-                    enabled = draft.isNotBlank(),
+                    onClick = onSend,
+                    enabled = draft.isNotBlank() && !sending,
                     modifier = Modifier.heightIn(min = 56.dp),
-                ) { Text("Envoyer") }
+                ) { Text(if (sending) "Envoi…" else "Envoyer") }
             }
         }
     }
