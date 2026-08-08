@@ -1,4 +1,10 @@
 import { createHash } from 'node:crypto';
+import {
+  VOICE_CHUNK_BYTES,
+  VOICE_MAX_BYTES,
+  VOICE_PCM_MIME,
+  isVoicePcmMime,
+} from './voice-pcm.mjs';
 
 // Réassemblage des pièces jointes/notes vocales reçues par chunks (extras chat). Reçoit un
 // événement `message.attachment.created`/`message.voice.created` (métadonnées + digest) puis des
@@ -12,13 +18,15 @@ import { createHash } from 'node:crypto';
 //   • purge des médias incomplets après un délai (pas de fuite mémoire).
 
 const DEFAULT_MAX_TOTAL_BYTES = 5 * 1024 * 1024; // 5 Mo (plan A2)
-const DEFAULT_MIME_ALLOWLIST = Object.freeze(['image/jpeg', 'image/png', 'image/webp', 'audio/mp4']);
+const DEFAULT_MIME_ALLOWLIST = Object.freeze(['image/jpeg', 'image/png', 'image/webp', 'audio/mp4', VOICE_PCM_MIME]);
 const DEFAULT_INCOMPLETE_TTL_MS = 10 * 60_000;
+const MAX_CHUNK_BYTES = 131_072;
 const MEDIA_ID = /^[A-Za-z0-9._:-]{1,64}$/u;
 const SHA256_HEX = /^[a-f0-9]{64}$/u;
 
 export function createMediaAssembler({
   maxTotalBytes = DEFAULT_MAX_TOTAL_BYTES,
+  maxVoiceBytes = VOICE_MAX_BYTES,
   mimeAllowlist = DEFAULT_MIME_ALLOWLIST,
   incompleteTtlMs = DEFAULT_INCOMPLETE_TTL_MS,
   now = Date.now,
@@ -36,15 +44,21 @@ export function createMediaAssembler({
     /** Déclare une pièce jointe entrante. Rejette AVANT toute allocation si les gardes ne passent pas. */
     begin(meta = {}) {
       const { mediaId, mime, sizeBytes, sha256, chunkCount, chunkBytes } = meta;
+      const voicePcm = isVoicePcmMime(mime);
       if (!MEDIA_ID.test(mediaId ?? '')) throw new Error('media_id_invalide');
       if (!allow.has(mime)) throw new Error(`media_mime_refuse:${mime}`);
       if (!SHA256_HEX.test(sha256 ?? '')) throw new Error('media_digest_invalide');
       if (!Number.isInteger(chunkCount) || chunkCount < 1 || chunkCount > 4096) throw new Error('media_chunk_count_invalide');
-      if (!Number.isInteger(chunkBytes) || chunkBytes < 1 || chunkBytes > 131_072) throw new Error('media_chunk_bytes_invalide');
+      if (!Number.isInteger(chunkBytes) || chunkBytes < 1 || chunkBytes > (voicePcm ? VOICE_CHUNK_BYTES : MAX_CHUNK_BYTES)) throw new Error('media_chunk_bytes_invalide');
       if (!Number.isInteger(sizeBytes) || sizeBytes < 1) throw new Error('media_size_invalide');
-      // Borne DURE avant toute réservation mémoire : le maximum théorique doit tenir sous la limite.
-      if (chunkCount * chunkBytes > maxTotalBytes) throw new Error('media_trop_gros');
-      if (sizeBytes > chunkCount * chunkBytes) throw new Error('media_size_incoherente');
+      const maxBytes = voicePcm ? Math.min(maxVoiceBytes, VOICE_MAX_BYTES) : maxTotalBytes;
+      if (sizeBytes > maxBytes) throw new Error('media_taille_invalide');
+      // Les images conservent la borne théorique historique. Pour la voix, le dernier chunk peut
+      // être plus court que 32 000 octets, donc il existe au plus un chunk de marge.
+      if (!voicePcm && chunkCount * chunkBytes > maxBytes) throw new Error('media_trop_gros');
+      const expectedChunkCount = Math.ceil(sizeBytes / chunkBytes);
+      if (chunkCount !== expectedChunkCount) throw new Error('media_chunk_count_invalide');
+      if (voicePcm && chunkCount * chunkBytes > maxBytes + VOICE_CHUNK_BYTES - 1) throw new Error('media_trop_gros');
       purgeExpired(now());
       if (!pending.has(mediaId)) {
         pending.set(mediaId, { meta: Object.freeze({ ...meta }), chunks: new Map(), received: 0, startedAt: now() });
@@ -58,7 +72,11 @@ export function createMediaAssembler({
       if (!entry) throw new Error('media_inconnu'); // chunk avant meta OU média déjà finalisé/purgé
       if (!Number.isInteger(index) || index < 0 || index >= entry.meta.chunkCount) throw new Error('media_index_invalide');
       const bytes = Buffer.from(binary ?? []);
-      if (bytes.length === 0 || bytes.length > entry.meta.chunkBytes) throw new Error('media_chunk_taille_invalide');
+      const expectedBytes = Math.min(
+        entry.meta.chunkBytes,
+        entry.meta.sizeBytes - (index * entry.meta.chunkBytes),
+      );
+      if (bytes.length !== expectedBytes) throw new Error('media_chunk_taille_invalide');
       if (entry.chunks.has(index)) return Object.freeze({ mediaId, complete: false, duplicate: true });
       entry.chunks.set(index, bytes);
       entry.received += 1;

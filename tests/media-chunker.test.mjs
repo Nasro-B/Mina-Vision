@@ -32,6 +32,15 @@ describe('media chunker (émission) — round-trip complet avec le réassembleur
     expect(meta.durationMs).toBe(3200);
   });
 
+  it('PCM16 canonical → type voix et chunks d’une seconde au plus', () => {
+    const { eventType, meta, chunks } = chunkMedia(Buffer.alloc(32_001, 7), {
+      mime: 'audio/L16;rate=16000;channels=1',
+    });
+    expect(eventType).toBe('message.voice.created');
+    expect(meta.chunkBytes).toBe(32_000);
+    expect(chunks.map((chunk) => chunk.binary.length)).toEqual([32_000, 1]);
+  });
+
   it('refuse mime hors liste, média vide ou trop gros', () => {
     expect(() => chunkMedia(Buffer.from('x'), { mime: 'application/pdf' })).toThrow(/mime_refuse/u);
     expect(() => chunkMedia(Buffer.alloc(0), { mime: 'image/png' })).toThrow(/media_vide/u);

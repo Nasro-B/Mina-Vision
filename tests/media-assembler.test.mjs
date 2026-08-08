@@ -59,6 +59,14 @@ describe('media assembler (réception pièces jointes — sécurité critique)',
     expect(asm.addChunk({ mediaId: 'M1', index: 0, binary: bytes }).duplicate).toBe(true);
   });
 
+  it('refuse un chunk non final tronqué avant de le conserver', () => {
+    const bytes = Buffer.from('abcdefgh', 'utf8');
+    const asm = createMediaAssembler();
+    asm.begin(metaFor(bytes, { chunkBytes: 4 }));
+    expect(() => asm.addChunk({ mediaId: 'M1', index: 0, binary: Buffer.from('abc') }))
+      .toThrow(/chunk_taille_invalide/u);
+  });
+
   it('purge les médias incomplets après le TTL', () => {
     let t = 1_000;
     const asm = createMediaAssembler({ incompleteTtlMs: 1_000, now: () => t });

@@ -65,7 +65,7 @@
 - Produces Node VOICE_PCM_MIME, VOICE_SAMPLE_RATE_HZ, VOICE_CHUNK_BYTES, VOICE_MAX_BYTES, isVoicePcmMime(mime), pcm16leToFloat32(bytes).
 - MediaChunker exposes encodeMeta(mediaId, mime, sizeBytes, sha256, chunkCount, chunkBytes, extraMeta) and encodeChunk(mediaId, index, binary).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
     @Test
     fun voicePcmConstantsAreFixed() {
@@ -87,7 +87,7 @@
       expect(() => parseMeta(imageMeta({ sizeBytes: 5 * 1024 * 1024 + 1 }))).toThrow('media_taille_invalide');
     });
 
-- [ ] **Step 2: Run tests to verify the red state**
+- [x] **Step 2: Run tests to verify the red state**
 
     Run: android\gradlew.bat :core:protocol:testDebugUnitTest --tests "*VoicePcmFormatTest"
 
@@ -97,7 +97,7 @@
 
     Expected: FAIL because src/chat/voice-pcm.mjs is absent and the MIME is refused.
 
-- [ ] **Step 3: Write minimal compatible implementation**
+- [x] **Step 3: Write minimal compatible implementation**
 
     object VoicePcmFormat {
         const val MIME = "audio/L16;rate=16000;channels=1"
@@ -124,7 +124,7 @@
 
     Make both assemblers use a mimeLimit helper: 50 MiB and 32 000-byte chunks only for canonical PCM, 5 MiB for images and legacy audio/mp4. Keep the historical audio/mp4 event mapping.
 
-- [ ] **Step 4: Run focused tests green**
+- [x] **Step 4: Run focused tests green**
 
     Run: android\gradlew.bat :core:protocol:testDebugUnitTest
 
@@ -134,7 +134,7 @@
 
     Expected: all tests pass, including refusal of noncanonical PCM parameters.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
     git add android/core/protocol src/chat/voice-pcm.mjs src/chat/media-chunker.mjs src/chat/media-assembler.mjs tests/voice-pcm.test.mjs tests/media-chunker.test.mjs
     git commit -m "feat(voice): define encrypted PCM media contract"

@@ -66,4 +66,41 @@ class MediaAssemblerTest {
             MediaAssembler.parseMeta(metaOf(bytes).plus("chunkCount" to 99))
         }.exceptionOrNull()?.message)
     }
+    @Test
+    fun canonicalPcmVoiceAcceptsFiftyMiBAndOneSecondChunks() {
+        val size = VoicePcmFormat.MAX_BYTES
+        val chunkCount = (size + VoicePcmFormat.CHUNK_BYTES - 1) / VoicePcmFormat.CHUNK_BYTES
+        val meta = MediaAssembler.parseMeta(
+            mapOf(
+                "mediaId" to "voice-pcm-1",
+                "mime" to VoicePcmFormat.MIME,
+                "sizeBytes" to size,
+                "sha256" to "a".repeat(64),
+                "chunkCount" to chunkCount,
+                "chunkBytes" to VoicePcmFormat.CHUNK_BYTES,
+            ),
+        )
+
+        assertEquals(VoicePcmFormat.MIME, meta.mime)
+        assertEquals(size, meta.sizeBytes)
+        assertEquals(chunkCount, meta.chunkCount)
+    }
+
+    @Test
+    fun rejectsMoreThanFourThousandAndNinetySixChunksBeforeAssembly() {
+        val error = runCatching {
+            MediaAssembler.parseMeta(
+                mapOf(
+                    "mediaId" to "too-many-chunks",
+                    "mime" to "image/jpeg",
+                    "sizeBytes" to 4_097,
+                    "sha256" to "a".repeat(64),
+                    "chunkCount" to 4_097,
+                    "chunkBytes" to 1,
+                ),
+            )
+        }.exceptionOrNull()
+
+        assertEquals("media_chunk_count_invalide", error?.message)
+    }
 }
