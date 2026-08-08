@@ -13,9 +13,8 @@ import fr.mina.gateway.ChatActivity
 /**
  * Notification à l'arrivée d'une réponse de Mina.
  *
- * L'aperçu contient le texte DÉCHIFFRÉ : il n'apparaît que sur cet appareil, dont le coffre a
- * déjà été déverrouillé. Rien n'est envoyé à un service de notification externe — la réponse est
- * arrivée par le lien direct avec le PC, elle ne repart pas.
+ * Aucun texte déchiffré n'entre dans la notification ou son historique système. L'utilisateur
+ * ouvre Mina pour lire la réponse dans le coffre local.
  */
 object ChatNotifier {
     private const val CHANNEL_ID = "mina_chat_replies"
@@ -48,8 +47,9 @@ object ChatNotifier {
         val notification = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
             .setContentTitle("Mina")
-            .setContentText(preview.take(120))
-            .setStyle(Notification.BigTextStyle().bigText(preview.take(600)))
+            .setContentText("Mina a répondu")
+            .setStyle(Notification.BigTextStyle().bigText("Ouvre Mina pour lire la réponse."))
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()
