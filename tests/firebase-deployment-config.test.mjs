@@ -11,11 +11,16 @@ describe('Firebase deployment configuration', () => {
     const projects = await readJson('../.firebaserc');
 
     expect(projects.projects.default).toBe('mina-vision');
-    expect(config.firestore).toEqual({ rules: 'firebase/firestore.rules' });
+    expect(config.firestore).toEqual({
+      rules: 'firebase/firestore.rules',
+      indexes: 'firestore.indexes.json',
+    });
+    expect(config.database).toEqual({ rules: 'database.rules.json' });
     expect(config.storage).toEqual({ rules: 'firebase.storage.rules' });
     expect(config.emulators).toMatchObject({
       auth: { port: 9099 },
       firestore: { port: 8080 },
+      database: { port: 9000 },
       storage: { port: 9199 },
       ui: { enabled: true, port: 4000 },
       singleProjectMode: true,
@@ -29,7 +34,8 @@ describe('Firebase deployment configuration', () => {
 
     expect(packageJson.scripts['test:firebase:emulator']).toBe('powershell -NoProfile -File scripts/run-firebase-emulator-smoke.ps1');
     expect(runner).toContain("-like 'jdk-21*'");
-    expect(runner).toContain("--only 'auth,firestore,storage'");
+    expect(runner).toContain("--only 'auth,firestore,database,storage'");
+    expect(runner).toContain('tests/firebase-chat-rules.test.mjs');
     expect(smoke).toContain("host: '127.0.0.1'");
     expect(smoke).toContain('firebase_emulator_environment_required');
   });

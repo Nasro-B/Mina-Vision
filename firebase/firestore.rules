@@ -1,29 +1,152 @@
 rules_version = '2';
 
-// Règles du relais `mina_app`.
-//
-// POSTURE ASSUMÉE : Firebase est un TUYAU NON DE CONFIANCE. La clé d'API Android est dans
-// l'APK, donc n'importe qui peut techniquement obtenir une session anonyme. Ces règles limitent
-// l'abus (forme, taille, append-only) ; elles ne SONT PAS la sécurité du canal.
-//
-// La sécurité réelle est ailleurs, et elle tient même si ces règles tombent :
-//   - le contenu est chiffré (AES-256-GCM, clé d'époque connue seulement du PC et des appareils
-//     appairés) — Firebase ne voit que du ciphertext ;
-//   - chaque événement est signé (P-256) et la signature est vérifiée AVANT déchiffrement, donc
-//     un intrus qui écrit ici ne peut rien injecter que le PC accepte ;
-//   - l'AAD lie le ciphertext à son contexte : un événement déplacé casse au lieu de passer.
-
 service cloud.firestore {
   match /databases/{database}/documents {
+    function hasOwnerClaim(ownerId) {
+      return request.auth != null
+        && request.auth.token.owner_id == ownerId
+        && request.auth.token.device_id is string
+        && request.auth.token.token_version is int;
+    }
 
+    function currentDevicePath(ownerId) {
+      return /databases/$(database)/documents/owners/$(ownerId)/devices/$(request.auth.token.device_id);
+    }
+
+    function isActiveDevice(ownerId) {
+      return hasOwnerClaim(ownerId)
+        && exists(currentDevicePath(ownerId))
+        && get(currentDevicePath(ownerId)).data.authUid == request.auth.uid
+        && get(currentDevicePath(ownerId)).data.revokedAt == null
+        && get(currentDevicePath(ownerId)).data.tokenVersion == request.auth.token.token_version;
+    }
+
+    function hasCapability(ownerId, capability) {
+      return isActiveDevice(ownerId)
+        && capability in get(currentDevicePath(ownerId)).data.capabilities;
+    }
+
+    function isBrain(ownerId) {
+      return isActiveDevice(ownerId)
+        && request.auth.token.device_id == 'mina-brain';
+    }
+
+    function hasOnlyAndAll(data, fields) {
+      return data.keys().hasOnly(fields) && data.keys().hasAll(fields);
+    }
+
+    function validEnvelope(data, eventId, ownerId) {
+      return hasOnlyAndAll(data, [
+          'version', 'eventId', 'threadId', 'senderDeviceId', 'deviceSequence', 'keyEpoch',
+          'routingClass', 'createdAt', 'expiresAt', 'payloadCiphertext', 'nonce', 'authTag', 'signature'
+        ])
+        && data.version == 3
+        && data.eventId == eventId
+        && data.senderDeviceId == request.auth.token.device_id
+        && data.threadId is string && data.threadId.size() > 0 && data.threadId.size() <= 160
+        && data.deviceSequence is int && data.deviceSequence >= 1 && data.deviceSequence <= 9007199254740991
+        && data.keyEpoch is int && data.keyEpoch >= 1 && data.keyEpoch <= 2147483647
+        && data.routingClass in ['message', 'receipt', 'stream', 'approval', 'control']
+        && data.createdAt is timestamp && data.expiresAt is timestamp
+        && data.createdAt <= request.time + duration.value(5, 'm')
+        && data.expiresAt > request.time
+        && data.expiresAt <= data.createdAt + duration.value(30, 'd')
+        && data.payloadCiphertext is string && data.payloadCiphertext.size() > 0 && data.payloadCiphertext.size() <= 350000
+        && data.nonce is string && data.nonce.size() >= 16 && data.nonce.size() <= 128
+        && data.authTag is string && data.authTag.size() >= 16 && data.authTag.size() <= 128
+        && data.signature is string && data.signature.size() >= 64 && data.signature.size() <= 256
+        && (
+          (data.routingClass == 'message' && hasCapability(ownerId, 'chat.write'))
+          || (data.routingClass == 'receipt' && hasCapability(ownerId, 'chat.read'))
+          || (data.routingClass == 'stream' && isBrain(ownerId))
+          || (data.routingClass == 'approval' && (isBrain(ownerId) || hasCapability(ownerId, 'approval.ordinary')))
+          || (data.routingClass == 'control' && hasCapability(ownerId, 'chat.write'))
+        );
+    }
+
+    function syncStatePath(ownerId) {
+      return /databases/$(database)/documents/owners/$(ownerId)/syncState/current;
+    }
+
+    function validCursor(ownerId, deviceId) {
+      return hasOnlyAndAll(request.resource.data, ['deviceId', 'cloudSequence', 'updatedAt'])
+        && request.resource.data.deviceId == deviceId
+        && request.resource.data.cloudSequence is int
+        && request.resource.data.cloudSequence >= 0
+        && request.resource.data.cloudSequence <= 9007199254740991
+        && request.resource.data.updatedAt == request.time
+        && exists(syncStatePath(ownerId))
+        && request.resource.data.cloudSequence <= get(syncStatePath(ownerId)).data.highWatermark;
+    }
+
+    match /owners/{ownerId} {
+      match /devices/{deviceId} {
+        allow get, list: if hasCapability(ownerId, 'chat.read');
+        allow create, update, delete: if false;
+      }
+
+      match /events/{eventId} {
+        allow get, list: if hasCapability(ownerId, 'chat.read');
+        allow create: if isActiveDevice(ownerId) && validEnvelope(request.resource.data, eventId, ownerId);
+        allow update, delete: if false;
+      }
+
+      match /eventRuntime/{eventId} {
+        allow get, list: if hasCapability(ownerId, 'chat.read');
+        allow create, update, delete: if false;
+      }
+
+      match /syncLog/{sequenceKey} {
+        allow get, list: if hasCapability(ownerId, 'chat.read');
+        allow create, update, delete: if false;
+      }
+
+      match /syncState/current {
+        allow get: if hasCapability(ownerId, 'chat.read');
+        allow create, update, delete, list: if false;
+      }
+
+      match /cursors/{deviceId} {
+        allow get: if hasCapability(ownerId, 'chat.read');
+        allow create: if isActiveDevice(ownerId)
+          && deviceId == request.auth.token.device_id
+          && validCursor(ownerId, deviceId);
+        allow update: if isActiveDevice(ownerId)
+          && deviceId == request.auth.token.device_id
+          && validCursor(ownerId, deviceId)
+          && request.resource.data.cloudSequence >= resource.data.cloudSequence;
+        allow delete, list: if false;
+      }
+
+      match /attachmentAcks/{ackId} {
+        allow get, list: if hasCapability(ownerId, 'chat.read');
+        allow create: if isActiveDevice(ownerId)
+          && hasOnlyAndAll(request.resource.data, ['attachmentId', 'deviceId', 'sha256', 'acknowledgedAt'])
+          && request.resource.data.deviceId == request.auth.token.device_id
+          && request.resource.data.attachmentId is string
+          && request.resource.data.sha256 is string && request.resource.data.sha256.size() == 64
+          && request.resource.data.acknowledgedAt == request.time;
+        allow update, delete: if false;
+      }
+
+      match /threads/{threadId} {
+        allow get, list: if hasCapability(ownerId, 'chat.read');
+        allow create, update, delete: if false;
+      }
+
+      match /{document=**} {
+        allow read, write: if false;
+      }
+    }
+
+    // Transition contrôlée : le relais anonyme historique reste isolé jusqu'à la migration des
+    // adaptateurs de Task 12. Il ne fait PAS partie du modèle owner/device ci-dessus.
     match /relay/{eventId} {
       function envelope() {
         return request.resource.data;
       }
 
-      // Seuls les 13 champs du contrat + 2 champs de routage. Tout champ supplémentaire est
-      // refusé : le relais ne doit pas devenir un canal auxiliaire pour des métadonnées.
-      function wellFormed() {
+      function legacyEnvelopeIsWellFormed() {
         return envelope().keys().hasOnly([
             'version', 'eventId', 'threadId', 'senderDeviceId', 'deviceSequence', 'keyEpoch',
             'routingClass', 'createdAtMs', 'expiresAtMs', 'payloadCiphertext', 'nonce',
@@ -47,15 +170,11 @@ service cloud.firestore {
       }
 
       allow read: if request.auth != null;
-      allow create: if request.auth != null && wellFormed();
-      // Append-only : un événement relayé ne se réécrit jamais. Sans cette règle, un tiers
-      // pourrait remplacer un message en attente par un autre ciphertext.
+      allow create: if request.auth != null && legacyEnvelopeIsWellFormed();
       allow update: if false;
-      // La suppression est le nettoyage normal après remise — le relais ne garde rien.
       allow delete: if request.auth != null;
     }
 
-    // Tout le reste reste fermé : le relais est la SEULE surface exposée.
     match /{document=**} {
       allow read, write: if false;
     }

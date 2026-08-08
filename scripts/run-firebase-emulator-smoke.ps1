@@ -10,5 +10,5 @@ if (-not $jdk) {
 
 $env:JAVA_HOME = $jdk.FullName
 $env:PATH = "$($jdk.FullName)\bin;$env:PATH"
-& firebase emulators:exec --config firebase.json --project mina-vision --only 'auth,firestore,storage' 'node scripts/firebase-emulator-smoke.mjs'
+& firebase emulators:exec --config firebase.json --project mina-vision --only 'auth,firestore,database,storage' 'node scripts/firebase-emulator-smoke.mjs && npx vitest run tests/firebase-chat-rules.test.mjs --maxWorkers=1 --no-file-parallelism'
 exit $LASTEXITCODE

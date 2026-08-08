@@ -1,0 +1,34 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "activeDevices": {
+      "$ownerId": {
+        "$deviceId": {
+          ".read": false,
+          ".write": false
+        }
+      }
+    },
+    "presence": {
+      "$ownerId": {
+        "$deviceId": {
+          ".read": "auth != null && auth.token.owner_id === $ownerId && auth.token.device_id === $deviceId && root.child('activeDevices').child($ownerId).child($deviceId).child('authUid').val() === auth.uid && root.child('activeDevices').child($ownerId).child($deviceId).child('revokedAt').val() === null && root.child('activeDevices').child($ownerId).child($deviceId).child('tokenVersion').val() === auth.token.token_version",
+          ".write": "auth != null && auth.token.owner_id === $ownerId && auth.token.device_id === $deviceId && root.child('activeDevices').child($ownerId).child($deviceId).child('authUid').val() === auth.uid && root.child('activeDevices').child($ownerId).child($deviceId).child('revokedAt').val() === null && root.child('activeDevices').child($ownerId).child($deviceId).child('tokenVersion').val() === auth.token.token_version && newData.hasChildren(['updatedAt', 'expiresAt']) && newData.child('updatedAt').isNumber() && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 90000"
+        }
+      }
+    },
+    "streams": {
+      "$ownerId": {
+        "$sessionId": {
+          "frames": {
+            "$sequence": {
+              ".read": "auth != null && auth.token.owner_id === $ownerId && root.child('activeDevices').child($ownerId).child(auth.token.device_id).child('authUid').val() === auth.uid && root.child('activeDevices').child($ownerId).child(auth.token.device_id).child('revokedAt').val() === null && root.child('activeDevices').child($ownerId).child(auth.token.device_id).child('tokenVersion').val() === auth.token.token_version",
+              ".write": "auth != null && auth.token.owner_id === $ownerId && auth.token.device_id === 'mina-brain' && root.child('activeDevices').child($ownerId).child('mina-brain').child('authUid').val() === auth.uid && root.child('activeDevices').child($ownerId).child('mina-brain').child('revokedAt').val() === null && root.child('activeDevices').child($ownerId).child('mina-brain').child('tokenVersion').val() === auth.token.token_version && newData.hasChildren(['ciphertext', 'sequence', 'expiresAt']) && newData.child('ciphertext').isString() && newData.child('ciphertext').val().length <= 16384 && newData.child('sequence').isNumber() && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 600000"
+            }
+          }
+        }
+      }
+    }
+  }
+}

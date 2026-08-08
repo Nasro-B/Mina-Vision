@@ -1,9 +1,55 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    // Le chemin historique de backup est conservé jusqu'à la migration dédiée : il est isolé
+    // de la nouvelle surface chat et aucune règle chat ne l'élargit.
     match /owners/{ownerId}/devices/{deviceId}/{objectPath=**} {
       allow read, write: if request.auth != null
         && request.auth.uid == ownerId;
+    }
+
+    function hasOwnerClaim(ownerId) {
+      return request.auth != null
+        && request.auth.token.owner_id == ownerId
+        && request.auth.token.device_id is string
+        && request.auth.token.token_version is int;
+    }
+
+    function currentDevicePath(ownerId) {
+      return /databases/(default)/documents/owners/$(ownerId)/devices/$(request.auth.token.device_id);
+    }
+
+    function activeDevice(ownerId) {
+      return hasOwnerClaim(ownerId)
+        && firestore.exists(currentDevicePath(ownerId))
+        && firestore.get(currentDevicePath(ownerId)).data.authUid == request.auth.uid
+        && firestore.get(currentDevicePath(ownerId)).data.revokedAt == null
+        && firestore.get(currentDevicePath(ownerId)).data.tokenVersion == request.auth.token.token_version;
+    }
+
+    function hasCapability(ownerId, capability) {
+      return activeDevice(ownerId)
+        && capability in firestore.get(currentDevicePath(ownerId)).data.capabilities;
+    }
+
+    match /owners/{ownerId}/chat/{threadId}/attachments/{attachmentId}/{chunkIndex} {
+      allow read: if hasCapability(ownerId, 'chat.read');
+      allow create: if hasCapability(ownerId, 'media.send')
+        && request.resource.contentType == 'application/octet-stream'
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024;
+      allow update, delete: if false;
+    }
+
+    match /owners/{ownerId}/history-snapshots/{snapshotId}/{chunkIndex} {
+      allow read: if activeDevice(ownerId)
+        && resource.metadata.targetDeviceId == request.auth.token.device_id;
+      allow create: if activeDevice(ownerId)
+        && request.auth.token.device_id == 'mina-brain'
+        && request.resource.contentType == 'application/octet-stream'
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024;
+      allow update, delete: if false;
     }
 
     match /{objectPath=**} {

@@ -1,6 +1,10 @@
 {
   "firestore": {
-    "rules": "firebase/firestore.rules"
+    "rules": "firebase/firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "database": {
+    "rules": "database.rules.json"
   },
   "storage": {
     "rules": "firebase.storage.rules"
@@ -11,6 +15,9 @@
     },
     "firestore": {
       "port": 8080
+    },
+    "database": {
+      "port": 9000
     },
     "storage": {
       "port": 9199

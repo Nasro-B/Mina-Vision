@@ -69,9 +69,11 @@
   },
   "devDependencies": {
     "@electron/rebuild": "4.2.0",
+    "@firebase/rules-unit-testing": "5.0.1",
     "@vitest/coverage-v8": "4.1.10",
     "electron": "43.1.0",
     "fast-check": "4.9.0",
+    "firebase-tools": "15.24.0",
     "jsdom": "^29.1.1",
     "vitest": "4.1.10"
   }
