@@ -54,7 +54,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import fr.mina.gateway.camera.CameraStreamService
 import fr.mina.gateway.chat.ChatSettings
-import fr.mina.gateway.feature.chat.MinaChatTheme
 import fr.mina.gateway.messaging.MessagingExecutors
 import fr.mina.gateway.messaging.MinaGatewayService
 import fr.mina.gateway.messaging.TelegramGateway
@@ -63,6 +62,7 @@ import fr.mina.gateway.messaging.storage.EncryptedOwnerIdentityStore
 import fr.mina.gateway.messaging.storage.MessagingDatabase
 import fr.mina.gateway.messaging.storage.RoomMessagingSecretStore
 import fr.mina.gateway.transport.DeviceIdentityStore
+import fr.mina.gateway.ui.MinaApp
 import org.json.JSONObject
 
 /**
@@ -87,18 +87,20 @@ class MainActivity : ComponentActivity() {
         )
         setContent {
             val state by homeState
-            MinaChatTheme {
-                ProvisioningHome(
+            MinaApp(
+                gatewayContent = { onOpenChat ->
+                    ProvisioningHome(
                     state = state,
                     onPhoneChange = { homeState.value = homeState.value.copy(phone = it) },
                     onTelegramChange = { homeState.value = homeState.value.copy(telegramIds = it) },
-                    onOpenChat = { startActivity(Intent(this@MainActivity, ChatActivity::class.java)) },
+                    onOpenChat = onOpenChat,
                     onOpenGuide = { startActivity(Intent(this@MainActivity, AideActivity::class.java)) },
                     onSave = { token -> provision(state.phone, state.telegramIds, token) },
                     onRemoveGateway = ::removeGateway,
                     onToggleBiometric = ::setBiometricLock,
-                )
-            }
+                    )
+                },
+            )
         }
         if (!handleCameraIntent(intent)) requestMessagingPermissions()
         loadSavedProvisioningState()

@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.gradle.api.tasks.testing.Test
 
 plugins {
     alias(libs.plugins.android.application)
@@ -50,6 +51,13 @@ android {
 }
 
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
+
+// Les tests JVM du module app sont légers ; borner leur worker évite qu'un poste déjà chargé
+// épuise le fichier d'échange avant même d'exécuter une assertion.
+tasks.withType<Test>().configureEach {
+    maxHeapSize = "256m"
+    maxParallelForks = 1
+}
 
 // Emballe l'APK sous un nom lisible pour la distribution (GitHub Release / sideload) :
 // « Mina Vision.apk » au lieu de « app-debug.apk ». Tâche Copy AUTONOME — elle ne touche ni au bloc

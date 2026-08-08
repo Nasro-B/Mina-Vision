@@ -21,13 +21,20 @@ describe('Android Kotlin gateway bootstrap', () => {
     expect(appBuild).toContain('compileSdk = 36');
     expect(appBuild).toContain('minSdk = 29');
     expect(appBuild).toContain('targetSdk = 35');
+    expect(appBuild).toContain('maxHeapSize = "256m"');
+    expect(appBuild).toContain('maxParallelForks = 1');
   });
 
   it('starts only a visible launcher activity and contains no embedded production secret', async () => {
-    const [manifest, activity, properties] = await Promise.all([
+    const [manifest, activity, properties, minaApp, navigation, conversations, devices, settings] = await Promise.all([
       read('app/src/main/AndroidManifest.xml'),
       read('app/src/main/kotlin/fr/mina/gateway/MainActivity.kt'),
       read('gradle.properties'),
+      read('app/src/main/kotlin/fr/mina/gateway/ui/MinaApp.kt'),
+      read('app/src/main/kotlin/fr/mina/gateway/ui/MinaNavigation.kt'),
+      read('feature/chat/src/main/kotlin/fr/mina/gateway/feature/chat/ui/ConversationListScreen.kt'),
+      read('feature/chat/src/main/kotlin/fr/mina/gateway/feature/chat/ui/DeviceScreen.kt'),
+      read('feature/chat/src/main/kotlin/fr/mina/gateway/feature/chat/ui/SettingsScreen.kt'),
     ]);
     expect(manifest).toContain('android.intent.category.LAUNCHER');
     expect(manifest).toContain('android:launchMode="singleTop"');
@@ -46,6 +53,20 @@ describe('Android Kotlin gateway bootstrap', () => {
     expect(activity).toContain('CameraStreamService.ACTION_START');
     expect(activity).toContain('Manifest.permission.CAMERA');
     expect(activity).toContain('stopService(Intent(this, CameraStreamService::class.java))');
+    expect(activity).toContain('MinaApp(');
+    expect(minaApp).toContain('MinaNavigation(');
+    expect(navigation).toContain('startDestination = ROUTE_CONVERSATIONS');
+    for (const route of ['conversations', 'chat/{threadId}', 'voice/{threadId}', 'devices', 'settings', 'gateway']) {
+      expect(navigation).toContain(route);
+    }
+    expect(conversations).toContain('Conversation avec Mina');
+    expect(devices).toContain('gérés depuis le PC');
+    expect(settings).toContain('Passerelle SMS & Telegram');
+    expect(settings).toContain('Appareils associés');
+    expect(navigation).toContain('onOpenDevices');
+    expect(minaApp).toContain('gatewayContent');
+    expect(navigation).toContain('ChatActivity::class.java');
+    expect(navigation).not.toContain('ChatRoute()');
     expect(manifest).toContain('android.permission.RECEIVE_BOOT_COMPLETED');
     expect(manifest).toContain('.messaging.GatewayBootReceiver');
     expect(manifest).toContain('android.intent.action.BOOT_COMPLETED');

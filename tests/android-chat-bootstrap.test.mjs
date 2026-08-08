@@ -6,6 +6,7 @@ describe('bootstrap Android chat', () => {
     const settings = await readFile(new URL('../android/settings.gradle.kts', import.meta.url), 'utf8');
     const app = await readFile(new URL('../android/app/build.gradle.kts', import.meta.url), 'utf8');
     const transport = await readFile(new URL('../android/core/transport/build.gradle.kts', import.meta.url), 'utf8');
+    const featureChat = await readFile(new URL('../android/feature/chat/build.gradle.kts', import.meta.url), 'utf8');
     expect(settings).toContain('":core:chat"');
     expect(settings).toContain('":feature:chat"');
     expect(settings).toContain('":feature:voice"');
@@ -16,6 +17,7 @@ describe('bootstrap Android chat', () => {
     expect(transport).toContain('implementation("com.google.firebase:firebase-firestore")');
     expect(app).not.toContain('firebase-auth-ktx');
     expect(transport).not.toContain('-ktx');
+    expect(featureChat).toContain('testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"');
     expect(app.match(/firebase-appcheck-debug/g)).toHaveLength(1);
     const gitignore = await readFile(new URL('../.gitignore', import.meta.url), 'utf8');
     expect(gitignore).toContain('android/app/google-services.json');

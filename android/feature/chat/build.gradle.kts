@@ -10,7 +10,10 @@ android {
     namespace = "fr.mina.gateway.feature.chat"
     compileSdk = 36
 
-    defaultConfig { minSdk = 29 }
+    defaultConfig {
+        minSdk = 29
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
 
     buildFeatures { compose = true }
 
