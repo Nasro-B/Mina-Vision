@@ -1,6 +1,6 @@
 # Mina Vision — Ledger de périmètre du chat natif
 
-> **Statut : décision produit requise.** Ce ledger constate le périmètre disque du 2026-07-29 ; il n’autorise ni l’option A (chat natif complet), ni l’option B (scope expérimental limité).
+> **Statut : option A autorisée, implémentation incomplète.** Nasro a choisi le chat natif complet. Ce ledger remesure le périmètre disque au 2026-08-08 08:11 ; il ne transforme pas la présence d’un fichier en validation fonctionnelle.
 
 ## Méthode et résultat brut
 
@@ -27,7 +27,7 @@ $paths = foreach ($line in $lines) {
 Sortie :
 
 ```json
-{"DeclaredCreatePaths":102,"Present":4,"Absent":98}
+{"DeclaredCreatePaths":102,"Present":6,"Absent":96}
 ```
 
 Cette mesure ne déduit pas l’état fonctionnel d’un fichier présent. Elle établit seulement que les livrables source explicitement demandés par les tâches 13–25 ne sont pas tous sur disque.
@@ -40,7 +40,7 @@ Le plan historique les décrit comme livrées. Ce ledger ne les re-certifie pas 
 
 | Tâche | Chemins déclarés | Présents | Absents | Conclusion factuelle |
 |---|---:|---:|---:|---|
-| 13 — FCM, WorkManager, Huawei | 9 | 2 | 7 | incomplète |
+| 13 — FCM, WorkManager, Huawei | 9 | 4 | 5 | incomplète |
 | 14 — historique, ACK, cursors, GC | 8 | 2 | 6 | incomplète |
 | 15 — shell Compose | 9 | 0 | 9 | non commencée sur ces livrables |
 | 16 — texte/streaming Compose | 10 | 0 | 10 | non commencée sur ces livrables |
@@ -54,26 +54,25 @@ Le plan historique les décrit comme livrées. Ce ledger ne les re-certifie pas 
 | 24 — vérificateur, Emulator et recette | 7 | 0 | 7 | non commencée sur ces livrables |
 | 25 — documentation/runbooks/rollback | 4 | 0 | 4 | non commencée sur ces livrables |
 
-Les quatre chemins présents sont :
+Les six chemins présents sont :
 
-- Tâche 13 : `android/app/src/main/kotlin/fr/mina/gateway/chat/MinaChatMessagingService.kt`, `android/app/src/main/kotlin/fr/mina/gateway/chat/ChatSyncWorker.kt`.
+- Tâche 13 : `android/app/src/main/kotlin/fr/mina/gateway/chat/MinaChatMessagingService.kt`, `android/app/src/main/kotlin/fr/mina/gateway/chat/ChatSyncWorker.kt`, `android/app/src/main/kotlin/fr/mina/gateway/chat/ChatSyncScheduler.kt`, `tests/android-chat-background-contract.test.mjs`.
 - Tâche 14 : `src/devices/chat-history-snapshot.mjs`, `tests/chat-history-snapshot.test.mjs`.
 
 Ils ne suffisent pas à valider leurs tâches complètes, car les autres livrables déclarés de ces tâches sont absents.
 
 ## Absences déterminantes vérifiées
 
-- Le scheduler et les coordinateurs de fond : `ChatSyncScheduler.kt`, `FcmRegistrationCoordinator.kt`, `HuaweiRealtimeCoordinator.kt`.
+- Les coordinateurs de fond restants : `FcmRegistrationCoordinator.kt`, `HuaweiRealtimeCoordinator.kt`.
 - Le shell Compose et ses écrans : `MinaApplication.kt`, `MinaApp.kt`, `MinaNavigation.kt`, `ConversationListScreen.kt`, `ChatScreen.kt`, `SettingsScreen.kt`.
 - Les médias, notes vocales et live : les chemins `attachments/*`, `VoiceNote*`, `LiveAudioCapture.kt`, `LiveVoiceSession.kt`, `LiveVoiceScreen.kt`, `src/voice/native-chat-live-bridge.mjs`.
 - Les approbations et la révocation : `approval-store.mjs`, `app-approval-adapter.mjs`, `chat-device-revocation.mjs`, `chat-repair-service.mjs`, `chat-thread-purge.mjs`.
 - Les gates : `scripts/verify-native-chat-release.mjs`, les tests `native-chat-*` listés en tâche 24, la recette manuelle et les runbooks/data map requis.
 
-## Décision à prendre avant tout code de chat natif
+## Option active
 
-| Option | Effet autorisé |
+| Option choisie | Effet autorisé |
 |---|---|
 | A — chat natif complet | Exécuter les tâches 13–25 en vagues indépendantes avec tests Node/Kotlin, Emulator et appareils physiques. |
-| B — scope limité honnête | Conserver le socle direct/relais existant comme expérimental, publier ses limites et retirer les promesses d’historique complet, Firebase, approbations APK et voix live. |
 
-Sans ce choix, le statut correct est `partiellement implémenté`, jamais « chat Android complet ».
+Le statut correct reste `partiellement implémenté`, jamais « chat Android complet », tant que les 96 livrables déclarés absents, leurs tests et leurs recettes ne sont pas clos avec preuve.
