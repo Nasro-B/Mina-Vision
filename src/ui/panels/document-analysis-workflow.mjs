@@ -67,6 +67,11 @@ function renderFailure(summary, error) {
   addCard(summary, 'Analyse non effectuée', message);
 }
 
+function setProposedCategory(categorySelect, category) {
+  if (![...categorySelect.options].some((option) => option.value === category)) return;
+  categorySelect.value = category;
+}
+
 export async function analyzeDocument({ api, path } = {}) {
   const selected = selectedPath(path);
   if (typeof api?.documentIntake !== 'function' || typeof api?.documents?.parse !== 'function'
@@ -86,14 +91,25 @@ export async function analyzeDocument({ api, path } = {}) {
   return Object.freeze({ state: 'analyzed', documentId: record.documentId, record, observation, classification });
 }
 
-export function bindDocumentAnalysis({ api, pathInput, submitButton, summary } = {}) {
+export function bindDocumentAnalysis({
+  api, pathInput, submitButton, summary, categorySelect = null, confirmButton = null,
+} = {}) {
   if (!pathInput || !submitButton || !summary?.replaceChildren) throw new TypeError('document_analysis_elements_required');
+  const confirmationEnabled = Boolean(categorySelect && confirmButton);
+  let pendingProposalId = null;
 
   const run = async () => {
     submitButton.disabled = true;
+    if (confirmationEnabled) confirmButton.disabled = true;
+    pendingProposalId = null;
     try {
       const result = await analyzeDocument({ api, path: pathInput.value });
       renderAnalysis(summary, result);
+      if (confirmationEnabled && result.state === 'analyzed' && typeof result.classification?.id === 'string') {
+        pendingProposalId = result.classification.id;
+        setProposedCategory(categorySelect, result.classification.category);
+        confirmButton.disabled = false;
+      }
       return result;
     } catch (error) {
       renderFailure(summary, error);
@@ -102,6 +118,24 @@ export function bindDocumentAnalysis({ api, pathInput, submitButton, summary } =
       submitButton.disabled = false;
     }
   };
+
+  const confirm = async () => {
+    if (!confirmationEnabled || !pendingProposalId) throw new Error('document_classification_confirmation_unavailable');
+    if (typeof api?.documents?.confirmClassification !== 'function') throw new TypeError('document_classification_confirmation_api_required');
+    confirmButton.disabled = true;
+    try {
+      const confirmed = await api.documents.confirmClassification(pendingProposalId, { category: categorySelect.value });
+      pendingProposalId = null;
+      addCard(summary, 'Classement confirmé', `${confirmed?.category ?? 'non défini'} · conservation ${confirmed?.retention ?? 'non définie'}`);
+      return confirmed;
+    } catch (error) {
+      addCard(summary, 'Classement non confirmé', 'La proposition reste inchangée.');
+      confirmButton.disabled = false;
+      throw error;
+    }
+  };
+
   submitButton.addEventListener('click', () => { void run().catch(() => {}); });
-  return Object.freeze({ run });
+  if (confirmationEnabled) confirmButton.addEventListener('click', () => { void confirm().catch(() => {}); });
+  return Object.freeze({ run, confirm });
 }

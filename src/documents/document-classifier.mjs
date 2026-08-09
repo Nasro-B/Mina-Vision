@@ -41,7 +41,13 @@ export function createDocumentClassifier({ repository, clock } = {}) {
     async confirmClassification(proposalId, overrides = {}) {
       const proposal = await repository.get(proposalId);
       if (!proposal) throw new Error('classification_proposal_not_found');
-      const confirmed = Object.freeze({ ...proposal, ...overrides, status: 'confirmed', confirmedAt: new Date(now()).toISOString() });
+      const category = overrides.category ?? proposal.category;
+      const retention = Object.hasOwn(overrides, 'retention')
+        ? overrides.retention
+        : category === proposal.category
+          ? proposal.retention
+          : (RETENTION_BY_CATEGORY[category] ?? RETENTION_BY_CATEGORY.other);
+      const confirmed = Object.freeze({ ...proposal, ...overrides, category, retention, status: 'confirmed', confirmedAt: new Date(now()).toISOString() });
       await repository.put(proposalId, confirmed);
       return confirmed;
     },

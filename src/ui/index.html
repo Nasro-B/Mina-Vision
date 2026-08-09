@@ -695,6 +695,16 @@
               <button class="ghost-button" id="document-analyze" type="button">Mettre en quarantaine et analyser</button>
             </div>
             <p class="sandbox-remediation">Chaîne locale&nbsp;: quarantaine → extraction locale → preuves → classement proposé. Le texte extrait et les octets bruts ne sont pas affichés ici.</p>
+            <div class="source-grid">
+              <label><span>Classement proposé</span><select id="document-category">
+                <option value="other">Autre document</option>
+                <option value="invoice">Facture</option>
+                <option value="contract">Contrat</option>
+                <option value="identity">Identité</option>
+              </select></label>
+              <button class="ghost-button" id="document-confirm" type="button" disabled>Confirmer le classement</button>
+            </div>
+            <p class="sandbox-remediation">La confirmation est explicite&nbsp;; elle ne déplace ni ne partage le fichier.</p>
             <div id="documents-summary" class="analytics-summary"></div>
             <p class="sandbox-remediation">Aucun octet brut de document n’entre dans ce panneau&nbsp;; les originaux ne sont jamais écrasés. Le mode urgence coupe le réseau et les automatisations externes.</p>
           </div>

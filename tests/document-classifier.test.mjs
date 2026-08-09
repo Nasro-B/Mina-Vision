@@ -44,6 +44,13 @@ describe('createDocumentClassifier.confirmClassification', () => {
     expect(confirmed).toMatchObject({ status: 'confirmed', project: 'Impôts 2026' });
   });
 
+  it('recalculates retention when confirmation changes category', async () => {
+    const classifier = createDocumentClassifier({ repository: fakeRepository(), clock: () => 0 });
+    const proposal = await classifier.proposeClassification(observation);
+    const confirmed = await classifier.confirmClassification(proposal.id, { category: 'invoice' });
+    expect(confirmed).toMatchObject({ category: 'invoice', retention: 'P10Y', status: 'confirmed' });
+  });
+
   it('rejects confirming an unknown proposal', async () => {
     const classifier = createDocumentClassifier({ repository: fakeRepository(), clock: () => 0 });
     await expect(classifier.confirmClassification('missing')).rejects.toThrow('classification_proposal_not_found');

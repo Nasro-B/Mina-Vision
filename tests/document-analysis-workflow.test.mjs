@@ -6,11 +6,15 @@ function workflowDom() {
   const dom = new JSDOM(`
     <input id="document-path">
     <button id="document-analyze" type="button">Analyser</button>
+    <select id="document-category"><option value="other">Autre</option><option value="invoice">Facture</option></select>
+    <button id="document-confirm" type="button" disabled>Confirmer</button>
     <div id="documents-summary"></div>
   `);
   return {
     input: dom.window.document.querySelector('#document-path'),
     button: dom.window.document.querySelector('#document-analyze'),
+    category: dom.window.document.querySelector('#document-category'),
+    confirm: dom.window.document.querySelector('#document-confirm'),
     summary: dom.window.document.querySelector('#documents-summary'),
   };
 }
@@ -70,6 +74,38 @@ describe('parcours d’analyse documentaire', () => {
 
     expect(summary.textContent).toContain('Fichier bloqué');
     expect(summary.textContent).toContain('executable');
+  });
+
+  it('attend un choix explicite avant de confirmer le classement proposé', async () => {
+    const { input, button, category, confirm, summary } = workflowDom();
+    const api = {
+      documentIntake: async () => ({
+        documentId: 'document-1', status: 'inspectable', detectedType: 'application/pdf', reasons: [],
+      }),
+      documents: {
+        parse: async () => ({ parserId: 'pdf-text-parser', pageCount: 1, blockCount: 1, confidence: 1 }),
+        proposeClassification: async () => ({ id: 'proposal-1', category: 'other', retention: 'P1Y' }),
+        confirmClassification: async (proposalId, overrides) => {
+          if (proposalId !== 'proposal-1' || JSON.stringify(overrides) !== JSON.stringify({ category: 'invoice' })) {
+            throw new Error('classification_confirmation_invalid');
+          }
+          return { category: 'invoice', retention: 'P10Y', status: 'confirmed' };
+        },
+      },
+    };
+    input.value = 'C:\\Documents\\facture.pdf';
+
+    const binding = bindDocumentAnalysis({
+      api, pathInput: input, submitButton: button, summary, categorySelect: category, confirmButton: confirm,
+    });
+    await binding.run();
+    expect(confirm.disabled).toBe(false);
+
+    category.value = 'invoice';
+    await expect(binding.confirm()).resolves.toMatchObject({ status: 'confirmed', category: 'invoice' });
+    expect(summary.textContent).toContain('Classement confirmé');
+    expect(summary.textContent).toContain('invoice');
+    expect(confirm.disabled).toBe(true);
   });
 
   it('refuse un chemin vide sans appeler la couche IPC', async () => {

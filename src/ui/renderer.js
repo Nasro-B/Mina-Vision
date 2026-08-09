@@ -80,6 +80,8 @@ const elements = {
   emergencyNetworkState: document.querySelector('#emergency-network-state'),
   documentPath: document.querySelector('#document-path'),
   documentAnalyze: document.querySelector('#document-analyze'),
+  documentCategory: document.querySelector('#document-category'),
+  documentConfirm: document.querySelector('#document-confirm'),
   documentSummary: document.querySelector('#documents-summary'),
   log: document.querySelector('#log'),
   technicalLog: document.querySelector('#technical-log'),
@@ -978,6 +980,8 @@ bindDocumentAnalysis({
   api,
   pathInput: elements.documentPath,
   submitButton: elements.documentAnalyze,
+  categorySelect: elements.documentCategory,
+  confirmButton: elements.documentConfirm,
   summary: elements.documentSummary,
 });
 // Nothing in the backend actually stays stuck after an emergency stop (mina-runtime.mjs keeps
