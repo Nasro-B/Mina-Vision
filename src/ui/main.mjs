@@ -137,6 +137,7 @@ import { createTodayController } from './pages/today-controller.mjs';
 import { createGraphController } from './pages/graph-controller.mjs';
 import { createDocumentQuarantineStore } from '../documents/document-quarantine.mjs';
 import { createDocumentIntake } from '../documents/document-intake.mjs';
+import { createDocumentDestinationResolver } from '../documents/document-destination-resolver.mjs';
 import { createDocumentController } from './pages/document-controller.mjs';
 import { createEmergencyController } from './pages/emergency-controller.mjs';
 import { createPersonalityService } from '../personality/personality-service.mjs';
@@ -3207,6 +3208,10 @@ app.whenReady().then(async () => {
     // Point de faute par domaine (T1.2) : `MINA_BOOT_FAULT=domain:documents` fait échouer CE domaine
     // pour prouver que les suivants s'initialisent quand même et que l'app reste prête.
     bootFault('domain:documents');
+    const documentPaths = createDocumentDestinationResolver({
+      resolveExistingPath: realpath,
+      authorizeDestination: (target) => hostWritePolicy.authorize(target),
+    });
     const documentIntake = createDocumentIntake({
       quarantineStore: createDocumentQuarantineStore({
         filesystem: { writeFile, readFile, mkdir, rm },
@@ -3214,7 +3219,7 @@ app.whenReady().then(async () => {
         quarantineDir: path.join(app.getPath('userData'), 'document-quarantine'),
       }),
       filesystem: { readFile },
-      realpathProvider: { resolve: (target) => realpath(target) },
+      realpathProvider: documentPaths,
       clock: Date.now,
     });
     documentController = {

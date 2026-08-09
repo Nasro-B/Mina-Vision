@@ -44,11 +44,13 @@ function fakeRepository() {
 }
 
 function passthroughRealpath(approvedRoot = null) {
+  const resolve = vi.fn(async (requestedPath) => {
+    if (approvedRoot && !requestedPath.startsWith(approvedRoot)) throw new Error('document_intake_path_escape');
+    return requestedPath;
+  });
   return {
-    resolve: vi.fn(async (requestedPath) => {
-      if (approvedRoot && !requestedPath.startsWith(approvedRoot)) throw new Error('document_intake_path_escape');
-      return requestedPath;
-    }),
+    resolve,
+    resolveDestination: resolve,
   };
 }
 
@@ -187,6 +189,27 @@ describe('createDocumentIntake.inspect / promote', () => {
     const result = await intake.promote(item.documentId, '/approved/out.pdf');
     expect(result.promoted).toBe(true);
     expect(filesystem.writeFile).toHaveBeenCalledWith('/approved/out.pdf', PDF_MAGIC, expect.objectContaining({ flag: 'wx' }));
+  });
+
+  it('promote resolves a new destination through the output resolver, not realpath for existing sources', async () => {
+    const filesystem = fakeFilesystem();
+    const quarantineStore = createDocumentQuarantineStore({ filesystem, repository: fakeRepository() });
+    const intake = createDocumentIntake({
+      quarantineStore,
+      filesystem,
+      realpathProvider: {
+        resolve: vi.fn(async () => { throw new Error('existing_path_required'); }),
+        resolveDestination: vi.fn(async () => '/approved/canonical/out.pdf'),
+      },
+      clock: () => 0,
+    });
+    const item = await intake.intake({ source: 'download', bytes: PDF_MAGIC, declaredName: 'facture.pdf' });
+
+    await expect(intake.promote(item.documentId, '/approved/out.pdf')).resolves.toMatchObject({
+      promoted: true,
+      destination: '/approved/canonical/out.pdf',
+    });
+    expect(filesystem.writeFile).toHaveBeenCalledWith('/approved/canonical/out.pdf', PDF_MAGIC, expect.objectContaining({ flag: 'wx' }));
   });
 
   it('promote rejects an unknown documentId', async () => {

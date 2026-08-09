@@ -7,7 +7,7 @@ export function createDocumentIntake({
 } = {}) {
   if (!quarantineStore?.putRecord || !quarantineStore?.writeBytes) throw new TypeError('document_intake_quarantine_store_required');
   if (!filesystem?.readFile) throw new TypeError('document_intake_filesystem_required');
-  if (!realpathProvider?.resolve) throw new TypeError('document_intake_realpath_provider_required');
+  if (!realpathProvider?.resolve || !realpathProvider?.resolveDestination) throw new TypeError('document_intake_realpath_provider_required');
   if (!clock || (typeof clock !== 'function' && typeof clock.now !== 'function')) {
     throw new TypeError('document_intake_clock_required');
   }
@@ -61,7 +61,7 @@ export function createDocumentIntake({
         const decision = await capabilityBroker.authorize({ capability: 'documents.promote', resource: documentId, effect: 'write' });
         if (decision.decision !== 'allow') throw new Error(decision.reason ?? 'document_promotion_denied');
       }
-      const realDestination = await realpathProvider.resolve(destination);
+      const realDestination = await realpathProvider.resolveDestination(destination);
       const bytes = await quarantineStore.readBytes(documentId);
       await filesystem.writeFile(realDestination, bytes, { flag: 'wx' });
       return Object.freeze({ promoted: true, destination: realDestination, documentId });

@@ -18,7 +18,8 @@ function fakeFilesystem() {
 }
 
 function passthroughRealpath() {
-  return { resolve: vi.fn(async (path) => path) };
+  const resolve = vi.fn(async (path) => path);
+  return { resolve, resolveDestination: resolve };
 }
 
 function buildDocumentWorld() {
