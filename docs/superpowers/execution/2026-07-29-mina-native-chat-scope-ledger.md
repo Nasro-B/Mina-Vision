@@ -111,7 +111,7 @@ Preuves obtenues le 2026-08-08 :
 ### État partiel vérifié de la tâche 16
 
 Les dix chemins `Create:` historiques de la tâche 16 restent littéralement absents : la remesure
-du 2026-08-08 donne toujours `102` chemins déclarés, `9` présents et `93` absents pour les tâches
+du 2026-08-09 donne toujours `102` chemins déclarés, `9` présents et `93` absents pour les tâches
 13–25. Cela ne masque pas le travail effectué dans le module réellement compilé
 `fr.mina.gateway.feature.chat` :
 
@@ -121,8 +121,12 @@ du 2026-08-08 donne toujours `102` chemins déclarés, `9` présents et `93` abs
   double envoi pendant la transaction et n'efface que le brouillon effectivement persisté.
 - [x] `ChatScreen` source le brouillon et l'état d'envoi depuis le ViewModel ; le clic ne vide
   plus localement le champ avant la confirmation du dépôt.
-- [ ] pagination bornée, gestion complète des fils, streaming ordonné/final, retry/cancel/stop,
-  recherche locale et test d'intégration PC↔Android restent ouverts.
+- [x] `ChatRepository.observeThread` conserve uniquement les `200` messages visibles les plus
+  récents ; les chunks `stream` sont exclus par Room avant déchiffrement et ne peuvent donc pas
+  réduire cette fenêtre.
+- [ ] le chargement explicite par pages de `50` messages anciens, la gestion complète des fils,
+  le streaming ordonné/final, retry/cancel/stop, la recherche locale et le test d'intégration
+  PC↔Android restent ouverts.
 
 Preuves locales de cette tranche :
 
@@ -138,6 +142,13 @@ Preuves locales de cette tranche :
 - non exécuté : l'instrumentation physique `:feature:chat:connectedDebugAndroidTest`. La commande
   `adb devices -l` ne listait aucun appareil le 2026-08-08 ; aucun résultat appareil ne lui est
   attribué.
+- rouge attendu 2026-08-09 : après ajout du test de fenêtre, `:core:chat:testDebugUnitTest --tests
+  fr.mina.gateway.chat.ChatRepositoryTest` a produit `20 tests completed, 1 failed` à la nouvelle
+  assertion de limite. Après le correctif minimal, le test des chunks média a produit `21 tests
+  completed, 1 failed` : les chunks consommaient encore la fenêtre brute.
+- vert 2026-08-09 : la même classe `ChatRepositoryTest` a fini avec `BUILD SUCCESSFUL in 43s`.
+  La gate Android complète (`protocol`, `core:chat`, `feature:voice`, `feature:chat`, tests app,
+  lint et APK Debug) a fini avec `BUILD SUCCESSFUL in 3m 7s` (`343` tâches actionnables).
 
 ### État partiel vérifié de la tâche 18
 

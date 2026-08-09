@@ -76,6 +76,7 @@ class ChatRepository(
         private const val TTL_MS = 30L * 24 * 60 * 60 * 1_000
         private const val MAX_OUTBOX = 5_000
         private const val MAX_TEXT_UTF8_BYTES = 32 * 1_024
+        private const val VISIBLE_THREAD_WINDOW = 200
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val TAG_BITS = 128
     }
@@ -250,13 +251,13 @@ class ChatRepository(
     }
 
     /**
-     * Flux du fil, DÉCHIFFRÉ en mémoire. Coffre verrouillé, on n'invente rien : le message
-     * apparaît avec un texte explicite plutôt qu'un contenu faux ou une liste vide.
-     * Les chunks binaires (routingClass stream) sont MASQUÉS — ils portent des octets, pas un
-     * message ; la bulle média vient de l'événement de métadonnées.
+     * Fenêtre DÉCHIFFRÉE en mémoire des 200 messages visibles les plus récents. Coffre verrouillé,
+     * on n'invente rien : le message apparaît avec un texte explicite plutôt qu'un contenu faux.
+     * Les chunks binaires sont exclus par Room avant le déchiffrement : ils portent des octets,
+     * pas un message ; la bulle média vient de l'événement de métadonnées.
      */
     fun observeThread(threadId: String): Flow<List<ChatMessage>> =
-        dao.observeThread(threadId).map { rows -> rows.map { it.toMessage() }.filter { it.kind != "chunk" } }
+        dao.observeThread(threadId, VISIBLE_THREAD_WINDOW).map { rows -> rows.map { it.toMessage() } }
 
     fun observeThreads(): Flow<List<ThreadRow>> = dao.observeThreads()
 

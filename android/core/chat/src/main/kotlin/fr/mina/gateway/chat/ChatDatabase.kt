@@ -65,8 +65,18 @@ data class ThreadRow(
 
 @Dao
 interface ChatDao {
-    @Query("SELECT * FROM chat_events WHERE thread_id = :threadId ORDER BY created_at_ms ASC, event_id ASC")
-    fun observeThread(threadId: String): Flow<List<ChatEventRow>>
+    @Query(
+        """
+        SELECT * FROM (
+            SELECT * FROM chat_events
+            WHERE thread_id = :threadId AND routing_class != 'stream'
+            ORDER BY created_at_ms DESC, event_id DESC
+            LIMIT :limit
+        )
+        ORDER BY created_at_ms ASC, event_id ASC
+        """,
+    )
+    fun observeThread(threadId: String, limit: Int): Flow<List<ChatEventRow>>
 
     @Query("SELECT * FROM chat_events WHERE thread_id = :threadId ORDER BY created_at_ms ASC, event_id ASC")
     suspend fun readThread(threadId: String): List<ChatEventRow>

@@ -164,6 +164,35 @@ class ChatRepositoryTest {
     }
 
     @Test
+    fun `le fil visible garde seulement les 200 messages les plus recents`() = runTest {
+        repeat(201) { index ->
+            clock += 1
+            repository.sendText("thread-main", "message-${index + 1}")
+        }
+
+        val visible = repository.observeThread("thread-main").first()
+
+        assertEquals(200, visible.size)
+        assertEquals("message-2", visible.first().text)
+        assertEquals("message-201", visible.last().text)
+    }
+
+    @Test
+    fun `les chunks media ne reduisent pas la fenetre de 200 messages visibles`() = runTest {
+        repeat(199) { index ->
+            clock += 1
+            repository.sendText("thread-main", "message-${index + 1}")
+        }
+        repository.sendMedia("thread-main", ByteArray(200_000) { 7 }, "image/jpeg")
+
+        val visible = repository.observeThread("thread-main").first()
+
+        assertEquals(200, visible.size)
+        assertEquals("message-1", visible.first().text)
+        assertEquals("image", visible.last().kind)
+    }
+
+    @Test
     fun `sendMedia refuse si le PC n annonce pas les pieces jointes — rien mis en file`() = runTest {
         val repo = ChatRepository(
             dao = db.chatDao(), deviceId = "device-samsung", now = { clock },
