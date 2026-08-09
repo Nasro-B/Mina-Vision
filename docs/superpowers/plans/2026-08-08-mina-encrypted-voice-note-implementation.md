@@ -210,11 +210,14 @@
     ORDER BY queued_at_ms ASC, event_id ASC
     LIMIT :limit
 
-- [ ] **Step 4: Run focused Android tests green**
+- [x] **Step 4: Run focused Android tests green**
 
     Run: android\gradlew.bat :core:chat:testDebugUnitTest
 
     Expected: BUILD SUCCESSFUL. The retry test proves stable event IDs and the source test proves no clear audio artifact.
+
+    Résultat 2026-08-09 : `:core:chat:testDebugUnitTest` = `BUILD SUCCESSFUL in 1m 56s`
+    (`70` tâches actionnables : `1` exécutée, `69` à jour).
 
 - [x] **Step 5: Commit**
 
