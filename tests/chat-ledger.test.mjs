@@ -81,4 +81,53 @@ describe('ledger des événements déjà traités', () => {
     expect(ledger.recall('A')).toBeNull();
     expect(ledger.recall('D')).toBe('D');
   });
+
+  it('ne mémorise pas une réponse streamée incomplète et vérifie ses fragments', async () => {
+    const ledger = createChatLedger();
+    await expect(ledger.streamOnce('EVT-STREAM', async ({ append }) => {
+      await append('bon');
+      return 'jour';
+    }, { makeResponseId: () => '01ARZ3NDEKTSV4RRFFQ69G5FAV' })).rejects.toThrow('chat_stream_answer_incoherent');
+
+    expect(ledger.recall('EVT-STREAM')).toBeNull();
+    const completed = await ledger.streamOnce('EVT-STREAM', async ({ append }) => {
+      await append('bon');
+      await append('jour');
+      return 'bonjour';
+    }, { makeResponseId: () => '01ARZ3NDEKTSV4RRFFQ69G5FAV' });
+
+    expect(completed).toMatchObject({
+      responseId: '01ARZ3NDEKTSV4RRFFQ69G5FAV', chunks: ['bon', 'jour'], answer: 'bonjour', replayed: false,
+    });
+  });
+
+  it('réessaie la migration d’un ancien résultat si sa persistance échoue', async () => {
+    const legacy = {
+      schemaVersion: 2,
+      entries: [{ eventId: 'EVT-LEGACY', responseId: null, chunks: [], answer: 'bonjour', atMs: 41 }],
+    };
+    let saved = structuredClone(legacy);
+    let saves = 0;
+    const store = {
+      save: async (data) => {
+        saves += 1;
+        if (saves === 2) throw new Error('disque indisponible');
+        saved = structuredClone(data);
+      },
+      load: async () => ({ data: structuredClone(saved), status: 'ok' }),
+    };
+    const ledger = createChatLedger({ store });
+    await ledger.load();
+
+    await expect(ledger.streamOnce('EVT-LEGACY', async () => 'ne doit pas être appelé', {
+      makeResponseId: () => '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+    })).rejects.toThrow('chat_ledger_persistance_echouee');
+
+    const replay = await ledger.streamOnce('EVT-LEGACY', async () => 'ne doit pas être appelé', {
+      makeResponseId: () => '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+    });
+
+    expect(replay).toMatchObject({ responseId: '01ARZ3NDEKTSV4RRFFQ69G5FAX', answer: 'bonjour', replayed: true });
+    expect(saved.entries[0].responseId).toBe('01ARZ3NDEKTSV4RRFFQ69G5FAX');
+  });
 });
