@@ -16,6 +16,7 @@ import { parseChatEvent } from '../contracts/chat.mjs';
 import { decodeChatPayload } from '../contracts/chat-payload.mjs';
 import { createChatCrypto } from './chat-crypto.mjs';
 import { createMonotonicUlid } from '../contracts/event-id.mjs';
+import { createChatResponseStream } from './chat-response-stream.mjs';
 
 const TTL_MS = 30 * 24 * 60 * 60 * 1_000;
 const MAX_BACKLOG = 200;
@@ -45,7 +46,7 @@ export function createChatRelay({
 } = {}) {
   if (!firestore?.watch || !firestore?.put || !firestore?.remove) throw new TypeError('chat_relay_firestore_requis');
   if (!identity?.privateKey) throw new TypeError('chat_relay_identite_requise');
-  if (!ledger?.once) throw new TypeError('chat_relay_ledger_requis');
+  if (!ledger?.once || !ledger?.streamOnce) throw new TypeError('chat_relay_ledger_requis');
   if (typeof respond !== 'function') throw new TypeError('chat_relay_respond_requis');
   if (typeof publicKeyFromSpki !== 'function') throw new TypeError('chat_relay_key_factory_requis');
 
@@ -54,6 +55,7 @@ export function createChatRelay({
   let handled = 0;
   let rejected = 0;
   let lastError = null;
+  const responseStream = createChatResponseStream({ ledger, respond, makeResponseId: ulid });
 
   /** Retire les champs de routage : seuls les 13 champs du contrat sont vérifiables. */
   const toEnvelope = (document) => {
@@ -63,6 +65,7 @@ export function createChatRelay({
 
   async function handleDocument(document) {
     let event;
+    let terminalFramePersisted = false;
     try {
       event = parseChatEvent(toEnvelope(document));
     } catch (error) {
@@ -148,37 +151,40 @@ export function createChatRelay({
       digest: createHash('sha256').update(text).digest('hex'),
     });
 
-    let answer;
     try {
-      // MÊME ledger que le direct : arrivé par les deux chemins, le message n'obtient qu'une
-      // seule réponse — c'est ce qui rend le double transport sûr.
-      const produced = await ledger.once(event.eventId, () => respond({
-        text, deviceId: event.senderDeviceId, threadId: event.threadId, eventId: event.eventId,
-      }));
-      answer = produced.answer;
+      const produced = await responseStream.deliver({
+        text,
+        deviceId: event.senderDeviceId,
+        threadId: event.threadId,
+        sourceEventId: event.eventId,
+      }, async ({ type, routingClass, payload }) => {
+        const createdAtMs = clock();
+        const reply = crypto.encryptAndSign({
+          header: {
+            version: 2,
+            eventId: ulid(),
+            threadId: event.threadId,
+            senderDeviceId: 'pc-mina',
+            deviceSequence: event.deviceSequence,
+            keyEpoch: event.keyEpoch,
+            routingClass,
+            createdAtMs,
+            expiresAtMs: createdAtMs + TTL_MS,
+          },
+          plaintext: payload,
+        });
+        await firestore.put({ ...reply, target: 'device', relayedAtMs: createdAtMs });
+        terminalFramePersisted = type === 'assistant.response.completed' || type === 'assistant.response.failed';
+      });
       if (produced.replayed) note('chat_relay_rejeu_resservi', { eventId: event.eventId });
     } catch (error) {
-      answer = `Je n'ai pas pu traiter ce message : ${error.message}`;
+      lastError = String(error?.message ?? error);
+      note('chat_relay_reponse_echec', { eventId: event.eventId, reason: lastError.slice(0, 120) });
+      // Le comportement historique est conservé seulement si `failed` a réellement rejoint le
+      // relais. Si son écriture a échoué, garder la question évite une perte sans terminal.
+      if (!terminalFramePersisted) return;
     }
-
-    const createdAtMs = clock();
-    const reply = crypto.encryptAndSign({
-      header: {
-        version: 2,
-        eventId: ulid(),
-        threadId: event.threadId,
-        senderDeviceId: 'pc-mina',
-        deviceSequence: event.deviceSequence,
-        keyEpoch: event.keyEpoch,
-        routingClass: 'message',
-        createdAtMs,
-        expiresAtMs: createdAtMs + TTL_MS,
-      },
-      plaintext: answer,
-    });
-
-    await firestore.put({ ...reply, target: 'device', relayedAtMs: createdAtMs });
-    // La question relayée est retirée APRÈS le dépôt de la réponse : une coupure entre les deux
+    // La question relayée est retirée APRÈS le dépôt d'un terminal : une coupure entre les deux
     // laisse la question en place et le message repartira, plutôt que de disparaître sans réponse.
     await firestore.remove(event.eventId).catch(() => {});
     handled += 1;

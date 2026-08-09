@@ -8,6 +8,7 @@ import { createChatDeviceRegistry } from '../src/devices/chat-device-registry.mj
 import { createChatCrypto, deriveDeviceWrapKey, unwrapEpochKey } from '../src/devices/chat-crypto.mjs';
 import { createMonotonicUlid } from '../src/contracts/event-id.mjs';
 import { encodeChatPayloadV2 } from '../src/contracts/chat-payload.mjs';
+import { decodeAssistantResponseFrame } from '../src/contracts/assistant-response-stream.mjs';
 
 const keyPair = () => {
   const pair = generateKeyPairSync('ec', {
@@ -234,11 +235,15 @@ describe('serveur du canal mina_app', () => {
     expect(await nextMessage(socket)).toMatchObject({ type: 'refused', reason: 'hello_attendu' });
   });
 
-  it('accuse réception PUIS renvoie la réponse de Mina, chiffrée et signée', async () => {
+  it('accuse réception PUIS envoie les trames de réponse ordonnées, chiffrées et signées', async () => {
     const registry = createChatDeviceRegistry();
     const { port, pc } = await startServer({
       registry,
-      respond: async ({ text }) => `Mina a lu « ${text} »`,
+      respond: async ({ text, onDelta }) => {
+        await onDelta('Mina a lu « ');
+        await onDelta(`${text} »`);
+        return `Mina a lu « ${text} »`;
+      },
     });
     const { code } = registry.openPairing();
     const session = await handshake({ port, pc, registry, pairingCode: code });
@@ -272,11 +277,25 @@ describe('serveur du canal mina_app', () => {
     const ack = await nextMessage(session.socket);
     expect(ack).toMatchObject({ type: 'ack', eventId: event.eventId });
 
-    const reply = await nextMessage(session.socket);
-    expect(reply.senderDeviceId).toBe('pc-mina');
+    const replies = [
+      await nextMessage(session.socket),
+      await nextMessage(session.socket),
+      await nextMessage(session.socket),
+      await nextMessage(session.socket),
+    ];
+    expect(replies.every((reply) => reply.senderDeviceId === 'pc-mina')).toBe(true);
     // Le clair n'apparaît nulle part dans ce qui transite.
-    expect(JSON.stringify(reply)).not.toContain('Mina a lu');
-    expect(deviceCrypto.verifyAndDecrypt(reply)).toBe('Mina a lu « bonjour Mina »');
+    expect(JSON.stringify(replies)).not.toContain('Mina a lu');
+    const frames = replies.map((reply) => decodeAssistantResponseFrame(deviceCrypto.verifyAndDecryptBytes(reply)));
+    expect(frames.map(({ type }) => type)).toEqual([
+      'assistant.response.started', 'assistant.response.chunk', 'assistant.response.chunk',
+      'assistant.response.completed',
+    ]);
+    expect(frames.map(({ sequence }) => sequence)).toEqual([0, 1, 2, 3]);
+    expect(frames.every(({ sourceEventId }) => sourceEventId === event.eventId)).toBe(true);
+    expect(new Set(frames.map(({ responseId }) => responseId)).size).toBe(1);
+    expect(frames.at(-1).text).toBe('Mina a lu « bonjour Mina »');
+    expect(replies.map(({ routingClass }) => routingClass)).toEqual(['stream', 'stream', 'stream', 'message']);
   });
 
   it('attend le traitement média vérifié avant l\'ACK direct', async () => {
@@ -321,7 +340,7 @@ describe('serveur du canal mina_app', () => {
     expect(await nextMessage(session.socket)).toMatchObject({ type: 'ack', eventId: event.eventId });
   });
 
-  it('dit que Mina n\'a pas pu répondre au lieu d\'inventer une réponse', async () => {
+  it('termine par une trame failed générique si Mina ne peut pas répondre', async () => {
     const registry = createChatDeviceRegistry();
     const { port, pc } = await startServer({
       registry,
@@ -337,7 +356,7 @@ describe('serveur du canal mina_app', () => {
       epochKey: session.epochKey,
     });
     const createdAtMs = Date.now();
-    session.socket.send(JSON.stringify(deviceCrypto.encryptAndSign({
+    const event = deviceCrypto.encryptAndSign({
       header: {
         version: 2,
         eventId: createMonotonicUlid()(),
@@ -350,10 +369,15 @@ describe('serveur du canal mina_app', () => {
         expiresAtMs: createdAtMs + 60_000,
       },
       plaintext: 'question',
-    })));
+    });
+    session.socket.send(JSON.stringify(event));
     await nextMessage(session.socket);
-    const reply = await nextMessage(session.socket);
-    expect(deviceCrypto.verifyAndDecrypt(reply)).toContain('modèle indisponible');
+    const replies = [await nextMessage(session.socket), await nextMessage(session.socket)];
+    expect(JSON.stringify(replies)).not.toContain('modèle indisponible');
+    const frames = replies.map((reply) => decodeAssistantResponseFrame(deviceCrypto.verifyAndDecryptBytes(reply)));
+    expect(frames.map(({ type }) => type)).toEqual(['assistant.response.started', 'assistant.response.failed']);
+    expect(frames.at(-1)).toMatchObject({ sourceEventId: event.eventId, sequence: 1, code: 'provider_unavailable' });
+    expect(replies.map(({ routingClass }) => routingClass)).toEqual(['stream', 'message']);
   });
 
   it('refuse un événement signé par un autre appareil', async () => {
@@ -534,7 +558,8 @@ describe('serveur du canal mina_app', () => {
     // 1. Avant révocation : le canal fonctionne (sinon le test ne prouverait rien).
     sendWithOldEpoch('avant révocation');
     expect(await nextMessage(session.socket)).toMatchObject({ type: 'ack' });
-    await nextMessage(session.socket); // la réponse chiffrée de Mina
+    await nextMessage(session.socket); // started chiffré
+    await nextMessage(session.socket); // completed chiffré
 
     // 2. Révocation DIRECTE dans le registre, sans passer par chat-channel : c'est le pire cas,
     //    celui où personne n'a pensé à fermer la socket. La sécurité ne doit pas dépendre de la

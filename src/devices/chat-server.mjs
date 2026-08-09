@@ -17,6 +17,7 @@ import { encodeChatSignatureInput } from '../contracts/chat-binary-codec.mjs';
 import { createChatCrypto, deriveDeviceWrapKey, wrapEpochKey } from './chat-crypto.mjs';
 import { createMonotonicUlid } from '../contracts/event-id.mjs';
 import { createChatLedger } from './chat-ledger.mjs';
+import { createChatResponseStream } from './chat-response-stream.mjs';
 
 const DEFAULT_PORT = 8771;
 const MAX_FRAME_BYTES = 262_144;
@@ -69,6 +70,7 @@ export function createChatServer({
 
   const note = (event, detail) => logger?.append?.({ event, ...detail });
   const sessions = new Map();
+  const responseStream = createChatResponseStream({ ledger, respond, makeResponseId: ulid });
   let http = null;
   let wss = null;
 
@@ -219,36 +221,39 @@ export function createChatServer({
       digest: createHash('sha256').update(text).digest('hex'),
     });
 
-    let answer;
     try {
-      // Le ledger garantit UNE génération par événement : un rejeu resert la même réponse au
-      // lieu d'en inventer une seconde, différente, pour la même question.
-      const produced = await ledger.once(event.eventId, () => respond({
-        text, deviceId: session.deviceId, threadId: event.threadId, eventId: event.eventId,
-      }));
-      answer = produced.answer;
+      const produced = await responseStream.deliver({
+        text,
+        deviceId: session.deviceId,
+        threadId: event.threadId,
+        sourceEventId: event.eventId,
+      }, async ({ routingClass, payload }) => {
+        const createdAtMs = clock();
+        const reply = crypto.encryptAndSign({
+          header: {
+            version: 2,
+            eventId: ulid(),
+            threadId: event.threadId,
+            senderDeviceId: 'pc-mina',
+            deviceSequence: event.deviceSequence,
+            keyEpoch: event.keyEpoch,
+            routingClass,
+            createdAtMs,
+            expiresAtMs: createdAtMs + TTL_MS,
+          },
+          plaintext: payload,
+        });
+        socket.send(JSON.stringify(reply));
+      });
       if (produced.replayed) note('chat_app_rejeu_resservi', { eventId: event.eventId });
     } catch (error) {
-      // Mina n'a pas pu répondre : on le DIT, on ne fabrique pas une réponse de remplacement.
-      answer = `Je n'ai pas pu traiter ce message : ${error.message}`;
+      // `deliver` a déjà tenté une trame `failed` générique ; ne jamais transformer l'erreur
+      // fournisseur en texte qui exposerait son détail au téléphone.
+      note('chat_app_reponse_echec', {
+        eventId: event.eventId,
+        reason: String(error?.message ?? error).slice(0, 120),
+      });
     }
-
-    const createdAtMs = clock();
-    const reply = crypto.encryptAndSign({
-      header: {
-        version: 2,
-        eventId: ulid(),
-        threadId: event.threadId,
-        senderDeviceId: 'pc-mina',
-        deviceSequence: event.deviceSequence,
-        keyEpoch: event.keyEpoch,
-        routingClass: 'message',
-        createdAtMs,
-        expiresAtMs: createdAtMs + TTL_MS,
-      },
-      plaintext: answer,
-    });
-    socket.send(JSON.stringify(reply));
   }
 
   /**

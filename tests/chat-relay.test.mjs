@@ -6,8 +6,10 @@ import { createChatRelay } from '../src/devices/chat-relay.mjs';
 import { firebaseConfigFromGoogleServices } from '../src/devices/firestore-relay-adapter.mjs';
 import { createChatLedger } from '../src/devices/chat-ledger.mjs';
 import { createChatCrypto } from '../src/devices/chat-crypto.mjs';
+import { createChatResponseStream } from '../src/devices/chat-response-stream.mjs';
 import { createMonotonicUlid } from '../src/contracts/event-id.mjs';
 import { encodeChatPayloadV2 } from '../src/contracts/chat-payload.mjs';
+import { decodeAssistantResponseFrame } from '../src/contracts/assistant-response-stream.mjs';
 
 const keyPair = () => {
   const pair = generateKeyPairSync('ec', {
@@ -90,23 +92,38 @@ const relayedEvent = ({ device, epochKey, plaintext = 'bonjour', overrides = {} 
 };
 
 describe('relais Firebase du canal mina_app', () => {
-  it('déchiffre, fait répondre Mina et dépose la réponse chiffrée', async () => {
-    const { relay, firestore, device, epochKey, pc } = buildRelay();
+  it('déchiffre, fait répondre Mina et dépose les trames chiffrées ordonnées', async () => {
+    const respond = async ({ text, onDelta }) => {
+      await onDelta('écho ');
+      await onDelta(text);
+      return `écho ${text}`;
+    };
+    const { relay, firestore, device, epochKey, pc } = buildRelay({ respond });
     relay.start();
-    await firestore.deliver([relayedEvent({ device, epochKey, plaintext: 'salut Mina' })]);
+    const document = relayedEvent({ device, epochKey, plaintext: 'salut Mina' });
+    await firestore.deliver([document]);
 
     const replies = [...firestore.stored.values()].filter((entry) => entry.target === 'device');
-    expect(replies).toHaveLength(1);
+    expect(replies).toHaveLength(4);
     // Le clair ne transite JAMAIS par Firebase.
-    expect(JSON.stringify(replies[0])).not.toContain('salut Mina');
-    expect(JSON.stringify(replies[0])).not.toContain('écho');
+    expect(JSON.stringify(replies)).not.toContain('salut Mina');
+    expect(JSON.stringify(replies)).not.toContain('écho');
 
     const readBack = createChatCrypto({
       signingPrivateKey: device.privateKey,
       verifyPublicKey: pc.publicKey,
       epochKey,
     });
-    expect(readBack.verifyAndDecrypt(replies[0])).toBe('écho salut Mina');
+    const frames = replies.map((reply) => decodeAssistantResponseFrame(readBack.verifyAndDecryptBytes(reply)));
+    expect(frames.map(({ type }) => type)).toEqual([
+      'assistant.response.started', 'assistant.response.chunk', 'assistant.response.chunk',
+      'assistant.response.completed',
+    ]);
+    expect(frames.map(({ sequence }) => sequence)).toEqual([0, 1, 2, 3]);
+    expect(frames.every(({ sourceEventId }) => sourceEventId === document.eventId)).toBe(true);
+    expect(new Set(frames.map(({ responseId }) => responseId)).size).toBe(1);
+    expect(frames.at(-1).text).toBe('écho salut Mina');
+    expect(replies.map(({ routingClass }) => routingClass)).toEqual(['stream', 'stream', 'stream', 'message']);
     expect(relay.status()).toMatchObject({ watching: true, handled: 1, rejected: 0 });
   });
 
@@ -223,29 +240,62 @@ describe('relais Firebase du canal mina_app', () => {
   it('direct ET relais pour le MÊME message : Mina ne répond qu\'une fois', async () => {
     const ledger = createChatLedger();
     const respond = vi.fn(async ({ text }) => `réponse à ${text}`);
-    const { relay, firestore, device, epochKey } = buildRelay({ ledger, respond });
+    const { relay, firestore, device, epochKey, pc } = buildRelay({ ledger, respond });
     relay.start();
 
     const document = relayedEvent({ device, epochKey, plaintext: 'question unique' });
-    // Le chemin direct a déjà traité cet eventId ; le relais le revoit.
-    await ledger.once(document.eventId, () => respond({ text: 'question unique' }));
+    const direct = createChatResponseStream({ ledger, respond });
+    const directFrames = [];
+    await direct.deliver({
+      sourceEventId: document.eventId, text: 'question unique', deviceId: 'device-samsung', threadId: 'thread-main',
+    }, async (frame) => directFrames.push(frame));
     await firestore.deliver([document]);
 
     expect(respond).toHaveBeenCalledTimes(1);
+    expect(directFrames.map(({ type }) => type)).toEqual(['assistant.response.started', 'assistant.response.completed']);
+    const relayFrames = [...firestore.stored.values()]
+      .filter((entry) => entry.target === 'device')
+      .map((entry) => decodeAssistantResponseFrame(createChatCrypto({
+        signingPrivateKey: device.privateKey, verifyPublicKey: pc.publicKey, epochKey,
+      }).verifyAndDecryptBytes(entry)));
+    expect(relayFrames.map(({ type }) => type)).toEqual(['assistant.response.started', 'assistant.response.completed']);
     expect(relay.status().handled).toBe(1);
   });
 
-  it('dit que Mina n\'a pas pu répondre au lieu d\'inventer', async () => {
+  it('dépose failed sans exposer l\'erreur fournisseur', async () => {
     const { relay, firestore, device, epochKey, pc } = buildRelay({
       respond: async () => { throw new Error('modèle indisponible'); },
     });
     relay.start();
-    await firestore.deliver([relayedEvent({ device, epochKey })]);
-    const reply = [...firestore.stored.values()].find((entry) => entry.target === 'device');
+    const document = relayedEvent({ device, epochKey });
+    await firestore.deliver([document]);
+    const replies = [...firestore.stored.values()].filter((entry) => entry.target === 'device');
     const readBack = createChatCrypto({
       signingPrivateKey: device.privateKey, verifyPublicKey: pc.publicKey, epochKey,
     });
-    expect(readBack.verifyAndDecrypt(reply)).toContain('modèle indisponible');
+    expect(JSON.stringify(replies)).not.toContain('modèle indisponible');
+    const frames = replies.map((reply) => decodeAssistantResponseFrame(readBack.verifyAndDecryptBytes(reply)));
+    expect(frames.map(({ type }) => type)).toEqual(['assistant.response.started', 'assistant.response.failed']);
+    expect(frames.at(-1)).toMatchObject({ sourceEventId: document.eventId, sequence: 1, code: 'provider_unavailable' });
+    expect(firestore.remove).toHaveBeenCalledWith(document.eventId);
+  });
+
+  it('conserve la question si sa trame failed ne peut pas être déposée', async () => {
+    const firestore = fakeFirestore();
+    firestore.put = vi.fn(async (document) => {
+      if (document.routingClass === 'message') throw new Error('relay_write_failed');
+      firestore.stored.set(document.eventId, document);
+    });
+    const { relay, device, epochKey } = buildRelay({
+      firestore,
+      respond: async () => { throw new Error('modèle indisponible'); },
+    });
+    relay.start();
+    const document = relayedEvent({ device, epochKey });
+
+    await firestore.deliver([document]);
+
+    expect(firestore.remove).not.toHaveBeenCalledWith(document.eventId);
   });
 
   it('s\'arrête réellement — status() ne ment pas sur l\'écoute', async () => {
