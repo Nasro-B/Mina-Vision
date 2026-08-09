@@ -7,7 +7,6 @@
 - [x] Validation unitaire après le fallback OCR : `421` fichiers / `3 395` tests passés par `npx vitest run --exclude tests/integration/** --maxWorkers=1 --no-file-parallelism` en `321,17 s`. Les intégrations et smoke Electron historiques ne sont pas rejoués dans cette vague OCR.
 - [x] Firebase local : projet et app Android inventoriés en lecture seule ; règles owner/device testées dans Auth/Firestore/RTDB/Storage Emulator sur loopback (`6/6` chat + smoke backup historique). Le diagnostic refuse aussi, avant signature, un compte de service d'un autre projet. Ces règles locales ne sont pas déployées dans le projet cloud.
 - [x] Firebase cloud : une clé de compte de service Mina Vision est configurée uniquement dans `env/` ignoré ; la release Storage active refuse l’anonyme. Une recette réelle avec UID temporaire a vérifié custom token, Firestore valide/refus invalide, Storage propriétaire/refus inter-propriétaire, puis sauvegarde chiffrée et restauration. La recette a supprimé ses objets et son utilisateur ; le listing Storage final est vide. La sonde locale reste volontairement `firebase_cloud_unverified`, car elle ne fait aucun appel cloud implicite.
-- [x] Autorité Firebase opérationnelle : la dernière consigne Nasro désigne `mina.vision.ai@gmail.com`, via l’index navigateur `/u/5`, pour les prochaines opérations Mina. Le compte `/u/0` `mina.vision.ai@gmail.com` n’est pas autorisé pour ces opérations. Aucun paramètre Firebase ni ressource cloud n’a été modifié par cette décision.
 - [x] LM Studio local : génération texte et embedding Mina passés avec Gemma et Nomic chargés.
 - [x] TTS locale hors réseau : Kokoro a effectué un warm-up puis une synthèse française PCM à `24 000 Hz` avec `MINA_OFFLINE=true`, sans microphone ni téléchargement.
 - [x] Vision locale Mina : l’adaptateur réellement utilisé par Mina a analysé une image locale de contrôle avec Gemma à `4096` tokens et un flux. La réponse finale a été reçue séparément du raisonnement du modèle ; seul ce contenu final est consommé par Mina. Le flag est activé uniquement dans `.env` local après cette sonde ; `.env.example` conserve le défaut désactivé. Cette preuve ne couvre pas une webcam ou une caméra téléphone physique.
@@ -34,6 +33,13 @@
 
 ### Preuves externes ou physiques
 
+- [ ] **Accès Firebase Mina Vision** — la dernière consigne Nasro désigne
+  `mina.vision.ai@gmail.com` via `https://console.firebase.google.com/u/0/project/mina-vision/overview`.
+  La lecture de cette URL le 2026-08-09 a montré une session Chrome encore connectée à
+  `mina.vision.ai@gmail.com` et le refus « le projet n'existe pas ou vous n'avez pas
+  l'autorisation ». Cela ne prouve pas l'accès sous le compte demandé. Aucun paramètre Firebase ni
+  ressource cloud n'a été modifié ; la prochaine opération cloud exige une session visible sous le
+  compte désigné et un accès confirmé au projet.
 - [ ] **Android utilisateur** — le Huawei USB et le Samsung A71 ADB Wi-Fi ont historiquement reçu l’APK debug vérifié. À la dernière vérification, `adb devices -l` n’a listé aucun appareil : le parcours application, le provisioning local et les permissions caméra/micro, SMS et Telegram restent donc à prouver. Le propriétaire indique que l’APK de référence et un fichier `.env` local contiennent des données de provisioning ; ce fichier n’a pas été lu pendant cette réconciliation, ne doit pas être exposé, et l’APK de référence ne doit pas être écrasé. Toute réinstallation autorisée exige une saisie locale du provisioning. Le test instrumentation isolé passé ne prouve pas ces parcours.
 - [ ] **Google Home** — SDK signé, relais autorisé et recette sur lumière non critique, supervisée.
 - [ ] **Mail fournisseurs** — comptes de test dédiés, consentement OAuth/TLS et opérations réversibles réelles par fournisseur.
