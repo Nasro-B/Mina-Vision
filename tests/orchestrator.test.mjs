@@ -40,7 +40,27 @@ describe('createMinaOrchestrator', () => {
     expect(executor.previewAction).toHaveBeenCalledWith(expect.objectContaining({ name: 'click' }), expect.objectContaining({ environment: 'browser' }));
     expect(executor.previewAction.mock.invocationCallOrder[0]).toBeLessThan(executor.execute.mock.invocationCallOrder[0]);
     expect(executor.hideCursor).toHaveBeenCalled();
-    expect(state).toMatchObject({ status: 'completed', result: 'Terminé', actionCount: 1 });
+    expect(state).toMatchObject({ status: 'completed', result: 'Mission terminée : 1 action vérifiée.', actionCount: 1 });
+  });
+
+  it('does not expose an ungrounded model completion text when no action was verified', async () => {
+    const executor = createExecutor();
+    const computerUse = {
+      start: vi.fn().mockResolvedValue({
+        interactionId: 'i1', completed: true, text: 'J’ai supprimé tous les fichiers.', calls: [],
+      }),
+      continue: vi.fn(),
+    };
+    const mina = createMinaOrchestrator({ computerUse, executors: { browser: executor } });
+
+    const state = await mina.run({ goal: 'Observe', environment: 'browser', maxActions: 5, timeoutMs: 10_000 });
+
+    expect(state).toMatchObject({
+      status: 'completed',
+      result: 'Mission clôturée sans action vérifiée.',
+      actionCount: 0,
+    });
+    expect(state.result).not.toContain('supprimé');
   });
 
   it('does not execute a sensitive action rejected by the user', async () => {

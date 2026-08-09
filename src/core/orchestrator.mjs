@@ -10,6 +10,12 @@ import { classifyAction } from '../safety/policy.mjs';
 import { verifyAction } from '../grounding/action-verifier.mjs';
 import { withRetry } from './error-resilience.mjs';
 
+function verifiedMissionSummary(state) {
+  if (state.actionCount < 1) return 'Mission clôturée sans action vérifiée.';
+  const plural = state.actionCount > 1 ? 's' : '';
+  return `Mission terminée : ${state.actionCount} action${plural} vérifiée${plural}.`;
+}
+
 export function createMinaOrchestrator({
   computerUse,
   executors,
@@ -97,7 +103,7 @@ export function createMinaOrchestrator({
           if (response.completed) {
             state = pendingUnverifiedAction
               ? stopMission(state, 'action_unverified')
-              : completeMission(state, response.text || 'Terminé');
+              : completeMission(state, verifiedMissionSummary(state));
             break;
           }
 
@@ -123,7 +129,7 @@ export function createMinaOrchestrator({
           if (action.name === 'done') {
             state = pendingUnverifiedAction
               ? stopMission(state, 'action_unverified')
-              : completeMission(state, response.text || 'Terminé');
+              : completeMission(state, verifiedMissionSummary(state));
             break;
           }
 
