@@ -1,15 +1,18 @@
 import { GMAIL_SCOPES } from '../oauth/google-oauth.mjs';
+import { MAX_ATTACHMENT_BYTES } from '../attachment-quarantine.mjs';
 
 const ID = /^[A-Za-z0-9._:-]{1,160}$/u;
 const MAX_SYNC_MESSAGES = 100;
+const MAX_ATTACHMENTS_PER_MESSAGE = 100;
 const BASE_URL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const FORBIDDEN_FULL_SCOPE = 'https://mail.google.com/';
+const BASE64URL = /^[A-Za-z0-9_-]+={0,2}$/u;
 
 function headerValue(headers, name) {
   return headers.find((header) => header.name?.toLowerCase() === name)?.value ?? null;
 }
 
-function normalizeMessage(raw) {
+function normalizeMessage(raw, attachments = []) {
   if (!ID.test(raw?.id ?? '') || !ID.test(raw?.threadId ?? '')) throw new Error('gmail_message_invalid');
   const headers = raw.payload?.headers ?? [];
   return Object.freeze({
@@ -23,8 +26,51 @@ function normalizeMessage(raw) {
     internetMessageId: headerValue(headers, 'message-id'),
     internalDate: raw.internalDate != null ? String(raw.internalDate) : null,
     snippet: String(raw.snippet ?? '').slice(0, 500),
+    attachments: Object.freeze(attachments),
     trust: 'external_untrusted',
   });
+}
+
+function attachmentCandidates(payload) {
+  const candidates = [];
+  function visit(part) {
+    if (!part || typeof part !== 'object') return;
+    const filename = typeof part.filename === 'string' ? part.filename.slice(0, 500) : '';
+    const body = part.body;
+    if (filename) {
+      const size = Number(body?.size);
+      if (!Number.isSafeInteger(size) || size < 1) throw new Error('gmail_attachment_invalid');
+      if (size > MAX_ATTACHMENT_BYTES) throw new Error('gmail_attachment_too_large');
+      const attachmentId = body?.attachmentId;
+      const data = body?.data;
+      if (typeof attachmentId !== 'string' && typeof data !== 'string') throw new Error('gmail_attachment_invalid');
+      if (typeof attachmentId === 'string' && !ID.test(attachmentId)) throw new Error('gmail_attachment_invalid');
+      candidates.push(Object.freeze({
+        attachmentId: typeof attachmentId === 'string' ? attachmentId : null,
+        data: typeof data === 'string' ? data : null,
+        filename,
+        contentType: typeof part.mimeType === 'string' && part.mimeType.length > 0
+          ? part.mimeType.slice(0, 200)
+          : 'application/octet-stream',
+        size,
+      }));
+    }
+    for (const child of Array.isArray(part.parts) ? part.parts : []) visit(child);
+  }
+  visit(payload);
+  if (candidates.length > MAX_ATTACHMENTS_PER_MESSAGE) throw new Error('gmail_attachment_count_exceeded');
+  return candidates;
+}
+
+function decodeAttachment(data, expectedSize) {
+  if (typeof data !== 'string' || !BASE64URL.test(data)) throw new Error('gmail_attachment_payload_invalid');
+  const canonical = data.replace(/=+$/u, '');
+  const bytes = Buffer.from(canonical, 'base64url');
+  if (bytes.length !== expectedSize || bytes.length < 1 || bytes.length > MAX_ATTACHMENT_BYTES
+    || bytes.toString('base64url') !== canonical) {
+    throw new Error('gmail_attachment_payload_invalid');
+  }
+  return bytes;
 }
 
 function isHistoryExpired(error) {
@@ -49,6 +95,28 @@ export function createGmailAdapter({
     return oauth.request(credentials, options);
   }
 
+  async function loadAttachments(credentialsProvider, raw) {
+    const attachments = [];
+    for (const candidate of attachmentCandidates(raw?.payload)) {
+      let data = candidate.data;
+      if (data === null) {
+        const { response } = await call(credentialsProvider, {
+          url: `${BASE_URL}/messages/${encodeURIComponent(raw.id)}/attachments/${encodeURIComponent(candidate.attachmentId)}`,
+        });
+        if (response.data?.size != null && Number(response.data.size) !== candidate.size) {
+          throw new Error('gmail_attachment_size_mismatch');
+        }
+        data = response.data?.data;
+      }
+      attachments.push(Object.freeze({
+        filename: candidate.filename,
+        contentType: candidate.contentType,
+        bytes: decodeAttachment(data, candidate.size),
+      }));
+    }
+    return Object.freeze(attachments);
+  }
+
   async function fullSync(credentialsProvider, persist) {
     const { response } = await call(credentialsProvider, {
       url: `${BASE_URL}/messages`,
@@ -58,7 +126,7 @@ export function createGmailAdapter({
     let imported = 0;
     for (const item of (response.data.messages ?? []).slice(0, MAX_SYNC_MESSAGES)) {
       const { response: full } = await call(credentialsProvider, { url: `${BASE_URL}/messages/${item.id}` });
-      const message = normalizeMessage(full.data);
+      const message = normalizeMessage(full.data, await loadAttachments(credentialsProvider, full.data));
       await persist(message);
       historyId = message.historyId ?? historyId;
       imported += 1;
@@ -75,7 +143,7 @@ export function createGmailAdapter({
     outer: for (const record of (response.data.history ?? [])) {
       for (const added of (record.messagesAdded ?? [])) {
         const { response: full } = await call(credentialsProvider, { url: `${BASE_URL}/messages/${added.message.id}` });
-        await persist(normalizeMessage(full.data));
+        await persist(normalizeMessage(full.data, await loadAttachments(credentialsProvider, full.data)));
         imported += 1;
         if (imported >= MAX_SYNC_MESSAGES) break outer;
       }

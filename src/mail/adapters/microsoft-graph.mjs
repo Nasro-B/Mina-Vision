@@ -1,5 +1,8 @@
+import { MAX_ATTACHMENT_BYTES } from '../attachment-quarantine.mjs';
+
 const ID = /^[A-Za-z0-9._:-]{1,160}$/u;
 const MAX_SYNC_MESSAGES = 100;
+const MAX_ATTACHMENTS_PER_MESSAGE = 100;
 const MAX_THROTTLE_RETRIES = 3;
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 
@@ -11,7 +14,11 @@ function sameStringSet(left, right) {
   return left.length === right.length && left.every((value) => right.includes(value));
 }
 
-function normalizeMessage(raw) {
+function isRemovedMessage(value) {
+  return value?.['@removed'] != null;
+}
+
+function normalizeMessage(raw, attachments = []) {
   if (typeof raw?.id !== 'string' || raw.id.length < 1) throw new Error('microsoft_message_invalid');
   return Object.freeze({
     provider: 'microsoft',
@@ -20,6 +27,7 @@ function normalizeMessage(raw) {
     subject: String(raw.subject ?? '').slice(0, 998),
     receivedAt: typeof raw.receivedDateTime === 'string' ? raw.receivedDateTime : null,
     bodyText: String(raw.body?.content ?? '').slice(0, 2_000_000),
+    attachments: Object.freeze(attachments),
     trust: 'external_untrusted',
   });
 }
@@ -36,6 +44,29 @@ async function parseJson(response) {
   return text.length > 0 ? JSON.parse(text) : {};
 }
 
+function attachmentCandidates(value) {
+  const candidates = [];
+  for (const attachment of Array.isArray(value) ? value : []) {
+    if (attachment?.['@odata.type'] !== '#microsoft.graph.fileAttachment') continue;
+    const size = Number(attachment.size);
+    if (!Number.isSafeInteger(size) || size < 1) throw new Error('microsoft_attachment_invalid');
+    if (size > MAX_ATTACHMENT_BYTES) throw new Error('microsoft_attachment_too_large');
+    const attachmentId = graphMessagePath(attachment.id, 'microsoft_attachment_invalid');
+    const filename = typeof attachment.name === 'string' ? attachment.name.slice(0, 500) : '';
+    if (!filename) throw new Error('microsoft_attachment_invalid');
+    candidates.push(Object.freeze({
+      attachmentId,
+      filename,
+      contentType: typeof attachment.contentType === 'string' && attachment.contentType.length > 0
+        ? attachment.contentType.slice(0, 200)
+        : 'application/octet-stream',
+      size,
+    }));
+    if (candidates.length > MAX_ATTACHMENTS_PER_MESSAGE) throw new Error('microsoft_attachment_count_exceeded');
+  }
+  return candidates;
+}
+
 export function createMicrosoftGraphAdapter({
   account,
   oauth,
@@ -48,7 +79,7 @@ export function createMicrosoftGraphAdapter({
   }
   if (!oauth?.refresh) throw new TypeError('microsoft_graph_oauth_client_required');
 
-  async function call(credentialsProvider, { url, method = 'GET', body } = {}, attempt = 0) {
+  async function request(credentialsProvider, { url, method = 'GET', body } = {}, attempt = 0) {
     const credentials = await credentialsProvider(account.id);
     const token = await oauth.refresh({ refreshToken: credentials.refreshToken, scopes: credentials.scopes });
     if (requiredTenantId && token.tenantId !== requiredTenantId) throw new Error('microsoft_tenant_mismatch');
@@ -66,12 +97,54 @@ export function createMicrosoftGraphAdapter({
     if (response.status === 429 && attempt < MAX_THROTTLE_RETRIES) {
       const retryAfterSeconds = Number(response.headers?.get?.('Retry-After') ?? 1);
       await wait((Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : 1) * 1000);
-      return call(credentialsProvider, { url, method, body }, attempt + 1);
+      return request(credentialsProvider, { url, method, body }, attempt + 1);
     }
     if (response.status >= 400 && response.status !== 410) {
       throw Object.assign(new Error(`microsoft_graph_request_failed:${response.status}`), { status: response.status });
     }
-    return { status: response.status, data: await parseJson(response) };
+    return { status: response.status, response };
+  }
+
+  async function call(credentialsProvider, options) {
+    const { status, response } = await request(credentialsProvider, options);
+    return { status, data: await parseJson(response) };
+  }
+
+  async function callBytes(credentialsProvider, options) {
+    const { status, response } = await request(credentialsProvider, options);
+    const contentLength = response.headers?.get?.('Content-Length');
+    if (contentLength !== null && contentLength !== undefined && contentLength !== '') {
+      const size = Number(contentLength);
+      if (!Number.isSafeInteger(size) || size < 1) throw new Error('microsoft_attachment_payload_invalid');
+      if (size > MAX_ATTACHMENT_BYTES) throw new Error('microsoft_attachment_too_large');
+    }
+    if (typeof response.arrayBuffer !== 'function') throw new Error('microsoft_attachment_payload_invalid');
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length < 1 || bytes.length > MAX_ATTACHMENT_BYTES) throw new Error('microsoft_attachment_payload_invalid');
+    return { status, bytes };
+  }
+
+  async function loadAttachments(credentialsProvider, raw) {
+    const messageId = graphMessagePath(raw?.id, 'microsoft_attachment_invalid');
+    let url = `${GRAPH_BASE}/me/messages/${messageId}/attachments`;
+    const attachments = [];
+    while (url) {
+      const { data } = await call(credentialsProvider, { url });
+      for (const candidate of attachmentCandidates(data.value)) {
+        const { bytes } = await callBytes(credentialsProvider, {
+          url: `${GRAPH_BASE}/me/messages/${messageId}/attachments/${candidate.attachmentId}/$value`,
+        });
+        if (bytes.length !== candidate.size) throw new Error('microsoft_attachment_size_mismatch');
+        attachments.push(Object.freeze({
+          filename: candidate.filename,
+          contentType: candidate.contentType,
+          bytes,
+        }));
+      }
+      if (attachments.length > MAX_ATTACHMENTS_PER_MESSAGE) throw new Error('microsoft_attachment_count_exceeded');
+      url = data['@odata.nextLink'] ?? null;
+    }
+    return Object.freeze(attachments);
   }
 
   async function fullSync(credentialsProvider, persist, folderId) {
@@ -82,7 +155,8 @@ export function createMicrosoftGraphAdapter({
       const { data } = await call(credentialsProvider, { url });
       for (const item of (data.value ?? [])) {
         if (imported >= MAX_SYNC_MESSAGES) break;
-        await persist(normalizeMessage(item));
+        if (isRemovedMessage(item)) continue;
+        await persist(normalizeMessage(item, await loadAttachments(credentialsProvider, item)));
         imported += 1;
       }
       deltaLink = data['@odata.deltaLink'] ?? deltaLink;
@@ -140,7 +214,8 @@ export function createMicrosoftGraphAdapter({
         if (status === 410) return fullSync(credentialsProvider, persist, folderId);
         for (const item of (data.value ?? [])) {
           if (imported >= MAX_SYNC_MESSAGES) break;
-          await persist(normalizeMessage(item));
+          if (isRemovedMessage(item)) continue;
+          await persist(normalizeMessage(item, await loadAttachments(credentialsProvider, item)));
           imported += 1;
         }
         deltaLink = data['@odata.deltaLink'] ?? deltaLink;

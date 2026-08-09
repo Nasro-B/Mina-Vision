@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const MAX_ZIP_ENTRIES = 500;
 const MAX_ZIP_TOTAL_BYTES = 100 * 1024 * 1024;
 // Anti-bombe (R-02) : ratio déclaré taille/compressé refusé avant toute décompression ; le

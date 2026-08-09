@@ -170,6 +170,86 @@ describe('Gmail adapter: history-cursor sync and expired-history resync', () => 
   });
 });
 
+describe('Gmail adapter: attachment ingestion', () => {
+  it('persists a bounded attachment nested in the MIME payload', async () => {
+    const bytes = Buffer.from('%PDF-1.7 safe attachment', 'utf8');
+    const persisted = [];
+    const adapter = createGmailAdapter({
+      account,
+      oauth: fakeGmailOAuth({
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages': async () => ({ data: { messages: [{ id: 'm1', threadId: 't1' }] } }),
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1': async () => ({
+          data: {
+            id: 'm1', threadId: 't1', historyId: 501, payload: {
+              headers: [],
+              parts: [{
+                parts: [{
+                  filename: 'devis.pdf', mimeType: 'application/pdf', body: { attachmentId: 'a1', size: bytes.length },
+                }],
+              }],
+            },
+          },
+        }),
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/attachments/a1': async () => ({
+          data: { size: bytes.length, data: bytes.toString('base64url') },
+        }),
+      }),
+    });
+
+    await adapter.sync({ credentialsProvider, persist: async (message) => persisted.push(message) });
+
+    expect(persisted).toEqual([expect.objectContaining({
+      attachments: [expect.objectContaining({
+        filename: 'devis.pdf', contentType: 'application/pdf', bytes,
+      })],
+    })]);
+  });
+
+  it('rejects an attachment declared above the quarantine bound before fetching its bytes', async () => {
+    const adapter = createGmailAdapter({
+      account,
+      oauth: fakeGmailOAuth({
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages': async () => ({ data: { messages: [{ id: 'm1', threadId: 't1' }] } }),
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1': async () => ({
+          data: {
+            id: 'm1', threadId: 't1', payload: {
+              headers: [],
+              parts: [{ filename: 'trop-gros.pdf', mimeType: 'application/pdf', body: { attachmentId: 'a1', size: 26 * 1024 * 1024 } }],
+            },
+          },
+        }),
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/attachments/a1': async () => {
+          throw new Error('gmail_attachment_fetch_should_not_run');
+        },
+      }),
+    });
+
+    await expect(adapter.sync({ credentialsProvider, persist: async () => {} })).rejects.toThrow('gmail_attachment_too_large');
+  });
+
+  it('rejects a non-canonical base64url attachment payload', async () => {
+    const adapter = createGmailAdapter({
+      account,
+      oauth: fakeGmailOAuth({
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages': async () => ({ data: { messages: [{ id: 'm1', threadId: 't1' }] } }),
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1': async () => ({
+          data: {
+            id: 'm1', threadId: 't1', payload: {
+              headers: [],
+              parts: [{ filename: 'corrompu.pdf', mimeType: 'application/pdf', body: { attachmentId: 'a1', size: 3 } }],
+            },
+          },
+        }),
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/m1/attachments/a1': async () => ({
+          data: { size: 3, data: '%%%' },
+        }),
+      }),
+    });
+
+    await expect(adapter.sync({ credentialsProvider, persist: async () => {} })).rejects.toThrow('gmail_attachment_payload_invalid');
+  });
+});
+
 describe('Gmail adapter: drafts and send qualify only accepted_by_provider, never delivered', () => {
   it('creates a draft and returns its draft id and provider message id', async () => {
     const adapter = createGmailAdapter({

@@ -59,6 +59,15 @@ function jsonResponse(status, body, headers = {}) {
   };
 }
 
+function bytesResponse(status, bytes, headers = {}) {
+  return {
+    status,
+    headers: { get: (name) => headers[name] ?? null },
+    text: async () => '',
+    arrayBuffer: async () => Uint8Array.from(bytes).buffer,
+  };
+}
+
 const account = Object.freeze({ id: 'work-graph', address: 'nasro@work.test' });
 const credentialsProvider = async () => ({ refreshToken: 'refresh-1', scopes: ['Mail.ReadWrite'] });
 
@@ -129,6 +138,116 @@ describe('Microsoft Graph adapter: delta sync and expired cursor', () => {
     });
     expect(result.resynced).toBe(true);
     expect(result.deltaLink).toContain('new');
+  });
+});
+
+describe('Microsoft Graph adapter: attachment ingestion', () => {
+  it('skips a deleted delta item without querying its attachments', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      if (url.includes('$deltatoken=abc')) {
+        return jsonResponse(200, {
+          value: [{ id: 'deleted-message', '@removed': { reason: 'deleted' } }],
+          '@odata.deltaLink': 'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=def',
+        });
+      }
+      if (url.includes('/attachments')) throw new Error('graph_attachment_fetch_should_not_run');
+      throw new Error(`unexpected_url:${url}`);
+    });
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+    const persist = vi.fn();
+
+    const result = await adapter.sync({
+      credentialsProvider,
+      cursor: { deltaLink: 'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=abc' },
+      persist,
+    });
+
+    expect(result).toEqual(expect.objectContaining({ imported: 0, resynced: false }));
+    expect(persist).not.toHaveBeenCalled();
+  });
+
+  it('persists only bounded file attachments and never dereferences a reference attachment', async () => {
+    const bytes = Buffer.from('%PDF-1.7 graph attachment', 'utf8');
+    const persisted = [];
+    const fetchImpl = vi.fn(async (url) => {
+      if (url.endsWith('/mailFolders/inbox/messages/delta')) {
+        return jsonResponse(200, {
+          value: [{ id: 'm1', internetMessageId: '<m1@work.test>', subject: 'Bonjour', body: { content: 'Contenu' } }],
+          '@odata.deltaLink': 'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=abc',
+        });
+      }
+      if (url.endsWith('/messages/m1/attachments')) {
+        return jsonResponse(200, {
+          value: [
+            { '@odata.type': '#microsoft.graph.fileAttachment', id: 'a1', name: 'devis.pdf', contentType: 'application/pdf', size: bytes.length },
+            { '@odata.type': '#microsoft.graph.referenceAttachment', id: 'r1', name: 'partage', sourceUrl: 'https://external.example.test/file' },
+          ],
+        });
+      }
+      if (url.endsWith('/messages/m1/attachments/a1/$value')) {
+        return bytesResponse(200, bytes, { 'Content-Length': String(bytes.length) });
+      }
+      throw new Error(`unexpected_url:${url}`);
+    });
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await adapter.sync({ credentialsProvider, persist: async (message) => persisted.push(message) });
+
+    expect(persisted).toEqual([expect.objectContaining({
+      attachments: [expect.objectContaining({
+        filename: 'devis.pdf', contentType: 'application/pdf', bytes,
+      })],
+    })]);
+  });
+
+  it('rejects a Graph attachment declared above the quarantine bound before reading raw bytes', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      if (url.endsWith('/mailFolders/inbox/messages/delta')) {
+        return jsonResponse(200, {
+          value: [{ id: 'm1', internetMessageId: '<m1@work.test>', subject: 'Bonjour', body: { content: 'Contenu' } }],
+          '@odata.deltaLink': 'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=abc',
+        });
+      }
+      if (url.endsWith('/messages/m1/attachments')) {
+        return jsonResponse(200, {
+          value: [{ '@odata.type': '#microsoft.graph.fileAttachment', id: 'a1', name: 'trop-gros.pdf', contentType: 'application/pdf', size: 26 * 1024 * 1024 }],
+        });
+      }
+      if (url.endsWith('/$value')) throw new Error('graph_attachment_fetch_should_not_run');
+      throw new Error(`unexpected_url:${url}`);
+    });
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await expect(adapter.sync({ credentialsProvider, persist: async () => {} })).rejects.toThrow('microsoft_attachment_too_large');
+  });
+
+  it('rejects an oversized Graph payload header before reading its body', async () => {
+    const arrayBuffer = vi.fn(async () => Uint8Array.from([1]).buffer);
+    const fetchImpl = vi.fn(async (url) => {
+      if (url.endsWith('/mailFolders/inbox/messages/delta')) {
+        return jsonResponse(200, {
+          value: [{ id: 'm1', internetMessageId: '<m1@work.test>', subject: 'Bonjour', body: { content: 'Contenu' } }],
+          '@odata.deltaLink': 'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=abc',
+        });
+      }
+      if (url.endsWith('/messages/m1/attachments')) {
+        return jsonResponse(200, {
+          value: [{ '@odata.type': '#microsoft.graph.fileAttachment', id: 'a1', name: 'devis.pdf', contentType: 'application/pdf', size: 1 }],
+        });
+      }
+      if (url.endsWith('/messages/m1/attachments/a1/$value')) {
+        return {
+          status: 200,
+          headers: { get: (name) => (name === 'Content-Length' ? String(26 * 1024 * 1024) : null) },
+          arrayBuffer,
+        };
+      }
+      throw new Error(`unexpected_url:${url}`);
+    });
+    const adapter = createMicrosoftGraphAdapter({ account, oauth: fakeGraphOauth(), fetchImpl });
+
+    await expect(adapter.sync({ credentialsProvider, persist: async () => {} })).rejects.toThrow('microsoft_attachment_too_large');
+    expect(arrayBuffer).not.toHaveBeenCalled();
   });
 });
 
