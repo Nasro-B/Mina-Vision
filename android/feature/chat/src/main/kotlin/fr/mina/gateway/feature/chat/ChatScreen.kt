@@ -105,6 +105,7 @@ fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
                 state = state,
                 history = history,
                 onLoadOlder = viewModel::loadOlderMessages,
+                onRetryMessage = viewModel::retryFailedMessage,
                 onDraftChange = viewModel::updateDraft,
                 onSend = viewModel::sendDraft,
                 onSendImage = viewModel::sendImage,
@@ -137,6 +138,7 @@ fun ChatScreen(
     state: ChatUiState,
     history: ChatHistoryWindowState = ChatHistoryWindowState(),
     onLoadOlder: () -> Unit = {},
+    onRetryMessage: (String) -> Unit = {},
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onSendImage: (android.net.Uri) -> Unit,
@@ -209,7 +211,9 @@ fun ChatScreen(
                             }
                         }
                     }
-                    items(messages, key = { it.eventId }) { message -> MessageBubble(message, loadMedia) }
+                    items(messages, key = { it.eventId }) { message ->
+                        MessageBubble(message, loadMedia, onRetryMessage)
+                    }
                 }
             }
 
@@ -313,7 +317,11 @@ private fun EmptyConversation(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun MessageBubble(message: ChatMessage, loadMedia: suspend (String) -> Pair<ByteArray, String>? = { null }) {
+private fun MessageBubble(
+    message: ChatMessage,
+    loadMedia: suspend (String) -> Pair<ByteArray, String>? = { null },
+    onRetryMessage: (String) -> Unit = {},
+) {
     val mine = !message.fromAssistant
     Row(
         Modifier.fillMaxWidth(),
@@ -352,6 +360,13 @@ private fun MessageBubble(message: ChatMessage, loadMedia: suspend (String) -> P
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (message.kind == "text" && message.deliveryState == DeliveryState.FAILED_FINAL) {
+                            Spacer(Modifier.size(8.dp))
+                            TextButton(
+                                onClick = { onRetryMessage(message.eventId) },
+                                modifier = Modifier.semantics { contentDescription = "Réessayer le message" },
+                            ) { Text("Réessayer") }
+                        }
                     }
                 }
             }

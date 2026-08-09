@@ -153,6 +153,26 @@ interface ChatDao {
         insertEvent(event)
         enqueue(outbox)
     }
+
+    /** Remet un échec final dans la même outbox, sans jamais créer un second événement. */
+    @Transaction
+    suspend fun retryFailedOutgoing(eventId: String, nowMs: Long): Boolean {
+        val event = findEvent(eventId) ?: return false
+        if (event.fromAssistant || event.deliveryState != DeliveryState.FAILED_FINAL) return false
+        enqueue(
+            OutboxRow(
+                eventId = event.eventId,
+                threadId = event.threadId,
+                queuedAtMs = nowMs,
+                attemptCount = 0,
+                nextAttemptAtMs = nowMs,
+                lastError = null,
+            ),
+        )
+        rescheduleOutbox(eventId, attempts = 0, nextAtMs = nowMs, error = null)
+        updateDeliveryState(eventId, DeliveryState.LOCAL_PENDING)
+        return true
+    }
 }
 
 @Database(

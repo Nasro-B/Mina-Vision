@@ -130,6 +130,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun retryFailedMessage(eventId: String) {
+        viewModelScope.launch {
+            try {
+                engine.repository.retryFailedMessage(eventId)
+                sendError.value = null
+                engine.start()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                sendError.value = humanReason(error)
+            }
+            refreshPending()
+        }
+    }
+
     /** Envoie une image (préparée : redimensionnée, EXIF retiré) en pièce jointe chiffrée. */
     fun sendImage(uri: android.net.Uri) {
         viewModelScope.launch {
@@ -207,6 +222,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         "chat_message_vide" -> "Message vide."
         "chat_message_trop_long" -> "Message trop long (maximum 32 KiB)."
         "chat_outbox_pleine" -> "Trop de messages en attente. Rallumez le PC pour les envoyer."
+        "chat_retry_non_reessayable" -> "Ce message ne peut plus être réessayé."
         "chat_hote_vide" -> "Adresse du PC manquante."
         "chat_port_invalide" -> "Port invalide (1 à 65535)."
         "chat_pc_sans_pieces_jointes" -> "Ce PC ne prend pas encore les pièces jointes. Mettez Mina à jour côté PC."

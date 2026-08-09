@@ -261,6 +261,11 @@ class ChatRepository(
         if (state == DeliveryState.COMPLETED || state == DeliveryState.PC_RECEIVED) dao.dequeue(eventId)
     }
 
+    /** Réémet le même eventId uniquement après un échec final : le ledger PC reste idempotent. */
+    suspend fun retryFailedMessage(eventId: String) {
+        require(dao.retryFailedOutgoing(eventId, now())) { "chat_retry_non_reessayable" }
+    }
+
     /**
      * Fenêtre DÉCHIFFRÉE en mémoire des 200 messages visibles les plus récents. Coffre verrouillé,
      * on n'invente rien : le message apparaît avec un texte explicite plutôt qu'un contenu faux.

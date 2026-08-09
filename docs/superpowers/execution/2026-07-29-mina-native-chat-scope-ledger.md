@@ -128,8 +128,12 @@ du 2026-08-09 donne toujours `102` chemins déclarés, `9` présents et `93` abs
   `(created_at_ms, event_id)`. `ChatHistoryWindow` conserve au plus `200` objets déchiffrés dans
   l'état UI, bloque une seconde demande pendant le chargement et l'écran propose l'action explicite
   « Charger les messages précédents » sans revenir automatiquement en bas après une page ancienne.
-- [ ] la gestion complète des fils, le streaming ordonné/final, retry/cancel/stop, la recherche
-  locale et le test d'intégration PC↔Android restent ouverts.
+- [x] un message texte sortant en `FAILED_FINAL` affiche « Réessayer ». La transaction Room
+  réinsère dans l'outbox le même `event_id` de l'événement chiffré existant, sans le modifier, avec
+  compteur remis à zéro ; un second clic, un événement déjà accusé par le PC, ou un événement reçu
+  de Mina est refusé. Le bouton ne couvre pas les pièces jointes ni les messages vocaux.
+- [ ] la gestion complète des fils, le streaming ordonné/final, cancel/stop, la recherche locale
+  et le test d'intégration PC↔Android restent ouverts.
 
 Preuves locales de cette tranche :
 
@@ -152,6 +156,12 @@ Preuves locales de cette tranche :
 - vert 2026-08-09 : la même classe `ChatRepositoryTest` a fini avec `BUILD SUCCESSFUL in 43s`.
   La gate Android complète (`protocol`, `core:chat`, `feature:voice`, `feature:chat`, tests app,
   lint et APK Debug) a fini avec `BUILD SUCCESSFUL in 3m 7s` (`343` tâches actionnables).
+- rouge attendu 2026-08-09 : le test de retry a d'abord échoué à la référence
+  `retryFailedMessage` absente, puis le test Compose a échoué au paramètre `onRetryMessage`
+  absent.
+- vert 2026-08-09 : `ChatRepositoryTest` contient `26` tests, `0` échec et `0` erreur dans son
+  rapport XML. `:feature:chat:assembleDebugAndroidTest` a compilé le test Compose ; aucune
+  instrumentation ni installation n'a été exécutée.
 - rouge attendu 2026-08-09 : le test de pagination a d'abord échoué sur les références absentes
   `observeThreadPage`/`loadOlderPage`, puis `ChatHistoryWindowTest` sur le contrôleur absent et
   `:feature:chat:assembleDebugAndroidTest` sur les paramètres UI absents.

@@ -79,6 +79,56 @@ class ChatRepositoryTest {
     }
 
     @Test
+    fun `retry remet le meme evenement en file apres un echec final`() = runTest {
+        val eventId = repository.sendText("thread-main", "bonjour")
+        val original = db.chatDao().findEvent(eventId)!!
+        db.chatDao().updateDeliveryState(eventId, DeliveryState.FAILED_FINAL)
+        db.chatDao().dequeue(eventId)
+
+        repository.retryFailedMessage(eventId)
+
+        val retried = db.chatDao().findEvent(eventId)!!
+        assertEquals(original.payloadCiphertext, retried.payloadCiphertext)
+        assertEquals(DeliveryState.LOCAL_PENDING, retried.deliveryState)
+        val outbox = db.chatDao().dueOutbox(clock, 10)
+        assertEquals(listOf(eventId), outbox.map { it.eventId })
+        assertEquals(0, outbox.single().attemptCount)
+        assertEquals(null, outbox.single().lastError)
+        assertEquals(listOf(eventId), db.chatDao().readThread("thread-main").map { it.eventId })
+        val duplicateRetry = runCatching { repository.retryFailedMessage(eventId) }.exceptionOrNull()
+        assertEquals("chat_retry_non_reessayable", duplicateRetry?.message)
+        assertEquals(1, repository.pendingCount())
+    }
+
+    @Test
+    fun `retry refuse un message deja recu par le PC`() = runTest {
+        val eventId = repository.sendText("thread-main", "bonjour")
+        repository.markDelivered(eventId, DeliveryState.PC_RECEIVED)
+
+        val error = runCatching { repository.retryFailedMessage(eventId) }.exceptionOrNull()
+
+        assertEquals("chat_retry_non_reessayable", error?.message)
+        assertEquals(0, repository.pendingCount())
+    }
+
+    @Test
+    fun `retry refuse un evenement recu de Mina`() = runTest {
+        val eventId = repository.sendText("thread-main", "bonjour")
+        val assistantEvent = db.chatDao().findEvent(eventId)!!.copy(
+            eventId = "assistant-event",
+            deliveryState = DeliveryState.FAILED_FINAL,
+            fromAssistant = true,
+        )
+        db.chatDao().dequeue(eventId)
+        db.chatDao().insertEvent(assistantEvent)
+
+        val error = runCatching { repository.retryFailedMessage(assistantEvent.eventId) }.exceptionOrNull()
+
+        assertEquals("chat_retry_non_reessayable", error?.message)
+        assertEquals(0, repository.pendingCount())
+    }
+
+    @Test
     fun `le meme evenement livre deux fois n apparait qu une seule fois`() = runTest {
         val eventId = repository.sendText("thread-main", "bonjour")
         val row = db.chatDao().findEvent(eventId)!!

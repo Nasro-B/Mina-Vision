@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.up
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import fr.mina.gateway.chat.DeliveryState
 import fr.mina.gateway.chat.ChatMessage
 import fr.mina.gateway.chat.LinkState
 import fr.mina.gateway.feature.voice.VoiceCaptureMode
@@ -161,5 +162,47 @@ class ChatScreenTest {
 
         compose.onNodeWithContentDescription("Charger les messages précédents").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals(1, loads) }
+    }
+
+    @Test
+    fun retryActionIsVisibleForAFailedOutgoingMessage() {
+        var retries = 0
+        val message = ChatMessage(
+            eventId = "event-failed",
+            threadId = MAIN_THREAD_ID,
+            text = "message a reessayer",
+            fromAssistant = false,
+            createdAtMs = 52,
+            deliveryState = DeliveryState.FAILED_FINAL,
+        )
+
+        compose.setContent {
+            MinaChatTheme {
+                ChatScreen(
+                    messages = listOf(message),
+                    state = ChatUiState(true, LinkState.ONLINE, 0, null, null, "", false),
+                    onRetryMessage = { retries += 1 },
+                    onDraftChange = {},
+                    onSend = {},
+                    onSendImage = {},
+                    voice = VoiceNoteUiState(),
+                    onBeginVoiceNote = {},
+                    onStopVoiceNote = {},
+                    onCancelVoice = {},
+                    onBeginPushToTalk = {},
+                    onEndPushToTalk = {},
+                    onRetryVoice = {},
+                    onVoicePermissionDenied = {},
+                    onVoiceHostStopped = {},
+                    hasRecordPermission = { true },
+                    onRetry = {},
+                    onDismissError = {},
+                    onUnpair = {},
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Réessayer le message").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(1, retries) }
     }
 }
