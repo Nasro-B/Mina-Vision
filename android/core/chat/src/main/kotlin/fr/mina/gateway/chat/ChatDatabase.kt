@@ -69,7 +69,9 @@ interface ChatDao {
         """
         SELECT * FROM (
             SELECT * FROM chat_events
-            WHERE thread_id = :threadId AND routing_class != 'stream'
+            WHERE thread_id = :threadId
+              AND routing_class != 'stream'
+              AND (from_assistant = 0 OR delivery_state != 'response_streaming')
             ORDER BY created_at_ms DESC, event_id DESC
             LIMIT :limit
         )
@@ -83,6 +85,7 @@ interface ChatDao {
         SELECT * FROM chat_events
         WHERE thread_id = :threadId
           AND routing_class != 'stream'
+          AND (from_assistant = 0 OR delivery_state != 'response_streaming')
           AND (
             created_at_ms < :beforeCreatedAtMs
             OR (created_at_ms = :beforeCreatedAtMs AND event_id < :beforeEventId)

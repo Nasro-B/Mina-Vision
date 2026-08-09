@@ -74,6 +74,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.mina.gateway.chat.ChatMessage
+import fr.mina.gateway.chat.ChatStreamingResponse
 import fr.mina.gateway.chat.DeliveryState
 import fr.mina.gateway.chat.LinkState
 import fr.mina.gateway.protocol.VoicePcmFormat
@@ -89,6 +90,7 @@ import java.util.Locale
 fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
     val history by viewModel.historyState.collectAsStateWithLifecycle()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val streamingResponses by viewModel.streamingResponses.collectAsStateWithLifecycle()
     val voice by viewModel.voiceState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     MinaChatTheme {
@@ -102,6 +104,7 @@ fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
         } else {
             ChatScreen(
                 messages = history.messages,
+                streamingResponses = streamingResponses,
                 state = state,
                 history = history,
                 onLoadOlder = viewModel::loadOlderMessages,
@@ -135,6 +138,7 @@ fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
 @Composable
 fun ChatScreen(
     messages: List<ChatMessage>,
+    streamingResponses: List<ChatStreamingResponse> = emptyList(),
     state: ChatUiState,
     history: ChatHistoryWindowState = ChatHistoryWindowState(),
     onLoadOlder: () -> Unit = {},
@@ -182,7 +186,7 @@ fun ChatScreen(
         Column(Modifier.padding(padding).fillMaxSize()) {
             LinkBanner(state = state, onRetry = onRetry)
 
-            if (messages.isEmpty()) {
+            if (messages.isEmpty() && streamingResponses.isEmpty()) {
                 EmptyConversation(Modifier.weight(1f))
             } else {
                 LazyColumn(
@@ -214,6 +218,9 @@ fun ChatScreen(
                     items(messages, key = { it.eventId }) { message ->
                         MessageBubble(message, loadMedia, onRetryMessage)
                     }
+                    items(streamingResponses, key = { "stream-${it.responseId}" }) { response ->
+                        StreamingResponseBubble(response)
+                    }
                 }
             }
 
@@ -238,6 +245,29 @@ fun ChatScreen(
                 onVoiceHostStopped = onVoiceHostStopped,
                 hasRecordPermission = hasRecordPermission,
             )
+        }
+    }
+}
+
+@Composable
+private fun StreamingResponseBubble(response: ChatStreamingResponse) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Start,
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp),
+            modifier = Modifier.widthIn(max = 300.dp),
+        ) {
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                Text("Mina répond…", style = MaterialTheme.typography.labelMedium)
+                if (response.text.isNotEmpty()) {
+                    Spacer(Modifier.size(4.dp))
+                    Text(response.text, style = MaterialTheme.typography.bodyLarge)
+                }
+            }
         }
     }
 }

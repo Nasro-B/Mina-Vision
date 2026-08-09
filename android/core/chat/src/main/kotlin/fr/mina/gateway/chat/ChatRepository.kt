@@ -4,10 +4,13 @@ import fr.mina.gateway.protocol.ChatBinaryCodec
 import fr.mina.gateway.protocol.ChatCrypto
 import fr.mina.gateway.protocol.ChatEvent
 import fr.mina.gateway.protocol.ChatPayloadCodec
+import fr.mina.gateway.protocol.AssistantResponseFrame
+import fr.mina.gateway.protocol.AssistantResponseStream
 import fr.mina.gateway.protocol.MediaAssembler
 import fr.mina.gateway.protocol.MediaChunker
 import fr.mina.gateway.protocol.MonotonicUlid
 import fr.mina.gateway.protocol.VoicePcmFormat
+import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONObject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -37,6 +40,12 @@ data class ChatMessage(
 data class ChatMessagePage(
     val messages: List<ChatMessage>,
     val hasOlder: Boolean,
+)
+
+/** Résultat transitoire d'une ingestion — le contenu reste déchiffré uniquement en mémoire. */
+data class ChatIngestResult(
+    val assistantResponseFrame: AssistantResponseFrame? = null,
+    val isAssistantResponse: Boolean = assistantResponseFrame != null,
 )
 
 /** Limites partagées entre Room et l'état déchiffré de l'interface. */
@@ -94,6 +103,10 @@ class ChatRepository(
 
     /** Sérialise la réservation et la reprise des ULID d'une même note vocale. */
     private val voiceEnqueueMutex = Mutex()
+    private val responseStreamAssembler = ChatResponseStreamAssembler()
+
+    /** Fragments de réponse de Mina, strictement transitoires : aucune écriture Room en clair. */
+    val streamingResponses: StateFlow<List<ChatStreamingResponse>> get() = responseStreamAssembler.responses
 
     /**
      * Compose, chiffre et met en file un message sortant. Retourne l'identifiant durable :
@@ -252,8 +265,18 @@ class ChatRepository(
     }
 
     /** Ingère un événement reçu — la déduplication par eventId rend l'appel idempotent. */
-    suspend fun ingest(event: ChatEvent, fromAssistant: Boolean) {
-        dao.insertEvent(event.toRow(deliveryState = DeliveryState.COMPLETED, fromAssistant = fromAssistant))
+    suspend fun ingest(event: ChatEvent, fromAssistant: Boolean): ChatIngestResult {
+        val response = if (fromAssistant) decodeAssistantResponse(event) else ChatIngestResult()
+        val state = if (
+            response.isAssistantResponse && response.assistantResponseFrame?.type != "assistant.response.completed"
+        ) {
+            DeliveryState.RESPONSE_STREAMING
+        } else {
+            DeliveryState.COMPLETED
+        }
+        val inserted = dao.insertEvent(event.toRow(deliveryState = state, fromAssistant = fromAssistant))
+        if (inserted != -1L) response.assistantResponseFrame?.let(responseStreamAssembler::accept)
+        return response
     }
 
     suspend fun markDelivered(eventId: String, state: String) {
@@ -311,6 +334,22 @@ class ChatRepository(
     /** Un message précis, déchiffré en mémoire — utilisé pour l'aperçu d'une notification. */
     suspend fun readMessage(eventId: String): ChatMessage? = dao.findEvent(eventId)?.toMessage()
 
+    private fun decodeAssistantResponse(event: ChatEvent): ChatIngestResult {
+        val row = event.toRow(deliveryState = DeliveryState.COMPLETED, fromAssistant = true)
+        val bytes = decryptBytesOrNull(row) ?: return ChatIngestResult()
+        return try {
+            val payload = runCatching { ChatPayloadCodec.decode(bytes) }.getOrNull() as? ChatPayloadCodec.PayloadV2
+                ?: return ChatIngestResult()
+            if (payload.type !in AssistantResponseStream.types) return ChatIngestResult()
+            ChatIngestResult(
+                assistantResponseFrame = runCatching { AssistantResponseStream.decode(payload) }.getOrNull(),
+                isAssistantResponse = true,
+            )
+        } finally {
+            bytes.fill(0)
+        }
+    }
+
     private fun ChatEventRow.toMessage(): ChatMessage {
         val bytes = decryptBytesOrNull(this)
             ?: return ChatMessage(
@@ -338,6 +377,19 @@ class ChatRepository(
                     "media.chunk" -> ChatMessage(
                         eventId, threadId, "", fromAssistant, createdAtMs, deliveryState,
                         kind = "chunk", mediaId = mediaId,
+                    )
+                    "assistant.response.completed" -> {
+                        val response = runCatching { AssistantResponseStream.decode(decoded) }.getOrNull()
+                        val text = response?.text
+                        if (text != null) {
+                            ChatMessage(eventId, threadId, text, fromAssistant, createdAtMs, deliveryState)
+                        } else {
+                            ChatMessage(eventId, threadId, "[${decoded.type}]", fromAssistant, createdAtMs, deliveryState)
+                        }
+                    }
+                    "assistant.response.failed" -> ChatMessage(
+                        eventId, threadId, "", fromAssistant, createdAtMs, deliveryState,
+                        kind = "chunk",
                     )
                     // Appels : le PC demande l'ouverture du composeur — le numéro voyage dans
                     // `mediaId` (champ porteur), la bulle affiche un bouton ACTION_DIAL.

@@ -202,11 +202,11 @@ class ChatEngine private constructor(context: Context) {
         if (!signer.verify(event, key)) return
         if (event.senderDeviceId == deviceId) return
         val known = database.chatDao().findEvent(event.eventId) != null
-        repository.ingest(event, fromAssistant = true)
+        val result = repository.ingest(event, fromAssistant = true)
         // Notifier UNIQUEMENT sur un événement nouveau : une retransmission ne doit pas
-        // rappeler une deuxième fois pour le même message. Les chunks binaires (routingClass
-        // stream, W6) ne notifient jamais — la bulle vient de l'événement de métadonnées.
-        if (!known && event.routingClass != "stream") {
+        // rappeler une deuxième fois pour le même message. Une réponse progressive ne notifie
+        // qu'au terminal durable ; les fragments et échecs restent transitoires.
+        if (shouldNotifyAssistantMessage(known, event.routingClass, result)) {
             repository.readMessage(event.eventId)
                 ?.takeIf { it.kind != "chunk" }
                 ?.let { message -> onAssistantMessage?.invoke(message) }
@@ -244,4 +244,14 @@ class ChatEngine private constructor(context: Context) {
                 instance ?: ChatEngine(context).also { instance = it }
             }
     }
+}
+
+internal fun shouldNotifyAssistantMessage(
+    known: Boolean,
+    routingClass: String,
+    result: ChatIngestResult,
+): Boolean = !known && if (result.isAssistantResponse) {
+    result.assistantResponseFrame?.type == "assistant.response.completed"
+} else {
+    routingClass != "stream"
 }

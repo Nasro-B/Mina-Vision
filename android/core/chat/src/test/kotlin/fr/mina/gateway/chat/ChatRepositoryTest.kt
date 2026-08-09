@@ -2,6 +2,9 @@ package fr.mina.gateway.chat
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import fr.mina.gateway.protocol.AssistantResponseStream
+import fr.mina.gateway.protocol.ChatBinaryCodec
+import fr.mina.gateway.protocol.ChatEvent
 import fr.mina.gateway.protocol.VoicePcmFormat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -19,6 +22,10 @@ import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 import java.security.SecureRandom
+import java.util.Base64
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * Stockage local du chat — sur vraie base SQLite (Robolectric), pas sur une imitation :
@@ -137,6 +144,73 @@ class ChatRepositoryTest {
         repository.ingest(row.toEvent(), fromAssistant = true)
         repository.ingest(row.toEvent(), fromAssistant = true)
         assertEquals(1, db.chatDao().readThread("thread-main").size)
+    }
+
+    @Test
+    fun `la reponse progressive reste chiffree, transitoire et son final est la seule bulle durable`() = runTest {
+        val responseId = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+        val sourceEventId = "01BX5ZZKBKACTAV9WEVGEMMVRZ"
+        val started = sealedAssistantEvent(
+            eventId = "01CZ7YV6B6EV7N5FNEC5P5X5PN",
+            routingClass = "stream",
+            payload = AssistantResponseStream.encodeStarted(responseId, sourceEventId),
+            sequence = 1,
+        )
+        val chunk = sealedAssistantEvent(
+            eventId = "01D3QJ5FVR9Z8MVW0N26Y6VSEW",
+            routingClass = "stream",
+            payload = AssistantResponseStream.encodeChunk(responseId, sourceEventId, 1, "Bon"),
+            sequence = 2,
+        )
+        val completed = sealedAssistantEvent(
+            eventId = "01E2R40V7Q7S7ECV6X9RF0X1QK",
+            routingClass = "message",
+            payload = AssistantResponseStream.encodeCompleted(responseId, sourceEventId, 2, "Bonjour !"),
+            sequence = 3,
+        )
+
+        repository.ingest(started, fromAssistant = true)
+        repository.ingest(chunk, fromAssistant = true)
+
+        assertEquals(
+            listOf(ChatStreamingResponse(responseId, sourceEventId, "Bon")),
+            repository.streamingResponses.value,
+        )
+        assertTrue(repository.observeThread("thread-main").first().isEmpty())
+        assertFalse(db.chatDao().findEvent(chunk.eventId)!!.payloadCiphertext.contains("Bon"))
+
+        repository.ingest(completed, fromAssistant = true)
+
+        assertTrue(repository.streamingResponses.value.isEmpty())
+        assertEquals(listOf("Bonjour !"), repository.observeThread("thread-main").first().map { it.text })
+        assertEquals(DeliveryState.COMPLETED, db.chatDao().findEvent(completed.eventId)?.deliveryState)
+        assertFalse(db.chatDao().findEvent(completed.eventId)!!.payloadCiphertext.contains("Bonjour"))
+    }
+
+    @Test
+    fun `un echec de reponse est persiste chiffre sans creer de bulle`() = runTest {
+        val responseId = "01F8MECHZX3TBDSZ7XRADM79XV"
+        val sourceEventId = "01G9J8BW5BJ7VHFH9A743R4ZBS"
+        val started = sealedAssistantEvent(
+            eventId = "01HCKM3MD8B5PF8JXV83KJJNDA",
+            routingClass = "stream",
+            payload = AssistantResponseStream.encodeStarted(responseId, sourceEventId),
+            sequence = 1,
+        )
+        val failed = sealedAssistantEvent(
+            eventId = "01J0J7WGKABTEQ4Z7AC7D75XCY",
+            routingClass = "message",
+            payload = AssistantResponseStream.encodeFailed(responseId, sourceEventId, 1, "provider_unavailable"),
+            sequence = 2,
+        )
+
+        repository.ingest(started, fromAssistant = true)
+        repository.ingest(failed, fromAssistant = true)
+
+        assertTrue(repository.streamingResponses.value.isEmpty())
+        assertTrue(repository.observeThread("thread-main").first().isEmpty())
+        assertEquals(DeliveryState.RESPONSE_STREAMING, db.chatDao().findEvent(failed.eventId)?.deliveryState)
+        assertFalse(db.chatDao().findEvent(failed.eventId)!!.payloadCiphertext.contains("provider_unavailable"))
     }
 
     @Test
@@ -411,6 +485,47 @@ class ChatRepositoryTest {
             ) {
                 throw IOException("injected_outgoing_write_failure")
             }
+        }
+    }
+
+    private fun sealedAssistantEvent(
+        eventId: String,
+        routingClass: String,
+        payload: ByteArray,
+        sequence: Long,
+    ): ChatEvent {
+        val header = ChatEvent(
+            version = 2,
+            eventId = eventId,
+            threadId = "thread-main",
+            senderDeviceId = "mina-pc",
+            deviceSequence = sequence,
+            keyEpoch = 1,
+            routingClass = routingClass,
+            createdAtMs = clock,
+            expiresAtMs = clock + 30L * 24 * 60 * 60 * 1_000,
+            payloadCiphertext = "",
+            nonce = "",
+            authTag = "",
+            signature = "",
+        )
+        val nonce = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        var sealed: ByteArray? = null
+        try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(epochKey, "AES"), GCMParameterSpec(128, nonce))
+            cipher.updateAAD(ChatBinaryCodec.encodeHeader(header))
+            sealed = cipher.doFinal(payload)
+            val encoder = Base64.getEncoder()
+            return header.copy(
+                payloadCiphertext = encoder.encodeToString(sealed.copyOfRange(0, sealed.size - 16)),
+                nonce = encoder.encodeToString(nonce),
+                authTag = encoder.encodeToString(sealed.copyOfRange(sealed.size - 16, sealed.size)),
+            )
+        } finally {
+            payload.fill(0)
+            nonce.fill(0)
+            sealed?.fill(0)
         }
     }
 }

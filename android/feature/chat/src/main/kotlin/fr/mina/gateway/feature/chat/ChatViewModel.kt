@@ -48,6 +48,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     val voiceState: StateFlow<VoiceNoteUiState> = voice.state
+    val streamingResponses = engine.repository.streamingResponses
 
     private val historyWindow = ChatHistoryWindow()
     val historyState: StateFlow<ChatHistoryWindowState> = historyWindow.state

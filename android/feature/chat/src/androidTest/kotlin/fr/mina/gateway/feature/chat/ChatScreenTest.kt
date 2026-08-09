@@ -4,17 +4,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.center
 import androidx.compose.ui.test.down
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.up
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import fr.mina.gateway.chat.DeliveryState
 import fr.mina.gateway.chat.ChatMessage
+import fr.mina.gateway.chat.ChatStreamingResponse
 import fr.mina.gateway.chat.LinkState
 import fr.mina.gateway.feature.voice.VoiceCaptureMode
 import fr.mina.gateway.feature.voice.VoiceNoteUiState
@@ -71,6 +74,102 @@ class ChatScreenTest {
         compose.onNodeWithText("Envoyer").performClick()
         compose.runOnIdle { assertEquals(1, sends) }
         compose.onNodeWithText("brouillon a conserver").assertIsDisplayed()
+    }
+
+    @Test
+    fun streamingAssistantResponseIsVisibleWithoutCreatingADurableMessage() {
+        compose.setContent {
+            MinaChatTheme {
+                ChatScreen(
+                    messages = emptyList(),
+                    streamingResponses = listOf(
+                        ChatStreamingResponse(
+                            responseId = "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                            sourceEventId = "01BX5ZZKBKACTAV9WEVGEMMVRZ",
+                            text = "Bon",
+                        ),
+                    ),
+                    state = ChatUiState(true, LinkState.ONLINE, 0, null, null, "", false),
+                    onDraftChange = {},
+                    onSend = {},
+                    onSendImage = {},
+                    voice = VoiceNoteUiState(),
+                    onBeginVoiceNote = {},
+                    onStopVoiceNote = {},
+                    onCancelVoice = {},
+                    onBeginPushToTalk = {},
+                    onEndPushToTalk = {},
+                    onRetryVoice = {},
+                    onVoicePermissionDenied = {},
+                    onVoiceHostStopped = {},
+                    hasRecordPermission = { true },
+                    onRetry = {},
+                    onDismissError = {},
+                    onUnpair = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Mina répond…").assertIsDisplayed()
+        compose.onNodeWithText("Bon").assertIsDisplayed()
+    }
+
+    @Test
+    fun streamingAssistantResponseDisappearsWhenItsDurableFinalMessageArrives() {
+        var messages by mutableStateOf(emptyList<ChatMessage>())
+        var streaming by mutableStateOf(
+            listOf(
+                ChatStreamingResponse(
+                    responseId = "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                    sourceEventId = "01BX5ZZKBKACTAV9WEVGEMMVRZ",
+                    text = "Bon",
+                ),
+            ),
+        )
+
+        compose.setContent {
+            MinaChatTheme {
+                ChatScreen(
+                    messages = messages,
+                    streamingResponses = streaming,
+                    state = ChatUiState(true, LinkState.ONLINE, 0, null, null, "", false),
+                    onDraftChange = {},
+                    onSend = {},
+                    onSendImage = {},
+                    voice = VoiceNoteUiState(),
+                    onBeginVoiceNote = {},
+                    onStopVoiceNote = {},
+                    onCancelVoice = {},
+                    onBeginPushToTalk = {},
+                    onEndPushToTalk = {},
+                    onRetryVoice = {},
+                    onVoicePermissionDenied = {},
+                    onVoiceHostStopped = {},
+                    hasRecordPermission = { true },
+                    onRetry = {},
+                    onDismissError = {},
+                    onUnpair = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Mina répond…").assertIsDisplayed()
+        compose.runOnIdle {
+            streaming = emptyList()
+            messages = listOf(
+                ChatMessage(
+                    eventId = "01E2R40V7Q7S7ECV6X9RF0X1QK",
+                    threadId = MAIN_THREAD_ID,
+                    text = "Bonjour !",
+                    fromAssistant = true,
+                    createdAtMs = 1,
+                    deliveryState = DeliveryState.COMPLETED,
+                ),
+            )
+        }
+
+        compose.onAllNodesWithText("Mina répond…").assertCountEquals(0)
+        compose.onNodeWithText("Bonjour !").assertIsDisplayed()
     }
 
     @Test
