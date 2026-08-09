@@ -1,6 +1,6 @@
 # Mina Vision — tâches restantes de réconciliation
 
-> État au 2026-08-09 10:06 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
+> État au 2026-08-09 10:10 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
 
 ## Clos avec preuve récente
 
@@ -21,7 +21,7 @@
 ### Runtime local
 
 - [ ] **Vision Mina par webcam PC et caméra téléphone** — les deux captures sont présentes dans le code (`getUserMedia` côté PC, flux Android signé côté téléphone) et l’adaptateur vision a désormais une preuve image locale. Il reste à tester les permissions, la capture matérielle et le trajet complet sur webcam PC puis téléphone Android autorisé. Ces recettes n’ont pas été exécutées.
-- [ ] **Voix locale complète hors réseau** — Kokoro TTS est maintenant prouvé localement hors réseau. Il reste microphone → STT local → Gemma → Kokoro, réseau désactivé. `MINA_STT_ENABLED=false` et aucun cache Whisper/Xenova n'a été trouvé dans les emplacements configurés/attendus ; le code ne lira désormais qu'un modèle STT déjà local en mode hors-ligne. Aucun téléchargement, transcription réelle ni test microphone n'a été lancé.
+- [ ] **Voix locale complète hors réseau** — Kokoro TTS est maintenant prouvé localement hors réseau. Il reste microphone → STT local → Gemma → Kokoro, réseau désactivé. `MINA_STT_ENABLED=false` et aucun cache Whisper/Xenova n'a été trouvé dans les emplacements configurés/attendus ; le code ne lira désormais qu'un modèle STT déjà local en mode hors-ligne. À 10:10, le processus `LMS` était ouvert mais aucune socket locale ne lui appartenait ni n’écoutait sur l’endpoint configuré `127.0.0.1:1234` : la sonde Mina a retourné `lm_studio_unreachable`, sans prompt envoyé. Aucun téléchargement, transcription réelle ni test microphone n'a été lancé.
 - [ ] **Packaging voix locale** — décision de distribution eSpeak/Kokoro requise avant publication de ce chemin.
 
 ### Exécution autorisée, encore à réconcilier et terminer
