@@ -35,7 +35,7 @@ export function createDocumentParserRegistry({ parsers, quarantineStore, clock }
       if (!parser) throw new Error('document_parser_not_found');
 
       const bytes = await quarantineStore.readBytes(documentId);
-      const result = await parser.parse({ bytes, signal });
+      const result = await parser.parse({ bytes, mediaType: item.detectedType, signal });
       validateBlocks(result.blocks);
 
       const confidences = result.blocks.map((block) => block.confidence);

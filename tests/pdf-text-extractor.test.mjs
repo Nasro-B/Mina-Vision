@@ -24,11 +24,29 @@ function createPdf(text) {
   return Buffer.from(body);
 }
 
+function fakePdfJs(pageTexts) {
+  return {
+    getDocument: () => ({
+      promise: Promise.resolve({
+        numPages: pageTexts.length,
+        getPage: async (pageNumber) => ({
+          getTextContent: async () => ({
+            items: [{ str: pageTexts[pageNumber - 1], hasEOL: false }],
+          }),
+          cleanup() {},
+        }),
+        async destroy() {},
+      }),
+      async destroy() {},
+    }),
+  };
+}
+
 describe('bounded PDF text extractor', () => {
   it('extracts text from a real one-page PDF with PDF.js', async () => {
     const extract = createPdfTextExtractor();
     await expect(extract(createPdf('Bonjour Mina Vision'), { maxPages: 10, maxBytes: 1_000_000 }))
-      .resolves.toEqual({ text: 'Bonjour Mina Vision', pages: 1 });
+      .resolves.toEqual({ text: 'Bonjour Mina Vision', pages: 1, pageTexts: ['Bonjour Mina Vision'] });
   });
 
   it('rejects page limits before reading page content', async () => {
@@ -44,5 +62,17 @@ describe('bounded PDF text extractor', () => {
     await expect(extract(Buffer.from('%PDF'), { maxPages: 10, maxBytes: 100 }))
       .rejects.toThrow('pdf_page_limit');
     expect(getPage).not.toHaveBeenCalled();
+  });
+});
+
+describe('PDF text provenance', () => {
+  it('retourne aussi le texte par page pour préserver la provenance aval', async () => {
+    const extract = createPdfTextExtractor({ loadPdfJs: async () => fakePdfJs(['Première page', 'Deuxième page']) });
+
+    await expect(extract(Buffer.from('%PDF-fake'))).resolves.toEqual({
+      text: 'Première page\n\nDeuxième page',
+      pages: 2,
+      pageTexts: ['Première page', 'Deuxième page'],
+    });
   });
 });

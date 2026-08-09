@@ -36,7 +36,7 @@ describe('contrat de composition des domaines (main.mjs)', () => {
       "reportCapability('biometrics.face', faceEmbedderState, faceEmbedderReason)",
       "reportCapability('personal'",
       "reportCapability('documents'",
-      "reportCapability('documents', 'degraded', 'document_form_rendering_unavailable')",
+      "reportCapability('documents', 'degraded', 'document_memory_form_conversion_download_not_configured')",
       "reportCapability('printing', 'degraded', 'printing_physical_receipt_unverified')",
       "reportCapability('personality'",
       "reportCapability('code', 'available')",
@@ -61,6 +61,30 @@ describe('contrat de composition des domaines (main.mjs)', () => {
     expect(main).toContain('mina-document-quarantine.sqlite');
     expect(main).toContain('mina-recovery-closures.sqlite');
     expect(main).toContain('mina-personality.sqlite');
+  });
+
+  it('relie la quarantaine document aux parseurs locaux, aux preuves et à la classification', async () => {
+    const main = await source();
+
+    for (const needle of [
+      "import { createDocumentParserRegistry } from '../documents/document-parser-registry.mjs';",
+      "import { createDocumentEvidenceStore } from '../documents/document-evidence-store.mjs';",
+      "import { createDocumentClassifier } from '../documents/document-classifier.mjs';",
+      "import { createPdfTextDocumentParser, createImageOcrDocumentParser } from '../documents/local-document-parsers.mjs';",
+      "import { createPdfTextExtractor } from '../research/pdf-text-extractor.mjs';",
+      'const documentQuarantineStore = createDocumentQuarantineStore({',
+      'createDocumentParserRegistry({',
+      'createPdfTextDocumentParser({ pdfExtractor: createPdfTextExtractor() })',
+      'createImageOcrDocumentParser({ ocrProvider: createTesseractOcrProvider() })',
+      'createDocumentEvidenceStore({',
+      'createDocumentClassifier({',
+      'evidenceStore,',
+      'classifier,',
+      'mina-document-evidence.sqlite',
+      'mina-document-classifications.sqlite',
+    ]) {
+      expect(main).toContain(needle);
+    }
   });
 
   it('publie le domaine urgence composé via le contrôleur IPC', async () => {

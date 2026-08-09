@@ -33,7 +33,11 @@ export function createPdfTextExtractor({ loadPdfJs = defaultLoadPdfJs } = {}) {
         pages.push(fragments.join(' ').replace(/ +\n +/gu, '\n').replace(/[ \t]+/gu, ' ').trim());
         page.cleanup?.();
       }
-      return Object.freeze({ text: pages.join('\n\n'), pages: document.numPages });
+      return Object.freeze({
+        text: pages.join('\n\n'),
+        pages: document.numPages,
+        pageTexts: Object.freeze([...pages]),
+      });
     } finally {
       if (document?.destroy) await document.destroy();
       else if (loadingTask?.destroy) await loadingTask.destroy();

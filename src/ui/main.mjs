@@ -96,6 +96,7 @@ import { createTelegramCommandRouter } from '../messaging/telegram-command-route
 import { createUtteranceAggregator } from '../voice/utterance-aggregator.mjs';
 import { createEchoGuard } from '../voice/echo-guard.mjs';
 import { createGroqWebAnswer, createWebAnswerChain, createWebAnswerService } from '../research/web-answer.mjs';
+import { createPdfTextExtractor } from '../research/pdf-text-extractor.mjs';
 import { createLocalVoiceClient } from '../voice/local-voice-client.mjs';
 import { createDeepgramStt } from '../voice/deepgram-stt.mjs';
 import { composeSelfBrief, createSelfModel } from '../core/self-model.mjs';
@@ -138,6 +139,10 @@ import { createGraphController } from './pages/graph-controller.mjs';
 import { createDocumentQuarantineStore } from '../documents/document-quarantine.mjs';
 import { createDocumentIntake } from '../documents/document-intake.mjs';
 import { createDocumentDestinationResolver } from '../documents/document-destination-resolver.mjs';
+import { createDocumentParserRegistry } from '../documents/document-parser-registry.mjs';
+import { createDocumentEvidenceStore } from '../documents/document-evidence-store.mjs';
+import { createDocumentClassifier } from '../documents/document-classifier.mjs';
+import { createPdfTextDocumentParser, createImageOcrDocumentParser } from '../documents/local-document-parsers.mjs';
 import { createDocumentController } from './pages/document-controller.mjs';
 import { createEmergencyController } from './pages/emergency-controller.mjs';
 import { createPersonalityService } from '../personality/personality-service.mjs';
@@ -367,6 +372,9 @@ let minaFileWorkspace = null;
 let printerRegistry = null;
 let printService = null;
 let printerRepository = null;
+let documentQuarantineRepository = null;
+let documentEvidenceRepository = null;
+let documentClassificationRepository = null;
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
@@ -3212,19 +3220,42 @@ app.whenReady().then(async () => {
       resolveExistingPath: realpath,
       authorizeDestination: (target) => hostWritePolicy.authorize(target),
     });
+    documentQuarantineRepository = createJsonRepository({
+      filename: path.join(app.getPath('userData'), 'mina-document-quarantine.sqlite'), table: 'documents', nativeBinding,
+    });
+    const documentQuarantineStore = createDocumentQuarantineStore({
+      filesystem: { writeFile, readFile, mkdir, rm },
+      repository: documentQuarantineRepository,
+      quarantineDir: path.join(app.getPath('userData'), 'document-quarantine'),
+    });
     const documentIntake = createDocumentIntake({
-      quarantineStore: createDocumentQuarantineStore({
-        filesystem: { writeFile, readFile, mkdir, rm },
-        repository: createJsonRepository({ filename: path.join(app.getPath('userData'), 'mina-document-quarantine.sqlite'), table: 'documents', nativeBinding }),
-        quarantineDir: path.join(app.getPath('userData'), 'document-quarantine'),
-      }),
+      quarantineStore: documentQuarantineStore,
       filesystem: { readFile },
       realpathProvider: documentPaths,
       clock: Date.now,
     });
+    const parserRegistry = createDocumentParserRegistry({
+      parsers: [
+        createPdfTextDocumentParser({ pdfExtractor: createPdfTextExtractor() }),
+        createImageOcrDocumentParser({ ocrProvider: createTesseractOcrProvider() }),
+      ],
+      quarantineStore: documentQuarantineStore,
+      clock: Date.now,
+    });
+    documentEvidenceRepository = createJsonRepository({
+      filename: path.join(app.getPath('userData'), 'mina-document-evidence.sqlite'), table: 'evidence', nativeBinding,
+    });
+    const evidenceStore = createDocumentEvidenceStore({ repository: documentEvidenceRepository, clock: Date.now });
+    documentClassificationRepository = createJsonRepository({
+      filename: path.join(app.getPath('userData'), 'mina-document-classifications.sqlite'), table: 'classifications', nativeBinding,
+    });
+    const classifier = createDocumentClassifier({ repository: documentClassificationRepository, clock: Date.now });
     documentController = {
       ...createDocumentController({
         intake: documentIntake,
+        parserRegistry,
+        evidenceStore,
+        classifier,
         printService,
         printerRegistry,
       }),
@@ -3232,7 +3263,7 @@ app.whenReady().then(async () => {
       // qui portent la confirmation locale (voir document-ipc.mjs).
       registerPrinting: false,
     };
-    reportCapability('documents', 'degraded', 'document_form_rendering_unavailable');
+    reportCapability('documents', 'degraded', 'document_memory_form_conversion_download_not_configured');
     reportCapability('printing', 'degraded', 'printing_physical_receipt_unverified');
   });
 
@@ -3582,6 +3613,9 @@ app.on('before-quit', (event) => {
     if (mailDatabase?.open) mailDatabase.close();
     messageDeliveryLedger?.close();
     printerRepository?.close();
+    documentQuarantineRepository?.close();
+    documentEvidenceRepository?.close();
+    documentClassificationRepository?.close();
     if (personalCalendarDatabase?.open) personalCalendarDatabase.close();
     if (browserExecutor) await browserExecutor.close();
     if (researchBrowser) await researchBrowser.close();
