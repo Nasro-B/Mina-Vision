@@ -193,6 +193,43 @@ class ChatRepositoryTest {
     }
 
     @Test
+    fun `une page ancienne contient les cinquante messages strictement precedents`() = runTest {
+        repeat(151) { index ->
+            clock += 1
+            repository.sendText("thread-main", "message-${index + 1}")
+        }
+
+        val recent = repository.observeThreadPage("thread-main", pageSize = 50).first()
+        val firstOlder = repository.loadOlderPage("thread-main", recent.messages.first(), pageSize = 50)
+        val secondOlder = repository.loadOlderPage("thread-main", firstOlder.messages.first(), pageSize = 50)
+        val lastOlder = repository.loadOlderPage("thread-main", secondOlder.messages.first(), pageSize = 50)
+
+        assertEquals((102..151).map { "message-$it" }, recent.messages.map { it.text })
+        assertTrue(recent.hasOlder)
+        assertEquals((52..101).map { "message-$it" }, firstOlder.messages.map { it.text })
+        assertTrue(firstOlder.hasOlder)
+        assertEquals((2..51).map { "message-$it" }, secondOlder.messages.map { it.text })
+        assertTrue(secondOlder.hasOlder)
+        assertEquals(listOf("message-1"), lastOlder.messages.map { it.text })
+        assertFalse(lastOlder.hasOlder)
+    }
+
+    @Test
+    fun `le curseur de page departage les messages de la meme milliseconde par event id`() = runTest {
+        repository.sendText("thread-main", "un")
+        repository.sendText("thread-main", "deux")
+        repository.sendText("thread-main", "trois")
+
+        val recent = repository.observeThreadPage("thread-main", pageSize = 2).first()
+        val older = repository.loadOlderPage("thread-main", recent.messages.first(), pageSize = 2)
+
+        assertEquals(listOf("deux", "trois"), recent.messages.map { it.text })
+        assertTrue(recent.hasOlder)
+        assertEquals(listOf("un"), older.messages.map { it.text })
+        assertFalse(older.hasOlder)
+    }
+
+    @Test
     fun `sendMedia refuse si le PC n annonce pas les pieces jointes — rien mis en file`() = runTest {
         val repo = ChatRepository(
             dao = db.chatDao(), deviceId = "device-samsung", now = { clock },

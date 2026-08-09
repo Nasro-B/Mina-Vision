@@ -33,6 +33,18 @@ data class ChatMessage(
     val mime: String? = null,
 )
 
+/** Une page de bulles déchiffrées, triée du plus ancien au plus récent. */
+data class ChatMessagePage(
+    val messages: List<ChatMessage>,
+    val hasOlder: Boolean,
+)
+
+/** Limites partagées entre Room et l'état déchiffré de l'interface. */
+object ChatHistoryLimits {
+    const val PAGE_SIZE = 50
+    const val MAX_DECRYPTED_UI_ITEMS = 200
+}
+
 /** États d'un message sortant — repris tels quels de la spécification. */
 object DeliveryState {
     const val LOCAL_PENDING = "local_pending"
@@ -76,7 +88,6 @@ class ChatRepository(
         private const val TTL_MS = 30L * 24 * 60 * 60 * 1_000
         private const val MAX_OUTBOX = 5_000
         private const val MAX_TEXT_UTF8_BYTES = 32 * 1_024
-        private const val VISIBLE_THREAD_WINDOW = 200
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val TAG_BITS = 128
     }
@@ -257,7 +268,36 @@ class ChatRepository(
      * pas un message ; la bulle média vient de l'événement de métadonnées.
      */
     fun observeThread(threadId: String): Flow<List<ChatMessage>> =
-        dao.observeThread(threadId, VISIBLE_THREAD_WINDOW).map { rows -> rows.map { it.toMessage() } }
+        observeThreadPage(threadId, ChatHistoryLimits.MAX_DECRYPTED_UI_ITEMS).map { it.messages }
+
+    fun observeThreadPage(threadId: String, pageSize: Int): Flow<ChatMessagePage> {
+        require(pageSize in 1..ChatHistoryLimits.MAX_DECRYPTED_UI_ITEMS) { "chat_page_size_invalid" }
+        return dao.observeThread(threadId, pageSize + 1).map { rows ->
+            ChatMessagePage(
+                messages = rows.takeLast(pageSize).map { it.toMessage() },
+                hasOlder = rows.size > pageSize,
+            )
+        }
+    }
+
+    suspend fun loadOlderPage(
+        threadId: String,
+        before: ChatMessage,
+        pageSize: Int,
+    ): ChatMessagePage {
+        require(before.threadId == threadId) { "chat_page_thread_invalid" }
+        require(pageSize in 1..ChatHistoryLimits.MAX_DECRYPTED_UI_ITEMS) { "chat_page_size_invalid" }
+        val rows = dao.readVisibleThreadBefore(
+            threadId = threadId,
+            beforeCreatedAtMs = before.createdAtMs,
+            beforeEventId = before.eventId,
+            limit = pageSize + 1,
+        )
+        return ChatMessagePage(
+            messages = rows.take(pageSize).asReversed().map { it.toMessage() },
+            hasOlder = rows.size > pageSize,
+        )
+    }
 
     fun observeThreads(): Flow<List<ThreadRow>> = dao.observeThreads()
 

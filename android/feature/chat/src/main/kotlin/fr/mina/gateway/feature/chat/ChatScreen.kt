@@ -87,7 +87,7 @@ import java.util.Locale
 
 @Composable
 fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
-    val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val history by viewModel.historyState.collectAsStateWithLifecycle()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val voice by viewModel.voiceState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -101,8 +101,10 @@ fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
             )
         } else {
             ChatScreen(
-                messages = messages,
+                messages = history.messages,
                 state = state,
+                history = history,
+                onLoadOlder = viewModel::loadOlderMessages,
                 onDraftChange = viewModel::updateDraft,
                 onSend = viewModel::sendDraft,
                 onSendImage = viewModel::sendImage,
@@ -133,6 +135,8 @@ fun ChatRoute(viewModel: ChatViewModel = viewModel()) {
 fun ChatScreen(
     messages: List<ChatMessage>,
     state: ChatUiState,
+    history: ChatHistoryWindowState = ChatHistoryWindowState(),
+    onLoadOlder: () -> Unit = {},
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onSendImage: (android.net.Uri) -> Unit,
@@ -152,8 +156,10 @@ fun ChatScreen(
     onUnpair: () -> Unit,
 ) {
     val listState = rememberLazyListState()
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    LaunchedEffect(messages.lastOrNull()?.eventId) {
+        if (!history.lastChangeWasOlder && messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.lastIndex)
+        }
     }
 
     Scaffold(
@@ -183,6 +189,26 @@ fun ChatScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    if (history.hasOlder) {
+                        item(key = "load-older") {
+                            TextButton(
+                                onClick = onLoadOlder,
+                                enabled = !history.loadingOlder,
+                                modifier = Modifier.fillMaxWidth().semantics {
+                                    contentDescription = "Charger les messages précédents"
+                                },
+                            ) {
+                                if (history.loadingOlder) {
+                                    LoadingDot()
+                                    Spacer(Modifier.size(8.dp))
+                                }
+                                Text(
+                                    if (history.loadingOlder) "Chargement des messages…"
+                                    else "Charger les messages précédents",
+                                )
+                            }
+                        }
+                    }
                     items(messages, key = { it.eventId }) { message -> MessageBubble(message, loadMedia) }
                 }
             }

@@ -4,7 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import fr.mina.gateway.chat.ChatEngine
-import fr.mina.gateway.chat.ChatMessage
+import fr.mina.gateway.chat.ChatHistoryLimits
 import fr.mina.gateway.chat.ChatSettings
 import fr.mina.gateway.chat.LinkState
 import fr.mina.gateway.chat.StoredVoiceAttachment
@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 const val MAIN_THREAD_ID = "thread-main"
@@ -48,8 +49,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     val voiceState: StateFlow<VoiceNoteUiState> = voice.state
 
-    val messages: StateFlow<List<ChatMessage>> = engine.repository.observeThread(MAIN_THREAD_ID)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    private val historyWindow = ChatHistoryWindow()
+    val historyState: StateFlow<ChatHistoryWindowState> = historyWindow.state
 
     private val pending = MutableStateFlow(0)
     private val sendError = MutableStateFlow<String?>(null)
@@ -86,6 +87,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     init {
         engine.start()
         refreshPending()
+        viewModelScope.launch {
+            engine.repository.observeThreadPage(MAIN_THREAD_ID, ChatHistoryLimits.PAGE_SIZE)
+                .collect { page -> historyWindow.acceptRecent(page) }
+        }
     }
 
     fun updateDraft(text: String) {
@@ -104,6 +109,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             draft.value = draftController.draft
             sending.value = draftController.sending
             refreshPending()
+        }
+    }
+
+    fun loadOlderMessages() {
+        viewModelScope.launch {
+            try {
+                historyWindow.loadOlder { before ->
+                    engine.repository.loadOlderPage(
+                        threadId = MAIN_THREAD_ID,
+                        before = before,
+                        pageSize = ChatHistoryLimits.PAGE_SIZE,
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                sendError.value = humanReason(error)
+            }
         }
     }
 

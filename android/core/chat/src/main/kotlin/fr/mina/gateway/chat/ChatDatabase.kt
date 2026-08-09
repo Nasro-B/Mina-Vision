@@ -78,6 +78,26 @@ interface ChatDao {
     )
     fun observeThread(threadId: String, limit: Int): Flow<List<ChatEventRow>>
 
+    @Query(
+        """
+        SELECT * FROM chat_events
+        WHERE thread_id = :threadId
+          AND routing_class != 'stream'
+          AND (
+            created_at_ms < :beforeCreatedAtMs
+            OR (created_at_ms = :beforeCreatedAtMs AND event_id < :beforeEventId)
+          )
+        ORDER BY created_at_ms DESC, event_id DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun readVisibleThreadBefore(
+        threadId: String,
+        beforeCreatedAtMs: Long,
+        beforeEventId: String,
+        limit: Int,
+    ): List<ChatEventRow>
+
     @Query("SELECT * FROM chat_events WHERE thread_id = :threadId ORDER BY created_at_ms ASC, event_id ASC")
     suspend fun readThread(threadId: String): List<ChatEventRow>
 

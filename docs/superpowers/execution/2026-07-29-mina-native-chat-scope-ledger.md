@@ -124,9 +124,12 @@ du 2026-08-09 donne toujours `102` chemins déclarés, `9` présents et `93` abs
 - [x] `ChatRepository.observeThread` conserve uniquement les `200` messages visibles les plus
   récents ; les chunks `stream` sont exclus par Room avant déchiffrement et ne peuvent donc pas
   réduire cette fenêtre.
-- [ ] le chargement explicite par pages de `50` messages anciens, la gestion complète des fils,
-  le streaming ordonné/final, retry/cancel/stop, la recherche locale et le test d'intégration
-  PC↔Android restent ouverts.
+- [x] le chargement explicite des messages anciens utilise des pages de `50` et un curseur strict
+  `(created_at_ms, event_id)`. `ChatHistoryWindow` conserve au plus `200` objets déchiffrés dans
+  l'état UI, bloque une seconde demande pendant le chargement et l'écran propose l'action explicite
+  « Charger les messages précédents » sans revenir automatiquement en bas après une page ancienne.
+- [ ] la gestion complète des fils, le streaming ordonné/final, retry/cancel/stop, la recherche
+  locale et le test d'intégration PC↔Android restent ouverts.
 
 Preuves locales de cette tranche :
 
@@ -149,6 +152,22 @@ Preuves locales de cette tranche :
 - vert 2026-08-09 : la même classe `ChatRepositoryTest` a fini avec `BUILD SUCCESSFUL in 43s`.
   La gate Android complète (`protocol`, `core:chat`, `feature:voice`, `feature:chat`, tests app,
   lint et APK Debug) a fini avec `BUILD SUCCESSFUL in 3m 7s` (`343` tâches actionnables).
+- rouge attendu 2026-08-09 : le test de pagination a d'abord échoué sur les références absentes
+  `observeThreadPage`/`loadOlderPage`, puis `ChatHistoryWindowTest` sur le contrôleur absent et
+  `:feature:chat:assembleDebugAndroidTest` sur les paramètres UI absents.
+- vert 2026-08-09 : `ChatRepositoryTest` contient `23` tests (`0` échec, `0` erreur), dont le
+  départage de messages à la même milliseconde ; `ChatHistoryWindowTest` contient `3` tests
+  (`0` échec, `0` erreur), dont la borne `200`, l'arrivée d'un nouveau message, le double clic et
+  le marqueur qui inhibe le scroll après une page ancienne.
+  La compilation de `:feature:chat:assembleDebugAndroidTest` a retourné `GRADLE_EXIT=0`.
+- vert 2026-08-09 : la gate fraîche
+  `:core:protocol:testDebugUnitTest :core:chat:testDebugUnitTest :feature:voice:testDebugUnitTest
+  :feature:chat:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`
+  a retourné `GRADLE_EXIT=0`; l'APK généré est
+  `android/app/build/outputs/apk/debug/app-debug.apk` (`53 926 022` octets).
+- non exécuté 2026-08-09 : `adb devices -l` a retourné seulement `List of devices attached`.
+  Le test Compose a été compilé mais aucune instrumentation ni recette sur téléphone ne lui est
+  attribuée.
 
 ### État partiel vérifié de la tâche 18
 
