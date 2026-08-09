@@ -5,6 +5,28 @@ const require = createRequire(import.meta.url);
 const { createPreloadApi } = require('../src/ui/preload.cjs');
 
 describe('preload API', () => {
+  it('exposes only the selected document parsing and classification operations', async () => {
+    const ipcRenderer = {
+      invoke: vi.fn().mockResolvedValue({}),
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      send: vi.fn(),
+    };
+    const api = createPreloadApi(ipcRenderer);
+
+    await api.documents.parse('document-1');
+    await api.documents.proposeClassification('document-1', { category: 'invoice' });
+    await api.documents.confirmClassification('proposal-1', { category: 'invoice' });
+
+    expect(ipcRenderer.invoke.mock.calls).toEqual([
+      ['mina:documents:parse', 'document-1'],
+      ['mina:documents:propose-classification', { documentId: 'document-1', hints: { category: 'invoice' } }],
+      ['mina:documents:confirm-classification', { proposalId: 'proposal-1', overrides: { category: 'invoice' } }],
+    ]);
+    expect(api.documents.writeRaw).toBeUndefined();
+    expect(Object.isFrozen(api.documents)).toBe(true);
+  });
+
   it('exposes read-only grounding projections without any proof publication method', async () => {
     const ipcRenderer = {
       invoke: vi.fn().mockResolvedValue({}),

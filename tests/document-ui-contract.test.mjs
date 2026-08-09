@@ -5,6 +5,7 @@ import { createEmergencyCorpus } from '../src/emergency/emergency-corpus.mjs';
 import { createEmergencyMode } from '../src/emergency/emergency-mode.mjs';
 import { createDocumentController } from '../src/ui/pages/document-controller.mjs';
 import { createEmergencyController } from '../src/ui/pages/emergency-controller.mjs';
+import { registerDocumentIpc } from '../src/ui/ipc/document-ipc.mjs';
 import { registerMinaIpc, CORE_CHANNELS } from '../src/ui/ipc/register-ipc.mjs';
 
 function fakeIpcMain() {
@@ -76,6 +77,75 @@ describe('document controller: unavailable form rendering is explicit', () => {
     expect(() => documentController.proposePrint({})).toThrow('print_service_not_configured');
     expect(() => documentController.submitPrint({})).toThrow('print_service_not_configured');
     expect(() => documentController.reconcilePrint('job-1')).toThrow('print_service_not_configured');
+  });
+});
+
+describe('document controller: classification uses persisted evidence', () => {
+  it('classifies the observation stored for the document, never an observation supplied by the renderer', async () => {
+    const { intake } = buildDocumentWorld();
+    const observation = Object.freeze({ documentId: 'document-1', mediaType: 'application/pdf', blocks: [] });
+    const controller = createDocumentController({
+      intake,
+      evidenceStore: { get: async (documentId) => (documentId === 'document-1' ? observation : null) },
+      classifier: {
+        proposeClassification: async (storedObservation, hints) => Object.freeze({
+          documentId: storedObservation.documentId,
+          category: hints.category,
+        }),
+      },
+    });
+
+    await expect(controller.proposeClassificationForDocument('document-1', { category: 'invoice' }))
+      .resolves.toEqual({ documentId: 'document-1', category: 'invoice' });
+    await expect(controller.proposeClassificationForDocument('missing', { category: 'invoice' }))
+      .rejects.toThrow('document_not_parsed');
+  });
+
+  it('routes the IPC classification request by documentId and ignores a renderer-supplied observation', async () => {
+    const handlers = new Map();
+    registerDocumentIpc({
+      ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
+      controller: {
+        proposeClassificationForDocument: async (documentId, hints) => Object.freeze({
+          documentId,
+          category: hints.category,
+        }),
+      },
+    });
+
+    await expect(handlers.get('mina:documents:propose-classification')({}, {
+      documentId: 'document-1',
+      observation: { documentId: 'injected-document' },
+      hints: { category: 'invoice' },
+    })).resolves.toEqual({ documentId: 'document-1', category: 'invoice' });
+  });
+});
+
+describe('document controller: parse response is redacted for the renderer', () => {
+  it('stores full evidence locally but returns only metadata and a block count', async () => {
+    const { intake } = buildDocumentWorld();
+    let stored = null;
+    const controller = createDocumentController({
+      intake,
+      parserRegistry: {
+        parse: async () => ({
+          documentId: 'document-1', mediaType: 'application/pdf', pageCount: 1,
+          parserId: 'pdf-text-parser', parserVersion: '1', confidence: 0.94,
+          blocks: [{ text: 'Donnée personnelle à ne pas envoyer au renderer', sourceOffset: { page: 1 }, confidence: 0.94 }],
+        }),
+      },
+      evidenceStore: { store: async (observation) => { stored = observation; } },
+    });
+
+    const response = await controller.parseDocument('document-1');
+
+    expect(stored.blocks[0].text).toBe('Donnée personnelle à ne pas envoyer au renderer');
+    expect(response).toEqual({
+      documentId: 'document-1', mediaType: 'application/pdf', pageCount: 1,
+      parserId: 'pdf-text-parser', parserVersion: '1', confidence: 0.94, blockCount: 1,
+    });
+    expect(JSON.stringify(response)).not.toContain('Donnée personnelle');
+    expect(response).not.toHaveProperty('blocks');
   });
 });
 

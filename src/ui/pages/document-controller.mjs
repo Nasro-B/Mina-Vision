@@ -13,11 +13,26 @@ export function createDocumentController({
       if (!parserRegistry) throw new Error('document_parser_not_configured');
       const observation = await parserRegistry.parse(documentId);
       if (evidenceStore) await evidenceStore.store(observation);
-      return observation;
+      return Object.freeze({
+        documentId: observation.documentId,
+        mediaType: observation.mediaType,
+        pageCount: observation.pageCount,
+        confidence: observation.confidence,
+        parserId: observation.parserId,
+        parserVersion: observation.parserVersion,
+        blockCount: observation.blocks.length,
+      });
     },
 
     proposeClassification: (observation, hints) => {
       if (!classifier?.proposeClassification) throw new Error('document_classifier_not_configured');
+      return classifier.proposeClassification(observation, hints);
+    },
+    async proposeClassificationForDocument(documentId, hints) {
+      if (!classifier?.proposeClassification) throw new Error('document_classifier_not_configured');
+      if (!evidenceStore?.get) throw new Error('document_evidence_not_configured');
+      const observation = await evidenceStore.get(documentId);
+      if (!observation) throw new Error('document_not_parsed');
       return classifier.proposeClassification(observation, hints);
     },
     confirmClassification: (proposalId, overrides) => {

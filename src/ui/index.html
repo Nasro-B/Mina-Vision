@@ -690,6 +690,11 @@
         </div>
         <div class="collapsible" id="documents-collapsible">
           <div class="collapsible-inner">
+            <div class="source-grid">
+              <label><span>Fichier local à analyser</span><input id="document-path" type="text" maxlength="4000" autocomplete="off" placeholder="C:\Documents\facture.pdf"></label>
+              <button class="ghost-button" id="document-analyze" type="button">Mettre en quarantaine et analyser</button>
+            </div>
+            <p class="sandbox-remediation">Chaîne locale&nbsp;: quarantaine → extraction locale → preuves → classement proposé. Le texte extrait et les octets bruts ne sont pas affichés ici.</p>
             <div id="documents-summary" class="analytics-summary"></div>
             <p class="sandbox-remediation">Aucun octet brut de document n’entre dans ce panneau&nbsp;; les originaux ne sont jamais écrasés. Le mode urgence coupe le réseau et les automatisations externes.</p>
           </div>

@@ -162,6 +162,11 @@ function createPreloadApi(ipcRenderer) {
     graphListContacts: () => ipcRenderer.invoke('mina:graph:list-contacts'),
     documentIntake: (payload) => ipcRenderer.invoke('mina:documents:intake', payload),
     documentGet: (payload) => ipcRenderer.invoke('mina:documents:get', payload),
+    documents: Object.freeze({
+      parse: (documentId) => ipcRenderer.invoke('mina:documents:parse', documentId),
+      proposeClassification: (documentId, hints) => ipcRenderer.invoke('mina:documents:propose-classification', { documentId, hints }),
+      confirmClassification: (proposalId, overrides) => ipcRenderer.invoke('mina:documents:confirm-classification', { proposalId, overrides }),
+    }),
     personalityGet: () => ipcRenderer.invoke('mina:personality:get'),
     smsPolicyStatus: () => ipcRenderer.invoke('mina:sms-policy-status'),
     smsStatus: () => ipcRenderer.invoke('mina:sms-status'),

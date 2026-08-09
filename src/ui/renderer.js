@@ -7,6 +7,7 @@ import {
   contactRow, homeDeviceRow, mailAccountRow, mailMessageRow, personalityRow,
   chatDeviceRow, printerRow, renderList, renderUnavailable, routineRow, taskRow,
 } from './panels/domain-panels.mjs';
+import { bindDocumentAnalysis } from './panels/document-analysis-workflow.mjs';
 import { assessFrameQuality, decideLensFlip, frameStatsFromGrayscale } from '../perception/frame-quality.mjs';
 import {
   cloudzirPaletteColors, createBargeInDetector, createCloudzirPalettePreference,
@@ -77,6 +78,9 @@ const elements = {
   todayRefresh: document.querySelector('#today-refresh'),
   todayItems: document.querySelector('#today-items'),
   emergencyNetworkState: document.querySelector('#emergency-network-state'),
+  documentPath: document.querySelector('#document-path'),
+  documentAnalyze: document.querySelector('#document-analyze'),
+  documentSummary: document.querySelector('#documents-summary'),
   log: document.querySelector('#log'),
   technicalLog: document.querySelector('#technical-log'),
   technicalLogClear: document.querySelector('#technical-log-clear'),
@@ -970,6 +974,12 @@ const applyStatusFromHealth = (status) => {
 };
 
 elements.start.addEventListener('click', () => { void startMission(); });
+bindDocumentAnalysis({
+  api,
+  pathInput: elements.documentPath,
+  submitButton: elements.documentAnalyze,
+  summary: elements.documentSummary,
+});
 // Nothing in the backend actually stays stuck after an emergency stop (mina-runtime.mjs keeps
 // runtimeStatus === 'ready') — only the status pill did, with no way back except restarting the
 // whole app. This just re-checks health and puts the UI back to 'Prête' without a real restart.
