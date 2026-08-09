@@ -452,6 +452,12 @@
     Résultat 2026-08-09 : `adb devices -l` n'a retourné aucune ligne appareil. La validation
     physique n'a donc pas été exécutée.
 
+    Mise à jour 2026-08-09 : `adb devices -l` liste désormais le Huawei USB
+    `HUAWEITESTSERIAL` et le Samsung A71 Wi-Fi `192.168.1.11:46505`; les deux exposent le package
+    `fr.mina.gateway.debug`. La recette reste non exécutée : aucun lancement, permission micro,
+    enregistrement, test instrumentation ni réinstallation n’a été effectué afin de préserver le
+    provisioning local existant.
+
 - [x] **Step 4: Update evidence-based ledger and commit**
 
     Mark Task 20 partial only after the source scan and automated gates are green. Keep Task 21 unchecked. If adb has no device row, state exactly that physical validation is pending.

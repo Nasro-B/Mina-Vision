@@ -33,14 +33,19 @@
 
 ### Preuves externes ou physiques
 
-- [ ] **Accès Firebase Mina Vision** — la dernière consigne Nasro désigne
+- [ ] **Accès Firebase Mina Vision** — la consigne active de Nasro désigne
   `mina.vision.ai@gmail.com` via `https://console.firebase.google.com/u/0/project/mina-vision/overview`.
-  La lecture de cette URL le 2026-08-09 a montré une session Chrome encore connectée à
-  `mina.vision.ai@gmail.com` et le refus « le projet n'existe pas ou vous n'avez pas
-  l'autorisation ». Cela ne prouve pas l'accès sous le compte demandé. Aucun paramètre Firebase ni
-  ressource cloud n'a été modifié ; la prochaine opération cloud exige une session visible sous le
-  compte désigné et un accès confirmé au projet.
-- [ ] **Android utilisateur** — le Huawei USB et le Samsung A71 ADB Wi-Fi ont historiquement reçu l’APK debug vérifié. À la dernière vérification, `adb devices -l` n’a listé aucun appareil : le parcours application, le provisioning local et les permissions caméra/micro, SMS et Telegram restent donc à prouver. Le propriétaire indique que l’APK de référence et un fichier `.env` local contiennent des données de provisioning ; ce fichier n’a pas été lu pendant cette réconciliation, ne doit pas être exposé, et l’APK de référence ne doit pas être écrasé. Toute réinstallation autorisée exige une saisie locale du provisioning. Le test instrumentation isolé passé ne prouve pas ces parcours.
+  L’onglet RTDB ouvert porte bien l’URL `/u/0/project/mina-vision/.../rules`, mais l’identité
+  affichée n’a pas pu être relue : l’extension Chrome liste les onglets puis expire au contrôle,
+  car son hôte natif n’est pas enregistré. Aucun paramètre Firebase ni ressource cloud n’a été
+  modifié. La publication RTDB attend la réparation du plugin navigateur, une session visible sous
+  le compte désigné et la confirmation de publication au moment de l’action.
+- [ ] **Android utilisateur** — le 2026-08-09, `adb devices -l` a listé le Huawei USB
+  `HUAWEITESTSERIAL` (`MAR_LX1A`) et le Samsung A71 Wi-Fi `192.168.1.11:46505` (`SM_A715F`), et
+  `pm path` confirme `fr.mina.gateway.debug` sur les deux. Aucun parcours applicatif, aucune
+  permission caméra/micro/SMS/Telegram et aucune recette instrumentation n’ont encore été exécutés.
+  Le provisioning local n’a pas été lu ni modifié, et aucun APK n’a été réinstallé ; il doit être
+  préservé avant toute recette pouvant l’écraser.
 - [ ] **Google Home** — SDK signé, relais autorisé et recette sur lumière non critique, supervisée.
 - [ ] **Mail fournisseurs** — comptes de test dédiés, consentement OAuth/TLS et opérations réversibles réelles par fournisseur.
 - [ ] **Windows Sandbox** — preuve d'isolation physique dédiée.
