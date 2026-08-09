@@ -63,6 +63,16 @@ describe('contrat de composition des domaines (main.mjs)', () => {
     expect(main).toContain('mina-personality.sqlite');
   });
 
+  it('publie le domaine urgence composé via le contrôleur IPC', async () => {
+    const main = await source();
+
+    expect(main).toContain("import { createEmergencyController } from './pages/emergency-controller.mjs';");
+    expect(main).toContain('let emergencyController = null;');
+    expect(main).toContain('governanceDomains.emergency && governanceDomains.emergencyCorpus');
+    expect(main).toContain('emergencyController = createEmergencyController({');
+    expect(main).toContain('...(emergencyController ? { emergency: emergencyController } : {}),');
+  });
+
   it('starts the Mina runtime before opening the paired-device chat channel', async () => {
     const main = await source();
     const runtimeStart = main.indexOf('await minaCore.start();');

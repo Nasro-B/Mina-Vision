@@ -138,6 +138,7 @@ import { createGraphController } from './pages/graph-controller.mjs';
 import { createDocumentQuarantineStore } from '../documents/document-quarantine.mjs';
 import { createDocumentIntake } from '../documents/document-intake.mjs';
 import { createDocumentController } from './pages/document-controller.mjs';
+import { createEmergencyController } from './pages/emergency-controller.mjs';
 import { createPersonalityService } from '../personality/personality-service.mjs';
 import { createPersonalityController } from './pages/personality-controller.mjs';
 import {
@@ -343,6 +344,7 @@ let runtimeCapabilityCatalog = null;
 let personalGraphDatabase = null;
 let personalControllers = null;
 let documentController = null;
+let emergencyController = null;
 let personalityController = null;
 let mailDatabase = null;
 let mailAccountStoreRef = null;
@@ -2331,6 +2333,7 @@ const registerIpc = () => {
       ...(cameraController ? { camera: cameraController } : {}),
       ...(personalControllers ? { personal: personalControllers } : {}),
       ...(documentController ? { document: documentController } : {}),
+      ...(emergencyController ? { emergency: emergencyController } : {}),
       ...(personalityController ? { personality: personalityController } : {}),
     },
     isValidSender: (event) => {
@@ -3356,6 +3359,12 @@ app.whenReady().then(async () => {
       ownerIdentity: { isOwner: isTelegramOwner },
       logger: governanceLogger,
     });
+    if (governanceDomains.emergency && governanceDomains.emergencyCorpus) {
+      emergencyController = createEmergencyController({
+        corpus: governanceDomains.emergencyCorpus,
+        mode: governanceDomains.emergency,
+      });
+    }
     for (const entry of governanceDomains.capabilities) {
       reportCapability(entry.domain, entry.state, entry.reason);
     }
