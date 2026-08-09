@@ -23,6 +23,10 @@ object ChatPayloadCodec {
         "message.attachment.created",
         "message.voice.created",
         "media.chunk",
+        "assistant.response.started",
+        "assistant.response.chunk",
+        "assistant.response.completed",
+        "assistant.response.failed",
         // Appels : demande d'ouverture du composeur (ACTION_DIAL) — l'humain appuie lui-même.
         "call.dial.requested",
     )

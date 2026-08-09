@@ -71,6 +71,23 @@ class ChatPayloadCodecTest {
     }
 
     @Test
+    fun assistantResponseCompletedFromNodeVector() {
+        val vectors = JSONObject(resource("mina-chat-payload-v2-vectors.json")).getJSONArray("vectors")
+        val vector = (0 until vectors.length())
+            .map { vectors.getJSONObject(it) }
+            .first { it.getString("name") == "assistant_response_completed" }
+
+        val payload = ChatPayloadCodec.decode(fromHex(vector.getString("payloadHex"))) as ChatPayloadCodec.PayloadV2
+        val response = AssistantResponseStream.decode(payload)
+
+        assertEquals("assistant.response.completed", response.type)
+        assertEquals(vector.getJSONObject("meta").getString("responseId"), response.responseId)
+        assertEquals(vector.getJSONObject("meta").getString("sourceEventId"), response.sourceEventId)
+        assertEquals(2, response.sequence)
+        assertEquals("bonjour", response.text)
+    }
+
+    @Test
     fun rejectsUnknownVersionAndType() {
         assertThrows(IllegalArgumentException::class.java) { ChatPayloadCodec.decode(byteArrayOf(0x00, 0x09)) }
         assertThrows(IllegalArgumentException::class.java) { ChatPayloadCodec.encodeV2("message.text.created", "{}") }
