@@ -98,4 +98,48 @@ describe('fallback text generator', () => {
     await expect(generator.generate({ messages: [] })).resolves.toEqual({ output: 'local ok' });
     expect(cloud.generate).toHaveBeenCalledTimes(2);
   });
+
+  it('transmet les deltas natifs mais ne mélange jamais deux fournisseurs après un fragment', async () => {
+    const cloud = provider('cloud', 'cloud', async ({ onDelta }) => {
+      await onDelta('début');
+      throw new Error('cloud_down');
+    });
+    const local = provider('local', 'local', async () => ({ output: 'ne doit pas être envoyé' }));
+    const generator = createFallbackTextGenerator({ providers: [cloud, local], mode: 'auto' });
+    const onDelta = vi.fn(async () => {});
+
+    await expect(generator.generate({ messages: [], stream: true, onDelta })).rejects.toThrow('cloud_down');
+    expect(onDelta).toHaveBeenCalledWith('début');
+    expect(local.generate).not.toHaveBeenCalled();
+  });
+
+  it('ne bascule pas non plus si un fournisseur n’attend pas la promesse de son delta', async () => {
+    const cloud = provider('cloud', 'cloud', async ({ onDelta }) => {
+      void onDelta('début');
+      throw new Error('cloud_down');
+    });
+    const local = provider('local', 'local', async () => ({ output: 'ne doit pas être envoyé' }));
+    const generator = createFallbackTextGenerator({ providers: [cloud, local], mode: 'auto' });
+    let releaseDelta;
+    const gate = new Promise((resolve) => { releaseDelta = resolve; });
+    const onDelta = vi.fn(async () => { await gate; });
+
+    const pending = generator.generate({ messages: [], stream: true, onDelta });
+    const rejected = expect(pending).rejects.toThrow('cloud_down');
+    await vi.waitFor(() => expect(onDelta).toHaveBeenCalledWith('début'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    releaseDelta();
+    await rejected;
+    expect(local.generate).not.toHaveBeenCalled();
+  });
+
+  it('laisse un fournisseur final-only retourner son final sans fragment synthétique', async () => {
+    const finalOnly = provider('gemini', 'cloud', async () => ({ output: 'final réel' }));
+    const generator = createFallbackTextGenerator({ providers: [finalOnly], mode: 'auto' });
+    const onDelta = vi.fn(async () => {});
+
+    await expect(generator.generate({ messages: [], stream: true, onDelta })).resolves.toEqual({ output: 'final réel' });
+    expect(finalOnly.generate).toHaveBeenCalledWith(expect.objectContaining({ stream: true, onDelta: expect.any(Function) }));
+    expect(onDelta).not.toHaveBeenCalled();
+  });
 });

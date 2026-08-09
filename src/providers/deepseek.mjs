@@ -98,7 +98,7 @@ export function createDeepSeekProvider({
         const delta = choice?.delta?.content ?? '';
         if (delta) {
           output += delta;
-          onDelta?.(delta);
+          await onDelta?.(delta);
         }
         if (choice?.finish_reason) finishReason = choice.finish_reason;
         if (chunk.usage) rawUsage = chunk.usage;

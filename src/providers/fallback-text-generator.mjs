@@ -39,20 +39,44 @@ export function createFallbackTextGenerator({
 
   async function generate(input) {
     const failures = [];
+    const forwardDelta = typeof input?.onDelta === 'function' ? input.onDelta : null;
     for (const provider of routes) {
       if ((unavailableUntil.get(provider.id) ?? 0) > now()) {
         failures.push(`${provider.id}:cooldown`);
         continue;
       }
+      let observedDelta = false;
+      let deltaError = null;
+      const providerInput = forwardDelta
+        ? {
+          ...input,
+          onDelta: async (delta) => {
+            // Ce marqueur est volontairement avant le premier await : même un fournisseur qui
+            // n'attend pas son callback ne pourra pas déclencher un fallback concurrent.
+            observedDelta = true;
+            try {
+              await forwardDelta(delta);
+            } catch (error) {
+              deltaError = error;
+              throw error;
+            }
+          },
+        }
+        : input;
       try {
-        const result = await provider.generate(input);
+        const result = await provider.generate(providerInput);
         if (!String(result?.output ?? '').trim()) throw new Error('empty_output');
         return result;
       } catch (error) {
+        if (deltaError) throw deltaError;
         failures.push(provider.id);
         if (isRateLimited(error)) unavailableUntil.set(provider.id, now() + (retryAfterMs(error) ?? rateLimitCooldownMs));
         else if (isTransientFailure(error)) unavailableUntil.set(provider.id, now() + transientCooldownMs);
         onFailure({ providerId: provider.id, error });
+        // Reprendre chez un autre fournisseur après un fragment mélangerait deux réponses dans le
+        // même stream durable. Le transport termine donc le flux en échec et le message sera
+        // rejoué proprement avec le même eventId.
+        if (observedDelta) throw error;
       }
     }
     throw new Error(`text_providers_failed:${failures.join(',') || 'none'}`);

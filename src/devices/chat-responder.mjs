@@ -24,7 +24,7 @@ const MAX_OUTPUT = 4_096;
 export function createChatResponder({ generate, memory = null, logger = null } = {}) {
   if (typeof generate !== 'function') throw new TypeError('chat_responder_generate_requis');
 
-  return async function respond({ text, deviceId, threadId, eventId = null }) {
+  return async function respond({ text, deviceId, threadId, eventId = null, onDelta = null }) {
     const body = String(text ?? '');
     if (body.length < 1 || body.length > MAX_INPUT || body.includes('\0')) {
       throw new Error('chat_message_invalide');
@@ -46,9 +46,25 @@ export function createChatResponder({ generate, memory = null, logger = null } =
     if (recalled) messages.push({ role: 'system', content: `Contexte récent :\n${recalled}` });
     messages.push({ role: 'user', content: body });
 
-    const response = await generate({ messages, temperature: 0.3 });
-    const answer = String(response?.output ?? '').trim().slice(0, MAX_OUTPUT);
-    if (!answer) throw new Error('chat_reponse_vide');
+    let emittedDelta = false;
+    const forwardDelta = typeof onDelta === 'function'
+      ? async (delta) => {
+        await onDelta(delta);
+        emittedDelta = true;
+      }
+      : null;
+    const response = await generate({
+      messages,
+      temperature: 0.3,
+      ...(forwardDelta ? { stream: true, onDelta: forwardDelta } : {}),
+    });
+    const output = String(response?.output ?? '');
+    // Les espaces d'un final qui a déjà produit des deltas font partie de la réponse canonique :
+    // les retirer ici rendrait `chunks.join('')` différent du final durable. Sans delta, on garde
+    // exactement la normalisation historique du canal final-only.
+    const answer = emittedDelta ? output : output.trim().slice(0, MAX_OUTPUT);
+    if (!answer.trim()) throw new Error('chat_reponse_vide');
+    if (emittedDelta && answer.length > MAX_OUTPUT) throw new Error('chat_reponse_trop_longue');
 
     try {
       // Échange complet : question ET réponse. La mémoire ne doit pas garder une conversation

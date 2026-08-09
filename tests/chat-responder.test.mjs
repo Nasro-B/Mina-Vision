@@ -58,4 +58,20 @@ describe('réponse de Mina sur le canal mina_app', () => {
     const respond = createChatResponder({ generate: async () => ({ output: '   ' }) });
     await expect(respond(baseInput)).rejects.toThrow('chat_reponse_vide');
   });
+
+  it('transmet les deltas natifs et retient exactement le final streamé une seule fois', async () => {
+    const memory = { rememberChatExchange: vi.fn(async () => ({ remembered: true })) };
+    const onDelta = vi.fn(async () => {});
+    const generate = vi.fn(async ({ stream, onDelta: providerDelta }) => {
+      expect(stream).toBe(true);
+      await providerDelta('bonjour ');
+      return { output: 'bonjour ' };
+    });
+    const respond = createChatResponder({ generate, memory });
+
+    await expect(respond({ ...baseInput, onDelta })).resolves.toBe('bonjour ');
+    expect(onDelta).toHaveBeenCalledWith('bonjour ');
+    expect(memory.rememberChatExchange).toHaveBeenCalledTimes(1);
+    expect(memory.rememberChatExchange).toHaveBeenCalledWith(expect.objectContaining({ assistantMessage: 'bonjour ' }));
+  });
 });

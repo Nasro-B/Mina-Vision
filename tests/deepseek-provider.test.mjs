@@ -45,6 +45,26 @@ describe('DeepSeek v4 provider', () => {
     expect(onDelta.mock.calls.map(([delta]) => delta)).toEqual(['Bon', 'jour']);
   });
 
+  it('attend le consommateur de delta avant de terminer le stream', async () => {
+    async function* stream() {
+      yield { choices: [{ delta: { content: 'Bon' }, finish_reason: 'stop' }] };
+    }
+    const fake = client(stream());
+    const provider = createDeepSeekProvider({ apiKeyProvider: async () => 'secret', clientFactory: () => fake });
+    let releaseDelta;
+    const gate = new Promise((resolve) => { releaseDelta = resolve; });
+    const onDelta = vi.fn(async () => { await gate; });
+
+    const pending = provider.generate({ messages: [], stream: true, onDelta });
+    await vi.waitFor(() => expect(onDelta).toHaveBeenCalledTimes(1));
+    let settled = false;
+    void pending.then(() => { settled = true; });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+    releaseDelta();
+    await expect(pending).resolves.toMatchObject({ output: 'Bon', finishReason: 'stop' });
+  });
+
   it('normalizes timeout and authentication failures', async () => {
     const timeoutClient = client(new Promise((_resolve, reject) => {
       setTimeout(() => reject(new Error('late')), 100);
