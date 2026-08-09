@@ -1,6 +1,6 @@
 # Mina Vision — tâches restantes de réconciliation
 
-> État au 2026-08-09 11:30 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
+> État au 2026-08-09 11:37 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
 
 ## Clos avec preuve récente
 
@@ -16,6 +16,7 @@
 - [x] Indexation initiale Mina Code : corpus réel de `935` fichiers indexé en `23 481 ms`, sous l'objectif historique `<30 s`.
 - [x] Avatar VRM : explicitement hors périmètre ; aucun asset, modèle, dépendance ou distribution VRM ne doit être ajouté.
 - [x] Parsing documentaire local partiel : le runtime compose maintenant la quarantaine avec les parseurs PDF à texte natif et image PNG/JPEG via Tesseract, puis conserve les observations et propositions de classification dans des stores SQLite locaux. Le panneau Mina accepte un chemin explicitement saisi, lance quarantaine → extraction locale → proposition de classement après un clic, puis offre un choix de catégorie et une confirmation explicite. Celle-ci n’affiche que des métadonnées redacted, recalcule la conservation par défaut lors d’un changement de catégorie et ne déplace ni ne partage le fichier. Un bouton distinct charge la liste locale de quarantaine : elle affiche seulement nom, type, taille, statut, raisons et date, jamais digest, octets ni texte extrait. Les `16` tests documents/UI ciblés ont passé (`116` tests), le smoke Electron isolé a rendu `SMOKE OK`, l’unitaire de `npm test` a atteint l’intégration via son `&&`, et l’intégration rejouée a passé (`18/18` fichiers, `49/49` tests). Le récapitulatif final de l’unitaire n’a pas été restitué par le superviseur : aucun nouveau total global unitaire n’est affirmé ici. Cette preuve ne couvre aucun document utilisateur, PDF scanné ni impression.
+- [x] Contrôles de runtime sans effet externe : `npm run smoke:sqlite:electron` a validé BetterSqlite3 sous Electron `43.1.0` / ABI `148`. `npm run verify` a confirmé les transports Android USB et LAN ; il a signalé sans ambiguïté LM Studio injoignable, SDK Google Home absent, comptes mail non configurables depuis le CLI et Firebase configuré localement mais `firebase_cloud_unverified`.
 
 ## Reste à faire — décision ou prérequis nécessaire
 
