@@ -8,6 +8,7 @@ import {
   chatDeviceRow, printerRow, renderList, renderUnavailable, routineRow, taskRow,
 } from './panels/domain-panels.mjs';
 import { bindDocumentAnalysis } from './panels/document-analysis-workflow.mjs';
+import { bindDocumentQuarantineList } from './panels/document-quarantine-list-workflow.mjs';
 import { assessFrameQuality, decideLensFlip, frameStatsFromGrayscale } from '../perception/frame-quality.mjs';
 import {
   cloudzirPaletteColors, createBargeInDetector, createCloudzirPalettePreference,
@@ -82,6 +83,8 @@ const elements = {
   documentAnalyze: document.querySelector('#document-analyze'),
   documentCategory: document.querySelector('#document-category'),
   documentConfirm: document.querySelector('#document-confirm'),
+  documentQuarantineRefresh: document.querySelector('#document-quarantine-refresh'),
+  documentQuarantineList: document.querySelector('#document-quarantine-list'),
   documentSummary: document.querySelector('#documents-summary'),
   log: document.querySelector('#log'),
   technicalLog: document.querySelector('#technical-log'),
@@ -983,6 +986,11 @@ bindDocumentAnalysis({
   categorySelect: elements.documentCategory,
   confirmButton: elements.documentConfirm,
   summary: elements.documentSummary,
+});
+bindDocumentQuarantineList({
+  api,
+  refreshButton: elements.documentQuarantineRefresh,
+  list: elements.documentQuarantineList,
 });
 // Nothing in the backend actually stays stuck after an emergency stop (mina-runtime.mjs keeps
 // runtimeStatus === 'ready') — only the status pill did, with no way back except restarting the

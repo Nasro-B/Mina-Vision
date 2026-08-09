@@ -4,9 +4,25 @@ export function createDocumentController({
 } = {}) {
   if (!intake?.intake || !intake?.inspect || !intake?.promote) throw new TypeError('document_controller_dependencies_required');
 
+  const documentListProjection = (record) => Object.freeze({
+    documentId: record.documentId,
+    declaredName: record.declaredName,
+    detectedType: record.detectedType,
+    size: record.size,
+    status: record.status,
+    reasons: [...record.reasons],
+    observedAt: record.observedAt,
+  });
+
   return Object.freeze({
     intakeDocument: (input) => intake.intake(input),
     getDocument: (documentId) => intake.inspect(documentId),
+    async listDocuments() {
+      if (!intake.list) throw new Error('document_quarantine_listing_unavailable');
+      const records = await intake.list();
+      if (!Array.isArray(records)) throw new Error('document_quarantine_listing_invalid');
+      return Object.freeze(records.map(documentListProjection));
+    },
     promoteDocument: ({ documentId, destination } = {}) => intake.promote(documentId, destination),
 
     async parseDocument(documentId) {

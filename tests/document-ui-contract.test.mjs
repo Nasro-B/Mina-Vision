@@ -119,6 +119,17 @@ describe('document controller: classification uses persisted evidence', () => {
       hints: { category: 'invoice' },
     })).resolves.toEqual({ documentId: 'document-1', category: 'invoice' });
   });
+
+  it('routes the read-only quarantine list through a named IPC channel', async () => {
+    const handlers = new Map();
+    registerDocumentIpc({
+      ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
+      controller: { listDocuments: async () => Object.freeze([{ documentId: 'document-1', declaredName: 'facture.pdf' }]) },
+    });
+
+    await expect(handlers.get('mina:documents:list')({}))
+      .resolves.toEqual([{ documentId: 'document-1', declaredName: 'facture.pdf' }]);
+  });
 });
 
 describe('document controller: parse response is redacted for the renderer', () => {
@@ -159,6 +170,7 @@ describe('IPC channel allowlist: named channels only, never a raw write escape h
       controllers: { document: documentController, emergency: emergencyController },
     });
     expect(channels).toContain('mina:documents:get');
+    expect(channels).toContain('mina:documents:list');
     expect(channels).toContain('mina:documents:intake');
     expect(channels).toContain('mina:printing:submit');
     expect(channels).toContain('mina:emergency:activate');
@@ -188,6 +200,20 @@ describe('document-controller.getDocument: renderer never receives raw bytes', (
   it('returns null for an unknown document rather than throwing', async () => {
     const { documentController } = buildDocumentWorld();
     expect(await documentController.getDocument('missing')).toBeNull();
+  });
+
+  it('lists quarantine metadata without exposing digests or raw bytes', async () => {
+    const { documentController } = buildDocumentWorld();
+    await documentController.intakeDocument({ source: 'download', bytes: Buffer.from('%PDF-1.7 mock'), declaredName: 'facture.pdf' });
+
+    const listed = await documentController.listDocuments();
+
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({
+      declaredName: 'facture.pdf', detectedType: 'application/pdf', size: 13, status: 'inspectable',
+    });
+    expect(listed[0]).not.toHaveProperty('digest');
+    expect(JSON.stringify(listed)).not.toContain('%PDF');
   });
 });
 

@@ -2,6 +2,7 @@ export function registerDocumentIpc({ ipcMain, controller } = {}) {
   if (!ipcMain?.handle || !controller) throw new TypeError('document_ipc_dependencies_required');
   ipcMain.handle('mina:documents:intake', (_event, payload) => controller.intakeDocument(payload));
   ipcMain.handle('mina:documents:get', (_event, payload) => controller.getDocument(payload));
+  ipcMain.handle('mina:documents:list', () => controller.listDocuments());
   ipcMain.handle('mina:documents:promote', (_event, payload) => controller.promoteDocument(payload));
   ipcMain.handle('mina:documents:parse', (_event, payload) => controller.parseDocument(payload));
   ipcMain.handle('mina:documents:propose-classification', (_event, payload) => controller.proposeClassificationForDocument(payload?.documentId, payload?.hints));

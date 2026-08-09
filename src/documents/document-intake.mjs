@@ -53,6 +53,11 @@ export function createDocumentIntake({
       return quarantineStore.getRecord(documentId);
     },
 
+    async list() {
+      if (!quarantineStore.listRecords) throw new Error('document_quarantine_listing_unavailable');
+      return quarantineStore.listRecords();
+    },
+
     async promote(documentId, destination) {
       const record = await quarantineStore.getRecord(documentId);
       if (!record) throw new Error('document_not_found');
