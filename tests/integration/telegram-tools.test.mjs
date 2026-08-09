@@ -3,6 +3,10 @@ import { createTelegramCommandRouter } from '../../src/messaging/telegram-comman
 import { createTelegramHomeCommands } from '../../src/messaging/telegram-home-commands.mjs';
 import { createTelegramMailCommands } from '../../src/messaging/telegram-mail-commands.mjs';
 import { createTelegramConversationResponder } from '../../src/messaging/telegram-conversation-responder.mjs';
+import { createGroundedResponseService } from '../../src/grounding/grounded-response.mjs';
+import { createClaimLedger } from '../../src/grounding/claim-ledger.mjs';
+import { createEvidenceValidator } from '../../src/grounding/evidence-validator.mjs';
+import { createGroundingPipeline } from '../../src/grounding/grounding-pipeline.mjs';
 import { createSmartHomeRegistry } from '../../src/home/registry.mjs';
 import { createSmartHomePolicy } from '../../src/home/policy.mjs';
 import { createSmartHomeRouter } from '../../src/home/router.mjs';
@@ -13,6 +17,13 @@ const STRANGER_SENDER = '222222222:222222222';
 
 function realIsOwner(ownerChatId) {
   return async (sender) => String(sender).split(':').pop() === ownerChatId;
+}
+
+function groundedResponse() {
+  const claimLedger = createClaimLedger({ ids: () => 'claim-1' });
+  return createGroundedResponseService({
+    pipeline: createGroundingPipeline({ claimLedger, evidenceValidator: createEvidenceValidator() }),
+  });
 }
 
 describe('integration: Telegram tools — real router + real home/mail command handlers, fake transport only', () => {
@@ -94,10 +105,16 @@ describe('integration: Telegram tools — real router + real home/mail command h
   });
 
   it('a normal conversational message from the owner reaches the real conversational responder, never a command handler', async () => {
-    const generate = vi.fn(async () => ({ output: 'Bonjour, comment puis-je aider ?' }));
+    const generate = vi.fn(async () => ({ output: JSON.stringify({
+      segments: [{ kind: 'creative', text: 'Bonjour, comment puis-je aider ?' }],
+      citations: [],
+    }) }));
+    const responder = createTelegramConversationResponder({ generate, groundedResponse: groundedResponse() });
     const router = createTelegramCommandRouter({
       homeCommands: createTelegramHomeCommands({ isOwner: realIsOwner('111111111'), homeService: { execute: vi.fn() }, homeRegistry: { list: () => [] }, audit: () => {} }),
-      conversation: createTelegramConversationResponder({ generate }),
+      conversation: {
+        reply: (message) => responder.reply({ ...message, evidence: [], workSessionId: 'work-1' }),
+      },
     });
 
     const result = await router.handle({ sender: OWNER_SENDER, body: 'Bonjour Mina, comment vas-tu ?' });

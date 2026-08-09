@@ -17,14 +17,14 @@ const MAX_OUTPUT = 4_096;
 
 /**
  * @param {object} options
- * @param {(input: object) => Promise<{output: string}>} options.generate
+ * @param {{reply(input: object): Promise<{text: string}>}} options.groundedResponse
  * @param {object} [options.memory] contrôleur mémoire ; absent, la conversation n'est pas retenue
  * @param {object} [options.logger]
  */
-export function createChatResponder({ generate, memory = null, logger = null } = {}) {
-  if (typeof generate !== 'function') throw new TypeError('chat_responder_generate_requis');
+export function createChatResponder({ groundedResponse, memory = null, logger = null } = {}) {
+  if (!groundedResponse?.reply) throw new TypeError('chat_responder_grounded_response_requis');
 
-  return async function respond({ text, deviceId, threadId, eventId = null, onDelta = null }) {
+  return async function respond({ text, deviceId, threadId, eventId = null, evidence = [], workSessionId }) {
     const body = String(text ?? '');
     if (body.length < 1 || body.length > MAX_INPUT || body.includes('\0')) {
       throw new Error('chat_message_invalide');
@@ -46,25 +46,16 @@ export function createChatResponder({ generate, memory = null, logger = null } =
     if (recalled) messages.push({ role: 'system', content: `Contexte récent :\n${recalled}` });
     messages.push({ role: 'user', content: body });
 
-    let emittedDelta = false;
-    const forwardDelta = typeof onDelta === 'function'
-      ? async (delta) => {
-        await onDelta(delta);
-        emittedDelta = true;
-      }
-      : null;
-    const response = await generate({
+    const response = await groundedResponse.reply({
       messages,
-      temperature: 0.3,
-      ...(forwardDelta ? { stream: true, onDelta: forwardDelta } : {}),
+      evidence,
+      workSessionId,
+      channel: 'mina_app',
+      maxOutput: MAX_OUTPUT,
     });
-    const output = String(response?.output ?? '');
-    // Les espaces d'un final qui a déjà produit des deltas font partie de la réponse canonique :
-    // les retirer ici rendrait `chunks.join('')` différent du final durable. Sans delta, on garde
-    // exactement la normalisation historique du canal final-only.
-    const answer = emittedDelta ? output : output.trim().slice(0, MAX_OUTPUT);
+    const answer = String(response?.text ?? '').trim();
     if (!answer.trim()) throw new Error('chat_reponse_vide');
-    if (emittedDelta && answer.length > MAX_OUTPUT) throw new Error('chat_reponse_trop_longue');
+    if (answer.length > MAX_OUTPUT) throw new Error('chat_reponse_trop_longue');
 
     try {
       // Échange complet : question ET réponse. La mémoire ne doit pas garder une conversation

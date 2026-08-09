@@ -454,6 +454,7 @@ let activityJournal = null;
 // Canal `mina_app` : la clé maîtresse n'est PAS conservée ailleurs — cette référence suit
 // exactement l'état du coffre, donc verrouiller la mémoire coupe aussi le canal téléphone.
 let chatChannel = null;
+let chatChannelReady = false;
 let chatMasterKey = null;
 let governanceDomains = null;
 // Couche 2 du journal (Task 5) : textes chiffrés, armée au déverrouillage du coffre.
@@ -2827,6 +2828,17 @@ app.whenReady().then(async () => {
         logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_media', entry) },
       });
 
+      if (!groundedResponse) throw new Error('grounded_response_runtime_unavailable');
+      const chatResponder = createChatResponder({
+        groundedResponse: {
+          reply: async (input) => groundedResponse.reply({
+            ...input,
+            generate: async (request) => (await telegramTextGenerator()).generate(request),
+          }),
+        },
+        memory: memoryController,
+        logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_app', entry) },
+      });
       chatChannel = createChatChannel({
         masterKey: () => chatMasterKey,
         identity: chatIdentity,
@@ -2850,11 +2862,15 @@ app.whenReady().then(async () => {
           writeFile,
           rename,
         }),
-        respond: createChatResponder({
-          generate: async (input) => (await telegramTextGenerator()).generate(input),
-          memory: memoryController,
-          logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_app', entry) },
-        }),
+        respond: async (input) => {
+          if (!minaCore) throw new Error('mina_runtime_unavailable');
+          return minaCore.runWork({
+            channel: 'mina_app',
+            identityId: input.deviceId,
+            goal: input.text,
+            run: ({ evidence, workSessionId }) => chatResponder({ ...input, evidence, workSessionId }),
+          });
+        },
         // Pièces jointes / notes vocales : réassemblées (gardes + sha256) puis stockées CHIFFRÉES
         // (clé HKDF dédiée, jamais la clé maître). À la complétion, la mémoire retient « [pièce
         // jointe …] » — jamais le binaire. Le texte v1 est totalement inchangé par ce chemin.
@@ -2869,13 +2885,8 @@ app.whenReady().then(async () => {
         host: process.env.MINA_CHAT_HOST ?? '0.0.0.0',
         logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'chat_app', entry) },
       });
-  await chatChannel.load();
-      const listening = await chatChannel.start();
-      void activityJournal?.append('chat_app_canal', {
-        listening: Boolean(listening),
-        port: listening?.port ?? null,
-        error: chatChannel.status().lastError,
-      });
+      await chatChannel.load();
+      chatChannelReady = true;
 
       // C2 — rétention 14 j des médias chiffrés reçus : purge au démarrage puis toutes les 6 h.
       // Bornée aux fichiers *.media de userData/chat-media, journalisée (jamais silencieuse).
@@ -2893,6 +2904,7 @@ app.whenReady().then(async () => {
       void activityJournal?.append('chat_app_canal', { listening: false, error: 'coffre_verrouille' });
     }
   } catch (error) {
+    chatChannelReady = false;
     const message = String(error?.message ?? error).slice(0, 300);
     technicalLog.record({ severity: 'warning', scope: 'chat', code: 'chat_app_canal_indisponible', message });
     void activityJournal?.append('chat_app_canal', { listening: false, error: message });
@@ -3411,6 +3423,20 @@ app.whenReady().then(async () => {
     ],
   });
   await minaCore.start();
+  if (chatChannelReady && chatChannel) {
+    try {
+      const listening = await chatChannel.start();
+      void activityJournal?.append('chat_app_canal', {
+        listening: Boolean(listening),
+        port: listening?.port ?? null,
+        error: chatChannel.status().lastError,
+      });
+    } catch (error) {
+      const message = String(error?.message ?? error).slice(0, 300);
+      technicalLog.record({ severity: 'warning', scope: 'chat', code: 'chat_app_canal_indisponible', message });
+      void activityJournal?.append('chat_app_canal', { listening: false, error: message });
+    }
+  }
   registerIpc();
   const adbWifiStatePath = path.join(app.getPath('userData'), 'mina-adb-wifi.json');
   const adbWifiEndpointStore = createAdbWifiEndpointStore({

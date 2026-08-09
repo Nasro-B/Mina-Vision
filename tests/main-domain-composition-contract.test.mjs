@@ -62,4 +62,13 @@ describe('contrat de composition des domaines (main.mjs)', () => {
     expect(main).toContain('mina-recovery-closures.sqlite');
     expect(main).toContain('mina-personality.sqlite');
   });
+
+  it('starts the Mina runtime before opening the paired-device chat channel', async () => {
+    const main = await source();
+    const runtimeStart = main.indexOf('await minaCore.start();');
+    const chatStart = main.indexOf('await chatChannel.start();');
+
+    expect(runtimeStart).toBeGreaterThan(-1);
+    expect(chatStart).toBeGreaterThan(runtimeStart);
+  });
 });
