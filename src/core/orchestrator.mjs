@@ -121,7 +121,9 @@ export function createMinaOrchestrator({
           }
 
           if (action.name === 'done') {
-            state = completeMission(state, response.text || 'Terminé');
+            state = pendingUnverifiedAction
+              ? stopMission(state, 'action_unverified')
+              : completeMission(state, response.text || 'Terminé');
             break;
           }
 

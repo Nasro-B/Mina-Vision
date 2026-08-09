@@ -123,6 +123,27 @@ describe('createMinaOrchestrator', () => {
     }));
   });
 
+  it('stops instead of accepting done after an action remains unverified', async () => {
+    const executor = createExecutor();
+    executor.observe.mockReset().mockResolvedValue(observation);
+    const computerUse = {
+      start: vi.fn().mockResolvedValue({
+        interactionId: 'i1', completed: false, text: '',
+        calls: [{ id: 'c1', name: 'click', arguments: { x: 500, y: 250 } }],
+      }),
+      continue: vi.fn().mockResolvedValue({
+        interactionId: 'i1', completed: false, text: 'Terminé',
+        calls: [{ id: 'c2', name: 'done', arguments: {} }],
+      }),
+    };
+    const mina = createMinaOrchestrator({ computerUse, executors: { browser: executor } });
+
+    const state = await mina.run({ goal: 'Clique', environment: 'browser', maxActions: 5, timeoutMs: 10_000 });
+
+    expect(state).toMatchObject({ status: 'stopped', stopReason: 'action_unverified' });
+    expect(executor.execute).toHaveBeenCalledTimes(1);
+  });
+
   it('stops after three consecutive unverifiable effects', async () => {
     const executor = createExecutor();
     executor.observe.mockReset().mockResolvedValue(observation);
