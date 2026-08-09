@@ -1,6 +1,6 @@
 # Mina Vision — tâches restantes de réconciliation
 
-> État au 2026-08-09 02:24 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
+> État au 2026-08-09 08:43 (Africa/Lagos). Ce tableau consolide les dernières preuves du [journal de réconciliation](2026-07-29-mina-reconciliation-log.md), de la [preuve de release](../../operations/RELEASE-EVIDENCE-2026-07.md) et du [ledger du chat natif](2026-07-29-mina-native-chat-scope-ledger.md). Il ne transforme aucune recette matérielle, compte externe ou décision produit en succès.
 
 ## Clos avec preuve récente
 
@@ -28,18 +28,20 @@
 
 - [ ] **Grounding live** — l’exécution selon le plan et la spécification est autorisée. Il reste à réconcilier le code actuel avec le contrat de corrélation `claimId`, puis à implémenter et prouver les chemins `startMission` et `phoneMessageSync` sans annoncer de citation live avant test.
 - [ ] **Chat natif Android, option A** — Nasro a choisi le chat complet des tâches 13–25. La notification Android n’expose plus le texte de réponse (`2185166`), les règles owner/device sont prouvées localement (`335d8e9`) et le réveil FCM est fail-closed (`071d279`). L’historique Android charge maintenant explicitement des pages de `50` avec curseur tuple et garde au plus `200` objets déchiffrés dans l’état UI ; un message texte sortant en échec final peut aussi être remis dans sa même outbox avec son même `eventId`, sans doublon local. `ChatRepositoryTest` (`26/26`) et `ChatHistoryWindowTest` (`3/3`) sont sans échec, et la gate Android fraîche a retourné `GRADLE_EXIT=0`. Le test Compose a seulement été compilé : aucun appareil n’étant attaché, il ne vaut pas recette instrumentée. Le retry ne couvre pas les pièces jointes, le streaming ordonné/final ni cancel/stop. La migration notes/PTT PCM chiffrée reste partielle et la tâche 21 de voix live n’est pas commencée. Il reste la migration du relais Firebase anonyme vers une identité propriétaire/appareil avec custom claims, App Check, Functions et enregistrement FID/FCM explicite ; tant qu’elle n’existe pas, le réveil FCM est volontairement ignoré et aucune tâche Android 13–25 ne peut être déclarée complète.
-- [ ] **Téléchargement de pièces jointes mail** — l’implémentation reste à concevoir contre le contrat de récupération, quarantaine et persistance chiffrée ; le contenu brut n’est pas persisté actuellement et `downloadAttachment` ne doit pas être annoncé comme disponible.
+- [ ] **Téléchargement de pièces jointes mail** — l’ingestion bornée est désormais implémentée pour Gmail et Microsoft Graph (`dd23516`) : seulement les descripteurs `fileAttachment` Graph sont lus, les références ne sont pas suivies, les tailles et encodages sont validés avant la quarantaine, et `74/74` tests ciblés sont verts. Le contenu brut n’est toujours pas persisté chiffré ; la migration de blob, l’export local one-shot et la recette réelle avec comptes de test restent à faire. `downloadAttachment` ne doit pas être annoncé comme disponible.
 - [ ] **Documents / impression** — l’exécution plan/spécification est autorisée ; il reste à identifier les implémentations réellement présentes, compléter le renderer requis et réaliser une recette d’impression physique avant de déclarer la capacité disponible.
 
 ### Preuves externes ou physiques
 
-- [ ] **Accès Firebase Mina Vision** — la consigne active de Nasro désigne
-  `mina.vision.ai@gmail.com` via `https://console.firebase.google.com/u/0/project/mina-vision/overview`.
-  L’onglet RTDB ouvert porte bien l’URL `/u/0/project/mina-vision/.../rules`, mais l’identité
-  affichée n’a pas pu être relue : l’extension Chrome liste les onglets puis expire au contrôle,
-  car son hôte natif n’est pas enregistré. Aucun paramètre Firebase ni ressource cloud n’a été
-  modifié. La publication RTDB attend la réparation du plugin navigateur, une session visible sous
-  le compte désigné et la confirmation de publication au moment de l’action.
+- [ ] **Accès Firebase Mina Vision** — la console RTDB a été relue sous
+  `Compte Google Sourire Concept (mina.vision.ai@gmail.com)` dans le projet Mina Vision ; la base
+  est en Belgique (`europe-west1`). L’endpoint
+  `https://mina-vision-default-rtdb.europe-west1.firebasedatabase.app` est propagé dans les deux
+  configurations locales et la génération Android release a lu exactement cette valeur
+  (`4e8cd2e`). Les règles cloud actuellement visibles restent le refus global par défaut
+  (`.read: false`, `.write: false`) ; aucune ressource cloud ni règle n’a été modifiée. La
+  publication des règles owner/device préparées attend la confirmation explicite de Nasro au moment
+  de l’action.
 - [ ] **Android utilisateur** — le 2026-08-09, `adb devices -l` a listé le Huawei USB
   `HUAWEITESTSERIAL` (`MAR_LX1A`) et le Samsung A71 Wi-Fi `192.168.1.11:46505` (`SM_A715F`), et
   `pm path` confirme `fr.mina.gateway.debug` sur les deux. Aucun parcours applicatif, aucune
@@ -49,7 +51,9 @@
 - [ ] **Google Home** — SDK signé, relais autorisé et recette sur lumière non critique, supervisée.
 - [ ] **Mail fournisseurs** — comptes de test dédiés, consentement OAuth/TLS et opérations réversibles réelles par fournisseur.
 - [ ] **Windows Sandbox** — preuve d'isolation physique dédiée.
-- [ ] **Chrome via l'extension demandée** — réinstaller/réparer le plugin navigateur Codex : l'extension est installée, mais son hôte natif Chrome n'est pas enregistré ; aucune navigation de contournement n'est utilisée.
+- [x] **Chrome via l'extension demandée** — la session Chrome demandée fonctionne ; elle a ouvert la
+  page RTDB Rules et relu le compte Google, la région et les règles sans effectuer de modification
+  cloud.
 
 ## Ordre de reprise proposé
 
