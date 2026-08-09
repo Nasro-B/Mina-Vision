@@ -14,6 +14,9 @@ import { createLocalPathPermissions } from '../security/local-path-permissions.m
 import { createStartupManager } from '../system/startup-manager.mjs';
 import { resolveStorageRoots } from '../system/storage-roots.mjs';
 import { createClaimLedger } from '../grounding/claim-ledger.mjs';
+import { createEvidenceValidator } from '../grounding/evidence-validator.mjs';
+import { createGroundingPipeline } from '../grounding/grounding-pipeline.mjs';
+import { createGroundedResponseService } from '../grounding/grounded-response.mjs';
 import { createSessionManager } from '../sessions/session-manager.mjs';
 import { createSessionStore } from '../sessions/session-store.mjs';
 import { createKeyring } from '../crypto/keyring.mjs';
@@ -64,7 +67,7 @@ import { createDesktopClient } from '../executors/desktop-client.mjs';
 import { createDesktopCursorOverlay } from './desktop-cursor-overlay.mjs';
 import { createAdbWifiEndpointStore, createAdbWifiKeeper, createPhoneBridge } from '../executors/phone-bridge.mjs';
 import { createAdbMdnsPeerKeeper } from '../executors/adb-mdns-peer.mjs';
-import { createPhoneMessageSync } from '../devices/phone-message-sync.mjs';
+import { createPhoneMessageSync, telegramReplyTarget } from '../devices/phone-message-sync.mjs';
 import { createMessageDeliveryLedger } from '../messaging/message-delivery-ledger.mjs';
 import { createHttpsmsClient } from '../messaging/httpsms/client.mjs';
 import { createHttpsmsProvider } from '../messaging/httpsms/provider.mjs';
@@ -297,6 +300,7 @@ let cameraVision = null;
 let voice = null;
 let activeOrchestrator = null;
 let minaCore = null;
+let groundedResponse = null;
 let memoryController = null;
 // Set at bootstrap: lets the voice layer and the renderer read Mina's REAL capabilities (installed
 // skills, sandbox availability) instead of a hardcoded list.
@@ -809,9 +813,20 @@ const isTelegramOwner = async (sender) => {
 
 const getPhoneMessageSync = () => {
   if (!memoryController) throw new Error('memory_runtime_unavailable');
-  const conversation = createTelegramConversationResponder({
+  if (!minaCore) throw new Error('mina_runtime_unavailable');
+  if (!groundedResponse) throw new Error('grounded_response_runtime_unavailable');
+  const telegramConversation = createTelegramConversationResponder({
     generate: async (input) => (await telegramTextGenerator()).generate(input),
+    groundedResponse,
   });
+  const conversation = {
+    reply: async (message) => minaCore.runWork({
+      channel: 'telegram',
+      identityId: telegramReplyTarget(message.sender),
+      goal: message.body,
+      run: ({ evidence, workSessionId }) => telegramConversation.reply({ ...message, evidence, workSessionId }),
+    }),
+  };
   // Deterministic slash commands are tried BEFORE the conversational LLM ever sees the message —
   // this ordering is the whole security boundary (see telegram-command-router.mjs). Both handlers
   // are optional: a domain that failed to compose (see the try/catch blocks above) simply drops
@@ -2455,6 +2470,9 @@ app.whenReady().then(async () => {
   const sessionStore = createSessionStore();
   const sessionManager = createSessionManager({ store: sessionStore });
   const claimLedger = createClaimLedger();
+  groundedResponse = createGroundedResponseService({
+    pipeline: createGroundingPipeline({ claimLedger, evidenceValidator: createEvidenceValidator() }),
+  });
   const nativeBinding = nativeCacheCandidates({ rootDir: ROOT_DIR })
     .map((root) => path.join(root, `electron-v${process.versions.modules}`, 'better_sqlite3.node'))
     .find((candidate) => existsSync(candidate));

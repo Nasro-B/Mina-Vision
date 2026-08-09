@@ -5,21 +5,26 @@ const SYSTEM_PROMPT = [
   'N’affirme jamais avoir exécuté une action si aucun outil ne l’a réellement confirmée.',
 ].join(' ');
 
-export function createTelegramConversationResponder({ generate } = {}) {
+export function createTelegramConversationResponder({ generate, groundedResponse } = {}) {
   if (typeof generate !== 'function') throw new TypeError('telegram_text_generator_required');
+  if (!groundedResponse?.reply) throw new TypeError('telegram_grounded_response_required');
 
-  async function reply(message = {}) {
-    if (typeof message.body !== 'string' || message.body.length < 1 || message.body.length > 4_096
-      || message.body.includes('\0')) throw new TypeError('telegram_message_invalid');
-    const response = await generate({
+  async function reply({ body, evidence = [], workSessionId } = {}) {
+    if (typeof body !== 'string' || body.length < 1 || body.length > 4_096
+      || body.includes('\0')) throw new TypeError('telegram_message_invalid');
+    const response = await groundedResponse.reply({
+      generate,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: message.body },
+        { role: 'user', content: body },
       ],
-      temperature: 0.3,
+      evidence,
+      workSessionId,
+      channel: 'telegram',
+      maxOutput: 4_096,
     });
-    const text = String(response?.output ?? '').trim().slice(0, 4_096);
-    if (!text) throw new Error('telegram_reply_empty');
+    const text = String(response?.text ?? '');
+    if (!text || text.length > 4_096) throw new Error('telegram_grounded_reply_invalid');
     return text;
   }
 
