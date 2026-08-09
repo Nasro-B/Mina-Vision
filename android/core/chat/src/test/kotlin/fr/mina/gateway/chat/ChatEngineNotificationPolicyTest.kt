@@ -44,6 +44,22 @@ class ChatEngineNotificationPolicyTest {
         ))
     }
 
+    @Test
+    fun `ne rebranche jamais RTDB pour une trame assistant deja ingeree`() {
+        assertTrue(shouldRouteRealtimeResponse(
+            known = false,
+            result = ChatIngestResult(assistantResponseFrame = started()),
+        ))
+        assertFalse(shouldRouteRealtimeResponse(
+            known = true,
+            result = ChatIngestResult(assistantResponseFrame = started()),
+        ))
+        assertFalse(shouldRouteRealtimeResponse(
+            known = false,
+            result = ChatIngestResult(),
+        ))
+    }
+
     private fun started() = AssistantResponseFrame(
         type = "assistant.response.started",
         responseId = RESPONSE_ID,

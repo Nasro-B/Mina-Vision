@@ -5,7 +5,7 @@ import {
 import {
   Timestamp, doc, getDoc, serverTimestamp, setDoc, updateDoc,
 } from 'firebase/firestore';
-import { ref as databaseRef, set as setRealtime } from 'firebase/database';
+import { get as getRealtime, ref as databaseRef, set as setRealtime } from 'firebase/database';
 import { ref as storageRef, uploadBytes } from 'firebase/storage';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -41,6 +41,9 @@ const emulatorDescribe = process.env.FIRESTORE_EMULATOR_HOST ? describe : descri
 const OWNER_ID = 'owner-test';
 const DEVICE_ID = 'device-test';
 const OWNER_UID = 'opaque-owner-uid';
+const BRAIN_DEVICE_ID = 'mina-brain';
+const BRAIN_UID = 'opaque-mina-brain-uid';
+const RESPONSE_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const CLAIMS = Object.freeze({
   owner_id: OWNER_ID,
   device_id: DEVICE_ID,
@@ -63,6 +66,16 @@ function validEnvelope(eventId = 'event-test') {
     nonce: 'n'.repeat(16),
     authTag: 't'.repeat(16),
     signature: 's'.repeat(64),
+  };
+}
+
+function validStreamFrame(sequence, ciphertext = 'AQID', extra = {}) {
+  const now = Date.now();
+  return {
+    ciphertext,
+    sequence,
+    expiresAt: now + 60_000,
+    ...extra,
   };
 }
 
@@ -99,11 +112,16 @@ emulatorDescribe('règles Emulator owner/device du chat', () => {
       await setRealtime(databaseRef(context.database()), {
         activeDevices: {
           [OWNER_ID]: {
-            [DEVICE_ID]: {
-              authUid: OWNER_UID,
-              revokedAt: null,
-              tokenVersion: 1,
-            },
+          [DEVICE_ID]: {
+            authUid: OWNER_UID,
+            revokedAt: null,
+            tokenVersion: 1,
+          },
+          [BRAIN_DEVICE_ID]: {
+            authUid: BRAIN_UID,
+            revokedAt: null,
+            tokenVersion: 1,
+          },
           },
         },
       });
@@ -116,6 +134,14 @@ emulatorDescribe('règles Emulator owner/device du chat', () => {
 
   function ownerContext() {
     return testEnv.authenticatedContext(OWNER_UID, CLAIMS);
+  }
+
+  function brainContext() {
+    return testEnv.authenticatedContext(BRAIN_UID, {
+      owner_id: OWNER_ID,
+      device_id: BRAIN_DEVICE_ID,
+      token_version: 1,
+    });
   }
 
   it('autorise seulement le device actif owner à lire et créer une enveloppe bornée', async () => {
@@ -157,6 +183,28 @@ emulatorDescribe('règles Emulator owner/device du chat', () => {
       cloudSequence: 43,
       updatedAt: serverTimestamp(),
     }));
+  });
+
+  it('réserve les flux RTDB au PC actif, impose la séquence et interdit la réécriture', async () => {
+    const framesPath = `streams/${OWNER_ID}/${RESPONSE_ID}/frames`;
+    const brain = brainContext().database();
+    const device = ownerContext().database();
+    const unpaired = testEnv.authenticatedContext('opaque-unpaired-stream-uid', {
+      owner_id: OWNER_ID,
+      device_id: 'unpaired-device',
+      token_version: 1,
+    }).database();
+
+    await assertSucceeds(setRealtime(databaseRef(brain, `${framesPath}/1`), validStreamFrame(1)));
+    await assertSucceeds(getRealtime(databaseRef(device, framesPath)));
+    await assertFails(getRealtime(databaseRef(unpaired, framesPath)));
+    await assertFails(setRealtime(databaseRef(brain, `${framesPath}/0`), validStreamFrame(0)));
+    await assertFails(setRealtime(databaseRef(brain, `${framesPath}/2`), validStreamFrame(1)));
+    await assertFails(setRealtime(databaseRef(brain, `${framesPath}/1`), validStreamFrame(1, 'BAUG')));
+    await assertFails(setRealtime(databaseRef(brain, `${framesPath}/3`), validStreamFrame(3, 'BwgJ', {
+      plaintext: 'interdit',
+    })));
+    await assertFails(setRealtime(databaseRef(brain, `${framesPath}/4`), validStreamFrame(4, '')));
   });
 
   it('refuse un device révoqué, une version de token divergente ou une capability absente', async () => {

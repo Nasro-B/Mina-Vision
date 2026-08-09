@@ -9,6 +9,7 @@ import { createChatCrypto } from '../src/devices/chat-crypto.mjs';
 import { createChatResponseStream } from '../src/devices/chat-response-stream.mjs';
 import { createMonotonicUlid } from '../src/contracts/event-id.mjs';
 import { encodeChatPayloadV2 } from '../src/contracts/chat-payload.mjs';
+import { parseChatEvent } from '../src/contracts/chat.mjs';
 import { decodeAssistantResponseFrame } from '../src/contracts/assistant-response-stream.mjs';
 
 const keyPair = () => {
@@ -42,6 +43,14 @@ const fakeFirestore = () => {
   };
 };
 
+const fakeRealtimeStream = () => {
+  const frames = [];
+  return {
+    frames,
+    publishFrame: vi.fn(async (frame) => { frames.push(structuredClone(frame)); }),
+  };
+};
+
 const buildRelay = (overrides = {}) => {
   const pc = keyPair();
   const device = keyPair();
@@ -61,6 +70,9 @@ const buildRelay = (overrides = {}) => {
     respond: overrides.respond ?? (async ({ text }) => `écho ${text}`),
     handleMedia: overrides.handleMedia ?? null,
     publicKeyFromSpki,
+    realtimeStream: overrides.realtimeStream ?? null,
+    realtimeOwnerId: overrides.realtimeOwnerId ?? null,
+    clock: overrides.clock ?? Date.now,
     ulid: createMonotonicUlid(),
   });
   return { relay, firestore, pc, device, epochKey };
@@ -125,6 +137,45 @@ describe('relais Firebase du canal mina_app', () => {
     expect(frames.at(-1).text).toBe('écho salut Mina');
     expect(replies.map(({ routingClass }) => routingClass)).toEqual(['stream', 'stream', 'stream', 'message']);
     expect(relay.status()).toMatchObject({ watching: true, handled: 1, rejected: 0 });
+  });
+
+  it('dépose seulement les chunks éphémères dans RTDB et garde les terminaux dans Firestore', async () => {
+    const respond = async ({ text, onDelta }) => {
+      await onDelta('écho ');
+      await onDelta(text);
+      return `écho ${text}`;
+    };
+    const realtimeStream = fakeRealtimeStream();
+    const { relay, firestore, device, epochKey, pc } = buildRelay({
+      respond,
+      realtimeStream,
+      realtimeOwnerId: 'owner-test',
+    });
+    relay.start();
+    const document = relayedEvent({ device, epochKey, plaintext: 'salut Mina' });
+
+    await firestore.deliver([document]);
+
+    const firestoreReplies = [...firestore.stored.values()].filter((entry) => entry.target === 'device');
+    expect(firestoreReplies).toHaveLength(2);
+    const streamEnvelopes = realtimeStream.frames.map(({ ciphertext }) => parseChatEvent(
+      JSON.parse(Buffer.from(ciphertext, 'base64').toString('utf8')),
+    ));
+    const readBack = createChatCrypto({
+      signingPrivateKey: device.privateKey,
+      verifyPublicKey: pc.publicKey,
+      epochKey,
+    });
+    expect(streamEnvelopes.map((event) => decodeAssistantResponseFrame(readBack.verifyAndDecryptBytes(event))))
+      .toMatchObject([
+        { type: 'assistant.response.chunk', sequence: 1, text: 'écho ' },
+        { type: 'assistant.response.chunk', sequence: 2, text: 'salut Mina' },
+      ]);
+    expect(realtimeStream.frames).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ownerId: 'owner-test', responseId: expect.any(String), sequence: 1 }),
+      expect.objectContaining({ ownerId: 'owner-test', responseId: expect.any(String), sequence: 2 }),
+    ]));
+    expect(JSON.stringify(realtimeStream.frames)).not.toContain('écho');
   });
 
   it('retire la question relayée après avoir déposé la réponse', async () => {

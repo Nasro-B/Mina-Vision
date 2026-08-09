@@ -13,6 +13,7 @@ import { createChatServer } from './chat-server.mjs';
 
 const EPOCH_INFO = 'mina-chat-epoch-v1';
 const KEY_BYTES = 32;
+const IDENTIFIER = /^[A-Za-z0-9._:-]{1,160}$/u;
 
 /**
  * @param {object} options
@@ -29,6 +30,9 @@ export function createChatChannel({
   /** Façade Firestore ; absente, le canal fonctionne en direct SEUL et le dit. */
   firestore = null,
   publicKeyFromSpki = null,
+  /** Transport RTDB déjà authentifié ; absent tant que les claims owner/device ne sont pas provisionnés. */
+  realtimeStream = null,
+  realtimeOwnerId = null,
   respond,
   /** Factory du handler média, composée une seule fois avec le ledger partagé direct/Firebase. */
   createMediaHandler = null,
@@ -41,6 +45,10 @@ export function createChatChannel({
 } = {}) {
   if (typeof masterKey !== 'function') throw new TypeError('chat_channel_master_key_requis');
   if (typeof respond !== 'function') throw new TypeError('chat_channel_respond_requis');
+  if ((realtimeStream === null) !== (realtimeOwnerId === null)
+    || (realtimeStream !== null && (typeof realtimeStream.publishFrame !== 'function' || !IDENTIFIER.test(realtimeOwnerId)))) {
+    throw new TypeError('chat_channel_realtime_identity_required');
+  }
 
   let registry = createChatDeviceRegistry({ clock });
   const ledger = createChatLedger({ store: ledgerStore, clock });
@@ -95,7 +103,8 @@ export function createChatChannel({
       // pris, sinon un PC mal configuré perdrait aussi le chemin de secours.
       if (firestore && publicKeyFromSpki && !relay) {
         relay = createChatRelay({
-          firestore, identity, registry, epochKeyFor, ledger, respond, handleMedia: mediaHandler, publicKeyFromSpki, clock, logger,
+          firestore, identity, registry, epochKeyFor, ledger, respond, handleMedia: mediaHandler,
+          publicKeyFromSpki, clock, logger, realtimeStream, realtimeOwnerId,
         });
         relay.start();
       }
@@ -131,7 +140,9 @@ export function createChatChannel({
         keyEpoch: registry.keyEpoch(),
         processedEvents: ledger.size(),
         // Vérité sur le secours : « relais actif » seulement s'il écoute vraiment.
-        relay: relay?.status() ?? Object.freeze({ watching: false, handled: 0, rejected: 0, lastError: 'relais non configuré' }),
+        relay: relay?.status() ?? Object.freeze({
+          watching: false, handled: 0, rejected: 0, lastError: 'relais non configuré', realtime: false,
+        }),
         generationsInFlight: ledger.inFlight(),
         connectedDevices: server?.connectedDevices?.() ?? [],
         devices: registry.list(),

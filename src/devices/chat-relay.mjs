@@ -17,9 +17,12 @@ import { decodeChatPayload } from '../contracts/chat-payload.mjs';
 import { createChatCrypto } from './chat-crypto.mjs';
 import { createMonotonicUlid } from '../contracts/event-id.mjs';
 import { createChatResponseStream } from './chat-response-stream.mjs';
+import { decodeAssistantResponseFrame } from '../contracts/assistant-response-stream.mjs';
 
 const TTL_MS = 30 * 24 * 60 * 60 * 1_000;
+const RTDB_FRAME_TTL_MS = 10 * 60 * 1_000;
 const MAX_BACKLOG = 200;
+const IDENTIFIER = /^[A-Za-z0-9._:-]{1,160}$/u;
 
 /**
  * @param {object} options
@@ -30,6 +33,8 @@ const MAX_BACKLOG = 200;
  * @param {object} options.ledger ledger partagé avec le chemin direct
  * @param {(input: object) => Promise<string>} options.respond
  * @param {(input: object) => Promise<object>} [options.handleMedia]
+ * @param {{ publishFrame(frame: object): Promise<object> }|null} [options.realtimeStream] transport RTDB déjà authentifié
+ * @param {string|null} [options.realtimeOwnerId] propriétaire des trames RTDB
  */
 export function createChatRelay({
   firestore,
@@ -43,12 +48,18 @@ export function createChatRelay({
   clock = Date.now,
   logger = null,
   ulid = createMonotonicUlid(),
+  realtimeStream = null,
+  realtimeOwnerId = null,
 } = {}) {
   if (!firestore?.watch || !firestore?.put || !firestore?.remove) throw new TypeError('chat_relay_firestore_requis');
   if (!identity?.privateKey) throw new TypeError('chat_relay_identite_requise');
   if (!ledger?.once || !ledger?.streamOnce) throw new TypeError('chat_relay_ledger_requis');
   if (typeof respond !== 'function') throw new TypeError('chat_relay_respond_requis');
   if (typeof publicKeyFromSpki !== 'function') throw new TypeError('chat_relay_key_factory_requis');
+  if ((realtimeStream === null) !== (realtimeOwnerId === null)
+    || (realtimeStream !== null && (typeof realtimeStream.publishFrame !== 'function' || !IDENTIFIER.test(realtimeOwnerId)))) {
+    throw new TypeError('chat_relay_realtime_identity_required');
+  }
 
   const note = (event, detail) => logger?.append?.({ event, ...detail });
   let unsubscribe = null;
@@ -173,7 +184,28 @@ export function createChatRelay({
           },
           plaintext: payload,
         });
-        await firestore.put({ ...reply, target: 'device', relayedAtMs: createdAtMs });
+        let publishedToRealtime = false;
+        if (type === 'assistant.response.chunk' && realtimeStream) {
+          try {
+            const frame = decodeAssistantResponseFrame(payload);
+            await realtimeStream.publishFrame({
+              ownerId: realtimeOwnerId,
+              responseId: frame.responseId,
+              sequence: frame.sequence,
+              ciphertext: Buffer.from(JSON.stringify(reply), 'utf8').toString('base64'),
+              expiresAtMs: createdAtMs + RTDB_FRAME_TTL_MS,
+            });
+            publishedToRealtime = true;
+          } catch (error) {
+            // RTDB est un accélérateur transitoire : une panne ne doit jamais faire perdre une
+            // réponse, Firestore reçoit alors exactement la même enveloppe chiffrée.
+            note('chat_relay_rtdb_stream_fallback', {
+              eventId: reply.eventId,
+              reason: String(error?.message ?? error).slice(0, 120),
+            });
+          }
+        }
+        if (!publishedToRealtime) await firestore.put({ ...reply, target: 'device', relayedAtMs: createdAtMs });
         terminalFramePersisted = type === 'assistant.response.completed' || type === 'assistant.response.failed';
       });
       if (produced.replayed) note('chat_relay_rejeu_resservi', { eventId: event.eventId });
@@ -216,6 +248,7 @@ export function createChatRelay({
       handled,
       rejected,
       lastError,
+      realtime: Boolean(realtimeStream),
     }),
   });
 }

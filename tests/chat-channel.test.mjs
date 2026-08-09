@@ -166,4 +166,24 @@ describe('canal mina_app côté PC', () => {
     expect(work).toHaveBeenCalledOnce();
     await channel.stop();
   });
+
+  it('transmet un flux RTDB déjà authentifié au relais sans en créer un', async () => {
+    const firestore = {
+      watch: vi.fn(() => () => {}),
+      put: vi.fn(async () => {}),
+      remove: vi.fn(async () => {}),
+    };
+    const realtimeStream = { publishFrame: vi.fn(async () => {}) };
+    const { channel } = await startChannel({
+      firestore,
+      publicKeyFromSpki: () => null,
+      realtimeStream,
+      realtimeOwnerId: 'owner-test',
+    });
+
+    await channel.start();
+
+    expect(channel.status().relay).toMatchObject({ watching: true, realtime: true });
+    await channel.stop();
+  });
 });

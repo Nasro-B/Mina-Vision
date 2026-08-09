@@ -137,6 +137,14 @@ class ChatEngine private constructor(context: Context) {
         )
     }.getOrNull()
 
+    /** Fragments RTDB seulement après le `started` Firestore/direct déjà signé. */
+    private val responseStream: FirebaseResponseStream? = runCatching { FirebaseResponseStream() }.getOrNull()
+    private val responseStreamController = FirebaseResponseStreamController(
+        deviceId = deviceId,
+        stream = responseStream,
+        onEvent = { event -> scope.launch { acceptFromPc(event) } },
+    )
+
     private val syncLoop = ChatSyncLoop(
         dao = database.chatDao(),
         link = link,
@@ -179,6 +187,7 @@ class ChatEngine private constructor(context: Context) {
         syncLoop.stop()
         link.disconnect()
         relay?.stop()
+        responseStreamController.stopAll()
     }
 
     /**
@@ -203,6 +212,9 @@ class ChatEngine private constructor(context: Context) {
         if (event.senderDeviceId == deviceId) return
         val known = database.chatDao().findEvent(event.eventId) != null
         val result = repository.ingest(event, fromAssistant = true)
+        if (shouldRouteRealtimeResponse(known, result)) {
+            result.assistantResponseFrame?.let(responseStreamController::accept)
+        }
         // Notifier UNIQUEMENT sur un événement nouveau : une retransmission ne doit pas
         // rappeler une deuxième fois pour le même message. Une réponse progressive ne notifie
         // qu'au terminal durable ; les fragments et échecs restent transitoires.
@@ -255,3 +267,6 @@ internal fun shouldNotifyAssistantMessage(
 } else {
     routingClass != "stream"
 }
+
+internal fun shouldRouteRealtimeResponse(known: Boolean, result: ChatIngestResult): Boolean =
+    !known && result.assistantResponseFrame != null
