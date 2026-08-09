@@ -58,6 +58,24 @@ describe('document controller: unavailable form rendering is explicit', () => {
 
     await expect(documentController.commitFormCopy('proposal-1')).rejects.toThrow('document_form_rendering_unavailable');
   });
+
+  it('refuses every other non-composed operation instead of returning undefined', () => {
+    const { documentController } = buildDocumentWorld();
+
+    expect(() => documentController.proposeClassification({})).toThrow('document_classifier_not_configured');
+    expect(() => documentController.confirmClassification('proposal-1')).toThrow('document_classifier_not_configured');
+    expect(() => documentController.indexSelection({ proposalId: 'proposal-1', blockIds: [] })).toThrow('document_memory_not_configured');
+    expect(() => documentController.forgetDocument('document-1')).toThrow('document_memory_not_configured');
+    expect(() => documentController.proposeFill({ documentId: 'document-1', values: {} })).toThrow('document_form_rendering_unavailable');
+    expect(() => documentController.renderFormPreview('proposal-1')).toThrow('document_form_rendering_unavailable');
+    expect(() => documentController.convertDocument({})).toThrow('document_converter_not_configured');
+    expect(() => documentController.downloadDocument({})).toThrow('document_download_not_configured');
+    expect(() => documentController.discoverPrinters()).toThrow('printer_registry_not_configured');
+    expect(() => documentController.approvePrinter('printer-1')).toThrow('printer_registry_not_configured');
+    expect(() => documentController.proposePrint({})).toThrow('print_service_not_configured');
+    expect(() => documentController.submitPrint({})).toThrow('print_service_not_configured');
+    expect(() => documentController.reconcilePrint('job-1')).toThrow('print_service_not_configured');
+  });
 });
 
 describe('IPC channel allowlist: named channels only, never a raw write escape hatch', () => {

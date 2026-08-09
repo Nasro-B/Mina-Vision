@@ -16,25 +16,64 @@ export function createDocumentController({
       return observation;
     },
 
-    proposeClassification: (observation, hints) => classifier?.proposeClassification(observation, hints),
-    confirmClassification: (proposalId, overrides) => classifier?.confirmClassification(proposalId, overrides),
-    indexSelection: (input) => memoryService?.indexSelection(input),
-    forgetDocument: (documentId) => memoryService?.forgetDocument(documentId),
+    proposeClassification: (observation, hints) => {
+      if (!classifier?.proposeClassification) throw new Error('document_classifier_not_configured');
+      return classifier.proposeClassification(observation, hints);
+    },
+    confirmClassification: (proposalId, overrides) => {
+      if (!classifier?.confirmClassification) throw new Error('document_classifier_not_configured');
+      return classifier.confirmClassification(proposalId, overrides);
+    },
+    indexSelection: (input) => {
+      if (!memoryService?.indexSelection) throw new Error('document_memory_not_configured');
+      return memoryService.indexSelection(input);
+    },
+    forgetDocument: (documentId) => {
+      if (!memoryService?.forgetDocument) throw new Error('document_memory_not_configured');
+      return memoryService.forgetDocument(documentId);
+    },
 
-    proposeFill: (input) => formService?.proposeFill(input),
-    renderFormPreview: (proposalId) => formService?.renderPreview(proposalId),
+    proposeFill: (input) => {
+      if (!formService?.proposeFill) throw new Error('document_form_rendering_unavailable');
+      return formService.proposeFill(input);
+    },
+    renderFormPreview: (proposalId) => {
+      if (!formService?.renderPreview) throw new Error('document_form_rendering_unavailable');
+      return formService.renderPreview(proposalId);
+    },
     async commitFormCopy(proposalId, options) {
       if (!formService?.commitCopy) throw new Error('document_form_rendering_unavailable');
       return formService.commitCopy(proposalId, options);
     },
 
-    convertDocument: (input) => converter?.convert(input),
-    downloadDocument: (proposal) => downloadService?.download(proposal),
+    convertDocument: (input) => {
+      if (!converter?.convert) throw new Error('document_converter_not_configured');
+      return converter.convert(input);
+    },
+    downloadDocument: (proposal) => {
+      if (!downloadService?.download) throw new Error('document_download_not_configured');
+      return downloadService.download(proposal);
+    },
 
-    discoverPrinters: () => printerRegistry?.discover(),
-    approvePrinter: (printerId) => printerRegistry?.approvePrinter(printerId),
-    proposePrint: (input) => printService?.proposePrint(input),
-    submitPrint: (proposal) => printService?.submit(proposal),
-    reconcilePrint: (jobId) => printService?.reconcile(jobId),
+    discoverPrinters: () => {
+      if (!printerRegistry?.discover) throw new Error('printer_registry_not_configured');
+      return printerRegistry.discover();
+    },
+    approvePrinter: (printerId) => {
+      if (!printerRegistry?.approvePrinter) throw new Error('printer_registry_not_configured');
+      return printerRegistry.approvePrinter(printerId);
+    },
+    proposePrint: (input) => {
+      if (!printService?.proposePrint) throw new Error('print_service_not_configured');
+      return printService.proposePrint(input);
+    },
+    submitPrint: (proposal) => {
+      if (!printService?.submit) throw new Error('print_service_not_configured');
+      return printService.submit(proposal);
+    },
+    reconcilePrint: (jobId) => {
+      if (!printService?.reconcile) throw new Error('print_service_not_configured');
+      return printService.reconcile(jobId);
+    },
   });
 }
