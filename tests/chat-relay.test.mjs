@@ -386,6 +386,18 @@ describe('configuration Firebase depuis google-services.json', () => {
     });
   });
 
+  it('propage l’URL Realtime Database lorsque le projet en fournit une', () => {
+    expect(firebaseConfigFromGoogleServices({
+      ...googleServices,
+      project_info: {
+        ...googleServices.project_info,
+        firebase_url: 'https://mina-vision-default-rtdb.europe-west1.firebasedatabase.app',
+      },
+    })).toMatchObject({
+      databaseURL: 'https://mina-vision-default-rtdb.europe-west1.firebasedatabase.app',
+    });
+  });
+
   it('refuse un paquet absent plutôt que de renvoyer une configuration partielle', () => {
     expect(() => firebaseConfigFromGoogleServices(googleServices, 'fr.autre.app'))
       .toThrow('google_services_client_introuvable');

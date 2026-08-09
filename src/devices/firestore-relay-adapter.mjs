@@ -61,6 +61,7 @@ export function firebaseConfigFromGoogleServices(googleServices, packageName = '
   if (!client) throw new Error('google_services_client_introuvable');
   const apiKey = client.api_key?.[0]?.current_key;
   if (!apiKey) throw new Error('google_services_api_key_absente');
+  const databaseURL = googleServices.project_info.firebase_url;
   return Object.freeze({
     apiKey,
     appId: client.client_info.mobilesdk_app_id,
@@ -68,5 +69,6 @@ export function firebaseConfigFromGoogleServices(googleServices, packageName = '
     projectId: googleServices.project_info.project_id,
     messagingSenderId: googleServices.project_info.project_number,
     storageBucket: googleServices.project_info.storage_bucket,
+    ...(typeof databaseURL === 'string' && databaseURL ? { databaseURL } : {}),
   });
 }
