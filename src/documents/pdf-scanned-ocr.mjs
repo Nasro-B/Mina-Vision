@@ -29,6 +29,62 @@ function throwIfAborted(signal) {
   else if (signal?.aborted) throw signal.reason ?? new Error('document_pdf_ocr_aborted');
 }
 
+function clearBytes(bytes) {
+  try { bytes?.fill(0); } catch {}
+}
+
+function awaitAbortablePromise(value, signal, onAbort = null) {
+  const promise = Promise.resolve(value);
+  throwIfAborted(signal);
+  if (typeof signal?.addEventListener !== 'function') return promise;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const complete = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', abort);
+      callback(value);
+    };
+    const abort = () => {
+      try { Promise.resolve(onAbort?.()).catch(() => {}); } catch {}
+      complete(reject, signal.reason ?? new Error('document_pdf_ocr_aborted'));
+    };
+    signal.addEventListener('abort', abort, { once: true });
+    promise.then(
+      (value) => complete(resolve, value),
+      (error) => complete(reject, error),
+    );
+    if (signal.aborted) abort();
+  });
+}
+
+function awaitRenderTask(renderTask, signal) {
+  if (!renderTask?.promise) throw new Error('document_pdf_ocr_unavailable');
+  return awaitAbortablePromise(renderTask.promise, signal, () => renderTask.cancel?.());
+}
+
+function createAbortableLoadingTask(loadingTask, signal) {
+  if (!loadingTask?.promise || typeof loadingTask.destroy !== 'function') {
+    throw new Error('document_pdf_ocr_unavailable');
+  }
+  let destroyPromise = null;
+  const destroy = () => {
+    if (!destroyPromise) {
+      try {
+        destroyPromise = Promise.resolve(loadingTask.destroy());
+      } catch (error) {
+        destroyPromise = Promise.reject(error);
+      }
+    }
+    return destroyPromise;
+  };
+  if (typeof signal?.addEventListener !== 'function') return Object.freeze({ promise: loadingTask.promise, destroy });
+
+  const promise = awaitAbortablePromise(loadingTask.promise, signal, destroy);
+  return Object.freeze({ promise, destroy });
+}
+
 function dimensionsFor(viewport, maxPixels) {
   const width = Math.ceil(Number(viewport?.width));
   const height = Math.ceil(Number(viewport?.height));
@@ -58,7 +114,9 @@ export function createPdfPageRasterizer({ loadPdfJs = defaultLoadPdfJs } = {}) {
     const boundedMaxTotalBytes = positiveInteger(maxTotalBytes, DEFAULT_MAX_TOTAL_BYTES, DEFAULT_MAX_TOTAL_BYTES);
     const rasterScale = validateScale(scale);
     let source = null;
+    let pdfData = null;
     let loadingTask = null;
+    let abortableLoadingTask = null;
     const renderedPages = [];
     let completed = false;
     try {
@@ -66,10 +124,10 @@ export function createPdfPageRasterizer({ loadPdfJs = defaultLoadPdfJs } = {}) {
       if (source.length === 0) throw new Error('pdf_empty');
       if (source.length > boundedMaxBytes) throw new Error('file_too_large');
       throwIfAborted(signal);
-      const pdfjs = await loadPdfJs();
+      const pdfjs = await awaitAbortablePromise(loadPdfJs(), signal);
       if (typeof pdfjs?.getDocument !== 'function') throw new Error('document_pdf_ocr_unavailable');
       loadingTask = pdfjs.getDocument({
-        data: new Uint8Array(source),
+        data: (pdfData = new Uint8Array(source)),
         disableWorker: true,
         isEvalSupported: false,
         stopAtErrors: true,
@@ -77,10 +135,8 @@ export function createPdfPageRasterizer({ loadPdfJs = defaultLoadPdfJs } = {}) {
         maxImageSize: DEFAULT_MAX_PIXELS,
         canvasMaxAreaInBytes: HARD_MAX_CANVAS_AREA_BYTES,
       });
-      if (!loadingTask?.promise || typeof loadingTask.destroy !== 'function') {
-        throw new Error('document_pdf_ocr_unavailable');
-      }
-      const document = await loadingTask.promise;
+      abortableLoadingTask = createAbortableLoadingTask(loadingTask, signal);
+      const document = await abortableLoadingTask.promise;
       if (!Number.isSafeInteger(document?.numPages) || document.numPages < 1) {
         throw new Error('document_pdf_ocr_result_invalid');
       }
@@ -92,7 +148,11 @@ export function createPdfPageRasterizer({ loadPdfJs = defaultLoadPdfJs } = {}) {
       let totalBytes = 0;
       for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
         throwIfAborted(signal);
-        const page = await document.getPage(pageNumber);
+        const page = await awaitAbortablePromise(
+          document.getPage(pageNumber),
+          signal,
+          abortableLoadingTask.destroy,
+        );
         let canvasAndContext = null;
         try {
           throwIfAborted(signal);
@@ -107,8 +167,7 @@ export function createPdfPageRasterizer({ loadPdfJs = defaultLoadPdfJs } = {}) {
           }
           throwIfAborted(signal);
           const renderTask = page.render({ canvasContext: canvasAndContext.context, viewport });
-          if (!renderTask?.promise) throw new Error('document_pdf_ocr_unavailable');
-          await renderTask.promise;
+          await awaitRenderTask(renderTask, signal);
           throwIfAborted(signal);
           const png = Buffer.from(canvasAndContext.canvas.toBuffer('image/png'));
           if (png.length === 0 || png.length > boundedMaxPageBytes || totalBytes + png.length > boundedMaxTotalBytes) {
@@ -126,9 +185,15 @@ export function createPdfPageRasterizer({ loadPdfJs = defaultLoadPdfJs } = {}) {
       completed = true;
       return Object.freeze({ pageCount: document.numPages, pages: Object.freeze(renderedPages) });
     } finally {
-      if (!completed) renderedPages.forEach(({ bytes: rendered }) => rendered.fill(0));
-      source?.fill(0);
-      await loadingTask?.destroy?.();
+      if (!completed) renderedPages.forEach(({ bytes: rendered }) => clearBytes(rendered));
+      clearBytes(pdfData);
+      clearBytes(source);
+      try {
+        if (abortableLoadingTask) await abortableLoadingTask.destroy();
+        else await loadingTask?.destroy?.();
+      } catch (error) {
+        if (!signal?.aborted) throw error;
+      }
     }
   };
 }
@@ -180,7 +245,7 @@ export function createPdfScannedOcrFallback({ rasterizePdfPages, ocrProvider } =
       validateRasterizedPdf(rasterized);
       for (const page of rasterized.pages) {
         throwIfAborted(signal);
-        const result = await ocrProvider.recognize({ image: page.bytes, mimeType: page.mimeType });
+        const result = await ocrProvider.recognize({ image: page.bytes, mimeType: page.mimeType, signal });
         throwIfAborted(signal);
         blocks.push(...readOcrBlocks(result, page.page));
       }
@@ -189,7 +254,7 @@ export function createPdfScannedOcrFallback({ rasterizePdfPages, ocrProvider } =
     } finally {
       if (Array.isArray(rasterized?.pages)) {
         rasterized.pages.forEach((page) => {
-          if (Buffer.isBuffer(page?.bytes) || page?.bytes instanceof Uint8Array) page.bytes.fill(0);
+          if (Buffer.isBuffer(page?.bytes) || page?.bytes instanceof Uint8Array) clearBytes(page.bytes);
         });
       }
     }

@@ -77,7 +77,7 @@ export function createImageOcrDocumentParser({ ocrProvider } = {}) {
     async parse({ bytes, mediaType, signal } = {}) {
       if (!IMAGE_MEDIA_TYPES.has(mediaType)) throw new Error('document_image_media_type_unsupported');
       signal?.throwIfAborted();
-      const extracted = await ocrProvider.recognize({ image: bytes, mimeType: mediaType });
+      const extracted = await ocrProvider.recognize({ image: bytes, mimeType: mediaType, signal });
       signal?.throwIfAborted();
       if (!Array.isArray(extracted?.blocks)) throw new Error('document_ocr_result_invalid');
 

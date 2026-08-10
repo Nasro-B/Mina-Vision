@@ -126,4 +126,16 @@ describe('parseurs document locaux', () => {
 
     await expect(parser.parse({ bytes: Buffer.from('png'), mediaType: 'image/png' })).rejects.toThrow('document_ocr_text_empty');
   });
+
+  it('transmet le signal d’annulation au fournisseur OCR image', async () => {
+    const recognize = vi.fn(async () => ({
+      blocks: [{ text: 'Image', box: [1, 2, 3, 4], confidence: 0.9 }],
+    }));
+    const parser = createImageOcrDocumentParser({ ocrProvider: { recognize } });
+    const controller = new AbortController();
+
+    await parser.parse({ bytes: Buffer.from('png'), mediaType: 'image/png', signal: controller.signal });
+
+    expect(recognize).toHaveBeenCalledWith(expect.objectContaining({ signal: controller.signal }));
+  });
 });

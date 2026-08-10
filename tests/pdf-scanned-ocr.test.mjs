@@ -53,6 +53,17 @@ async function requireOcrFallback() {
 }
 
 describe('rendu local des PDF scannés', () => {
+  it('annule le chargement du module PDF.js avant toute lecture', async () => {
+    const createPdfPageRasterizer = await requireRasterizer();
+    const rasterize = createPdfPageRasterizer({ loadPdfJs: () => new Promise(() => {}) });
+    const controller = new AbortController();
+    const pending = rasterize(Buffer.from('%PDF-fake'), { signal: controller.signal });
+
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  }, 1_000);
+
   it('rend les pages PDF dans des PNG bornés et conserve leur numéro', async () => {
     const fake = fakePdfJs();
     const createPdfPageRasterizer = await requireRasterizer();
@@ -117,6 +128,92 @@ describe('rendu local des PDF scannés', () => {
     expect(fake.document.canvasFactory.destroy).toHaveBeenCalledOnce();
     expect(fake.loadingTask.destroy).toHaveBeenCalledOnce();
   });
+
+  it('annule un rendu PDF déjà démarré', async () => {
+    const fake = fakePdfJs();
+    let rejectRender;
+    let renderingStarted;
+    const started = new Promise((resolve) => { renderingStarted = resolve; });
+    const renderTask = {
+      promise: new Promise((_resolve, reject) => { rejectRender = reject; }),
+      cancel: vi.fn(() => rejectRender(new Error('render_cancelled'))),
+    };
+    fake.page.render.mockImplementation(() => {
+      renderingStarted();
+      return renderTask;
+    });
+    const createPdfPageRasterizer = await requireRasterizer();
+    const rasterize = createPdfPageRasterizer({ loadPdfJs: async () => fake.pdfjs });
+    const controller = new AbortController();
+    const pending = rasterize(Buffer.from('%PDF-fake'), { signal: controller.signal });
+
+    await started;
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(renderTask.cancel).toHaveBeenCalledOnce();
+    expect(fake.page.cleanup).toHaveBeenCalledOnce();
+    expect(fake.loadingTask.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('annule le chargement PDF avant le premier rendu', async () => {
+    let rejectLoading;
+    let loadingCreated;
+    const created = new Promise((resolve) => { loadingCreated = resolve; });
+    const loadingTask = {
+      promise: new Promise((_resolve, reject) => { rejectLoading = reject; }),
+      destroy: vi.fn(async () => rejectLoading(new Error('loading_cancelled'))),
+    };
+    const pdfjs = { getDocument: vi.fn(() => {
+      loadingCreated();
+      return loadingTask;
+    }) };
+    const createPdfPageRasterizer = await requireRasterizer();
+    const rasterize = createPdfPageRasterizer({ loadPdfJs: async () => pdfjs });
+    const controller = new AbortController();
+    const pending = rasterize(Buffer.from('%PDF-fake'), { signal: controller.signal });
+
+    await created;
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(loadingTask.destroy).toHaveBeenCalledOnce();
+  }, 1_000);
+
+  it('annule la demande de page PDF avant le rendu', async () => {
+    const fake = fakePdfJs();
+    let pageRequested;
+    const requested = new Promise((resolve) => { pageRequested = resolve; });
+    fake.document.getPage.mockImplementation(() => {
+      pageRequested();
+      return new Promise(() => {});
+    });
+    const createPdfPageRasterizer = await requireRasterizer();
+    const rasterize = createPdfPageRasterizer({ loadPdfJs: async () => fake.pdfjs });
+    const controller = new AbortController();
+    const pending = rasterize(Buffer.from('%PDF-fake'), { signal: controller.signal });
+
+    await requested;
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fake.loadingTask.destroy).toHaveBeenCalledOnce();
+  }, 1_000);
+
+  it('efface la copie de données confiée à PDF.js après le rendu', async () => {
+    const fake = fakePdfJs();
+    let pdfData;
+    fake.pdfjs.getDocument.mockImplementation(({ data }) => {
+      pdfData = data;
+      return fake.loadingTask;
+    });
+    const createPdfPageRasterizer = await requireRasterizer();
+    const rasterize = createPdfPageRasterizer({ loadPdfJs: async () => fake.pdfjs });
+
+    await rasterize(Buffer.from('%PDF-fake'));
+
+    expect(Buffer.from(pdfData).equals(Buffer.alloc(pdfData.length))).toBe(true);
+  });
 });
 
 describe('fallback OCR local des PDF scannés', () => {
@@ -124,6 +221,9 @@ describe('fallback OCR local des PDF scannés', () => {
     const firstPng = Buffer.from('first-page');
     const secondPng = Buffer.from('second-page');
     const createPdfScannedOcrFallback = await requireOcrFallback();
+    const recognize = vi.fn(async ({ image }) => (image === firstPng
+      ? { blocks: [{ text: 'Facture', box: [1, 2, 30, 18], confidence: 0.91 }] }
+      : { blocks: [{ text: 'Total', box: [3, 4, 48, 22], confidence: 0.82 }] }));
     const fallback = createPdfScannedOcrFallback({
       rasterizePdfPages: async () => ({
         pageCount: 2,
@@ -132,14 +232,11 @@ describe('fallback OCR local des PDF scannés', () => {
           { page: 2, bytes: secondPng, mimeType: 'image/png' },
         ],
       }),
-      ocrProvider: {
-        recognize: async ({ image }) => (image === firstPng
-          ? { blocks: [{ text: 'Facture', box: [1, 2, 30, 18], confidence: 0.91 }] }
-          : { blocks: [{ text: 'Total', box: [3, 4, 48, 22], confidence: 0.82 }] }),
-      },
+      ocrProvider: { recognize },
     });
 
-    await expect(fallback(Buffer.from('%PDF-fake'))).resolves.toEqual({
+    const controller = new AbortController();
+    await expect(fallback(Buffer.from('%PDF-fake'), { signal: controller.signal })).resolves.toEqual({
       pageCount: 2,
       blocks: [
         { text: 'Facture', sourceOffset: { kind: 'ocr', page: 1, box: [1, 2, 30, 18] }, confidence: 0.91 },
@@ -148,6 +245,7 @@ describe('fallback OCR local des PDF scannés', () => {
     });
     expect(firstPng.equals(Buffer.alloc(firstPng.length))).toBe(true);
     expect(secondPng.equals(Buffer.alloc(secondPng.length))).toBe(true);
+    expect(recognize).toHaveBeenCalledWith(expect.objectContaining({ signal: controller.signal }));
   });
 
   it('refuse un PDF scanné dont l’OCR local ne fournit aucun bloc', async () => {
@@ -175,5 +273,28 @@ describe('fallback OCR local des PDF scannés', () => {
 
     await expect(fallback(Buffer.from('%PDF-fake'))).rejects.toThrow('document_pdf_ocr_result_invalid');
     expect(png.equals(Buffer.alloc(png.length))).toBe(true);
+  });
+
+  it('ne masque pas une extraction OCR dont le buffer a été détaché', async () => {
+    const png = new Uint8Array([1, 2, 3]);
+    const createPdfScannedOcrFallback = await requireOcrFallback();
+    const fallback = createPdfScannedOcrFallback({
+      rasterizePdfPages: async () => ({
+        pageCount: 1,
+        pages: [{ page: 1, bytes: png, mimeType: 'image/png' }],
+      }),
+      ocrProvider: {
+        recognize: async ({ image }) => {
+          structuredClone(image.buffer, { transfer: [image.buffer] });
+          return { blocks: [{ text: 'Mina', box: [1, 2, 3, 4], confidence: 0.9 }] };
+        },
+      },
+    });
+
+    await expect(fallback(Buffer.from('%PDF-fake'))).resolves.toMatchObject({
+      pageCount: 1,
+      blocks: [{ text: 'Mina' }],
+    });
+    expect(png.byteLength).toBe(0);
   });
 });

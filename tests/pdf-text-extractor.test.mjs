@@ -43,6 +43,16 @@ function fakePdfJs(pageTexts) {
 }
 
 describe('bounded PDF text extractor', () => {
+  it('annule le chargement du module PDF.js avant toute lecture', async () => {
+    const extract = createPdfTextExtractor({ loadPdfJs: () => new Promise(() => {}) });
+    const controller = new AbortController();
+    const pending = extract(Buffer.from('%PDF-fake'), { signal: controller.signal });
+
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  }, 1_000);
+
   it('extracts text from a real one-page PDF with PDF.js', async () => {
     const extract = createPdfTextExtractor();
     await expect(extract(createPdf('Bonjour Mina Vision'), { maxPages: 10, maxBytes: 1_000_000 }))
@@ -62,6 +72,104 @@ describe('bounded PDF text extractor', () => {
     await expect(extract(Buffer.from('%PDF'), { maxPages: 10, maxBytes: 100 }))
       .rejects.toThrow('pdf_page_limit');
     expect(getPage).not.toHaveBeenCalled();
+  });
+
+  it('annule le chargement PDF texte avant la première page', async () => {
+    let loadingCreated;
+    const created = new Promise((resolve) => { loadingCreated = resolve; });
+    const loadingTask = {
+      promise: new Promise(() => {}),
+      destroy: vi.fn(async () => {}),
+    };
+    const pdfjs = { getDocument: vi.fn(() => {
+      loadingCreated();
+      return loadingTask;
+    }) };
+    const extract = createPdfTextExtractor({ loadPdfJs: async () => pdfjs });
+    const controller = new AbortController();
+    const pending = extract(Buffer.from('%PDF-fake'), { signal: controller.signal });
+
+    await created;
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(loadingTask.destroy).toHaveBeenCalledOnce();
+  }, 1_000);
+
+  it('annule la demande de page texte en cours', async () => {
+    let pageRequested;
+    const requested = new Promise((resolve) => { pageRequested = resolve; });
+    const document = {
+      numPages: 1,
+      getPage: vi.fn(() => {
+        pageRequested();
+        return new Promise(() => {});
+      }),
+      destroy: vi.fn(async () => {}),
+    };
+    const loadingTask = { promise: Promise.resolve(document), destroy: vi.fn(async () => {}) };
+    const pdfjs = { getDocument: vi.fn(() => loadingTask) };
+    const extract = createPdfTextExtractor({ loadPdfJs: async () => pdfjs });
+    const controller = new AbortController();
+    const pending = extract(Buffer.from('%PDF-fake'), { signal: controller.signal });
+
+    await requested;
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(document.destroy).toHaveBeenCalledOnce();
+  }, 1_000);
+
+  it('annule la lecture du texte d’une page en cours', async () => {
+    let textRequested;
+    const requested = new Promise((resolve) => { textRequested = resolve; });
+    const page = {
+      getTextContent: vi.fn(() => {
+        textRequested();
+        return new Promise(() => {});
+      }),
+      cleanup: vi.fn(),
+    };
+    const document = {
+      numPages: 1,
+      getPage: vi.fn(async () => page),
+      destroy: vi.fn(async () => {}),
+    };
+    const loadingTask = { promise: Promise.resolve(document), destroy: vi.fn(async () => {}) };
+    const pdfjs = { getDocument: vi.fn(() => loadingTask) };
+    const extract = createPdfTextExtractor({ loadPdfJs: async () => pdfjs });
+    const controller = new AbortController();
+    const pending = extract(Buffer.from('%PDF-fake'), { signal: controller.signal });
+
+    await requested;
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(page.cleanup).toHaveBeenCalledOnce();
+    expect(document.destroy).toHaveBeenCalledOnce();
+  }, 1_000);
+
+  it('efface la copie de données confiée à PDF.js après extraction', async () => {
+    let pdfData;
+    const document = {
+      numPages: 1,
+      getPage: async () => ({
+        getTextContent: async () => ({ items: [{ str: 'Mina', hasEOL: false }] }),
+        cleanup() {},
+      }),
+      async destroy() {},
+    };
+    const pdfjs = {
+      getDocument: vi.fn(({ data }) => {
+        pdfData = data;
+        return { promise: Promise.resolve(document), async destroy() {} };
+      }),
+    };
+    const extract = createPdfTextExtractor({ loadPdfJs: async () => pdfjs });
+
+    await extract(Buffer.from('%PDF-fake'));
+
+    expect(Buffer.from(pdfData).equals(Buffer.alloc(pdfData.length))).toBe(true);
   });
 });
 

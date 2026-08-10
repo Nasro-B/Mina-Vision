@@ -12,54 +12,149 @@ const defaultExecutablePath = process.platform === 'win32'
   ? 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
   : 'tesseract';
 
-function defaultRunner({ executablePath, args, input = null, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(executablePath, args, {
-      shell: false,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-    let done = false;
-    let stdoutSize = 0;
-    let stderrSize = 0;
-    const stdout = [];
-    const stderr = [];
-    const finish = (callback) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      callback();
-    };
-    const fail = (error) => finish(() => reject(error));
-    const timer = setTimeout(() => {
-      child.kill();
-      fail(new Error('tesseract_timeout'));
-    }, timeoutMs);
-    child.once('error', () => fail(new Error('tesseract_spawn_failed')));
-    child.stdout.on('data', (chunk) => {
-      stdoutSize += chunk.length;
-      if (stdoutSize > MAX_OUTPUT_BYTES) {
-        child.kill();
-        fail(new Error('tesseract_output_too_large'));
+function abortReason(signal) {
+  return signal?.reason ?? new Error('tesseract_ocr_aborted');
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw abortReason(signal);
+}
+
+function clearChunk(chunk) {
+  try { chunk.fill?.(0); } catch {}
+}
+
+function clearChunks(chunks) {
+  chunks.forEach(clearChunk);
+  chunks.length = 0;
+}
+
+export function createTesseractProcessRunner({ spawnProcess = spawn } = {}) {
+  if (typeof spawnProcess !== 'function') throw new TypeError('tesseract_ocr_spawn_required');
+
+  return function runTesseract({ executablePath, args, input = null, timeoutMs = DEFAULT_TIMEOUT_MS, signal } = {}) {
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(abortReason(signal));
         return;
       }
-      stdout.push(chunk);
+      let child;
+      try {
+        child = spawnProcess(executablePath, args, {
+          shell: false,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true,
+        });
+      } catch {
+        reject(new Error('tesseract_spawn_failed'));
+        return;
+      }
+      let done = false;
+      let timer = null;
+      let abort = null;
+      let stdoutSize = 0;
+      let stderrSize = 0;
+      const stdout = [];
+      const stderr = [];
+      let onChildError = null;
+      let onStdout = null;
+      let onStderr = null;
+      let onClose = null;
+      let onStdinError = null;
+      let stdinErrorListenerReleased = false;
+      let releaseStdinErrorListener = null;
+      const terminate = () => {
+        try { child.kill(); } catch {}
+      };
+      const cleanup = () => {
+        if (timer !== null) clearTimeout(timer);
+        if (abort) signal?.removeEventListener?.('abort', abort);
+        if (onChildError) child.removeListener?.('error', onChildError);
+        if (onStdout) child.stdout?.removeListener?.('data', onStdout);
+        if (onStderr) child.stderr?.removeListener?.('data', onStderr);
+        if (onClose) child.removeListener?.('close', onClose);
+        clearChunks(stdout);
+        clearChunks(stderr);
+      };
+      const finish = (callback) => {
+        if (done) return;
+        done = true;
+        cleanup();
+        callback();
+      };
+      const fail = (error) => finish(() => reject(error));
+      abort = () => {
+        fail(abortReason(signal));
+        terminate();
+      };
+      timer = setTimeout(() => {
+        fail(new Error('tesseract_timeout'));
+        terminate();
+      }, timeoutMs);
+      signal?.addEventListener?.('abort', abort, { once: true });
+      if (signal?.aborted) {
+        abort();
+        return;
+      }
+      onChildError = () => fail(new Error('tesseract_spawn_failed'));
+      onStdout = (chunk) => {
+        stdoutSize += chunk.length;
+        if (stdoutSize > MAX_OUTPUT_BYTES) {
+          clearChunk(chunk);
+          fail(new Error('tesseract_output_too_large'));
+          terminate();
+          return;
+        }
+        stdout.push(chunk);
+      };
+      onStderr = (chunk) => {
+        if (stderrSize >= 32_768) {
+          clearChunk(chunk);
+          return;
+        }
+        const kept = Buffer.from(chunk.subarray(0, 32_768 - stderrSize));
+        clearChunk(chunk);
+        stderrSize += kept.length;
+        stderr.push(kept);
+      };
+      onClose = (code) => {
+        const result = {
+          code,
+          stdout: Buffer.concat(stdout).toString('utf8'),
+          stderr: Buffer.concat(stderr).toString('utf8'),
+        };
+        finish(() => resolve(result));
+      };
+      onStdinError = () => {
+        if (done) return;
+        fail(new Error('tesseract_stdin_failed'));
+        terminate();
+      };
+      releaseStdinErrorListener = () => {
+        if (stdinErrorListenerReleased) return;
+        stdinErrorListenerReleased = true;
+        child.stdin?.removeListener?.('error', onStdinError);
+        child.stdin?.removeListener?.('close', releaseStdinErrorListener);
+        child.removeListener?.('close', releaseStdinErrorListener);
+      };
+      child.once('error', onChildError);
+      child.stdout.on('data', onStdout);
+      child.stderr.on('data', onStderr);
+      child.once('close', onClose);
+      child.stdin.on('error', onStdinError);
+      child.stdin.once('close', releaseStdinErrorListener);
+      child.once('close', releaseStdinErrorListener);
+      try {
+        child.stdin.end(input ?? undefined);
+      } catch {
+        fail(new Error('tesseract_stdin_failed'));
+        terminate();
+      }
     });
-    child.stderr.on('data', (chunk) => {
-      if (stderrSize >= 32_768) return;
-      const kept = chunk.subarray(0, 32_768 - stderrSize);
-      stderrSize += kept.length;
-      stderr.push(kept);
-    });
-    child.once('close', (code) => finish(() => resolve({
-      code,
-      stdout: Buffer.concat(stdout).toString('utf8'),
-      stderr: Buffer.concat(stderr).toString('utf8'),
-    })));
-    child.stdin.once('error', () => fail(new Error('tesseract_stdin_failed')));
-    child.stdin.end(input ?? undefined);
-  });
+  };
 }
+
+const defaultRunner = createTesseractProcessRunner();
 
 function parseInstalledLanguages(output) {
   return new Set(String(output ?? '')
@@ -145,25 +240,29 @@ export function createTesseractOcrProvider({
   }
   let installedLanguages = null;
 
-  async function availableLanguages() {
+  async function availableLanguages(signal) {
     if (installedLanguages) return installedLanguages;
+    throwIfAborted(signal);
     let result;
     try {
-      result = await runner({ executablePath, args: ['--list-langs'], timeoutMs });
+      result = await runner({ executablePath, args: ['--list-langs'], timeoutMs, signal });
     } catch {
+      if (signal?.aborted) throw abortReason(signal);
       throw new Error('tesseract_unavailable');
     }
+    throwIfAborted(signal);
     if (result?.code !== 0) throw new Error('tesseract_unavailable');
     installedLanguages = parseInstalledLanguages(result.stdout);
     return installedLanguages;
   }
 
-  async function recognize({ image, mimeType } = {}) {
+  async function recognize({ image, mimeType, signal } = {}) {
+    throwIfAborted(signal);
     if ((!Buffer.isBuffer(image) && !(image instanceof Uint8Array)) || image.length === 0
       || image.length > MAX_INPUT_BYTES || !IMAGE_MIME.test(mimeType ?? '')) {
       throw new TypeError('tesseract_ocr_input_invalid');
     }
-    const languages = await availableLanguages();
+    const languages = await availableLanguages(signal);
     const language = preferredLanguages.find((candidate) => languages.has(candidate));
     if (!language) throw new Error('tesseract_language_unavailable');
     const bytes = Buffer.from(image);
@@ -176,10 +275,13 @@ export function createTesseractOcrProvider({
           args: ['stdin', 'stdout', '-l', language, 'tsv'],
           input: bytes,
           timeoutMs,
+          signal,
         });
       } catch {
+        if (signal?.aborted) throw abortReason(signal);
         throw new Error('tesseract_ocr_failed');
       }
+      throwIfAborted(signal);
       if (result?.code !== 0) throw new Error('tesseract_ocr_failed');
       const parsed = parseTsv(result.stdout);
       return Object.freeze({
@@ -191,7 +293,7 @@ export function createTesseractOcrProvider({
         }),
       });
     } finally {
-      bytes.fill(0);
+      clearChunk(bytes);
     }
   }
 
