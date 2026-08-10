@@ -13,6 +13,7 @@ describe('panneau d’analyse documentaire', () => {
     for (const needle of [
       'id="document-path"',
       'id="document-analyze"',
+      'id="document-cancel"',
       'id="document-category"',
       'id="document-confirm"',
       'id="document-quarantine-refresh"',
@@ -24,6 +25,7 @@ describe('panneau d’analyse documentaire', () => {
       "import { bindDocumentQuarantineList } from './panels/document-quarantine-list-workflow.mjs';",
       "documentPath: document.querySelector('#document-path')",
       "documentAnalyze: document.querySelector('#document-analyze')",
+      "documentCancel: document.querySelector('#document-cancel')",
       "documentCategory: document.querySelector('#document-category')",
       "documentConfirm: document.querySelector('#document-confirm')",
       "documentQuarantineRefresh: document.querySelector('#document-quarantine-refresh')",
@@ -32,6 +34,7 @@ describe('panneau d’analyse documentaire', () => {
       'bindDocumentAnalysis({',
       'pathInput: elements.documentPath',
       'submitButton: elements.documentAnalyze',
+      'cancelButton: elements.documentCancel',
       'categorySelect: elements.documentCategory',
       'confirmButton: elements.documentConfirm',
       'summary: elements.documentSummary',

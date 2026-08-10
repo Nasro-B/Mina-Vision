@@ -16,6 +16,7 @@ describe('preload API', () => {
 
     await api.documents.list();
     await api.documents.parse('document-1');
+    await api.documents.cancel('document-1');
     await api.documents.evidence('document-1');
     await api.documents.proposeClassification('document-1', { category: 'invoice' });
     await api.documents.confirmClassification('proposal-1', { category: 'invoice' });
@@ -23,6 +24,7 @@ describe('preload API', () => {
     expect(ipcRenderer.invoke.mock.calls).toEqual([
       ['mina:documents:list'],
       ['mina:documents:parse', 'document-1'],
+      ['mina:documents:cancel-parse', 'document-1'],
       ['mina:documents:evidence', 'document-1'],
       ['mina:documents:propose-classification', { documentId: 'document-1', hints: { category: 'invoice' } }],
       ['mina:documents:confirm-classification', { proposalId: 'proposal-1', overrides: { category: 'invoice' } }],

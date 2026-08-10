@@ -87,7 +87,9 @@ function renderFailure(summary, error) {
   const reason = String(error?.message ?? '');
   const message = reason === 'document_path_required'
     ? 'Indiquez le chemin d’un fichier local avant de lancer l’analyse.'
-    : reason === 'document_pdf_text_empty'
+    : reason === 'document_parse_cancelled'
+      ? 'Analyse annulée. Aucun classement n’a été proposé.'
+      : reason === 'document_pdf_text_empty'
       ? 'Ce PDF ne contient pas de texte exploitable ; le PDF scanné n’est pas encore pris en charge.'
       : 'Analyse impossible sans exposer le contenu du document.';
   addCard(summary, 'Analyse non effectuée', message);
@@ -98,7 +100,7 @@ function setProposedCategory(categorySelect, category) {
   categorySelect.value = category;
 }
 
-export async function analyzeDocument({ api, path } = {}) {
+export async function analyzeDocument({ api, path, onParseStarted = null, onParseFinished = null } = {}) {
   const selected = selectedPath(path);
   if (typeof api?.documentIntake !== 'function' || typeof api?.documents?.parse !== 'function'
     || typeof api.documents.evidence !== 'function' || typeof api.documents.proposeClassification !== 'function') {
@@ -112,25 +114,48 @@ export async function analyzeDocument({ api, path } = {}) {
   }
   if (record.status === 'blocked') return Object.freeze({ state: 'blocked', documentId: record.documentId, record });
 
+  onParseStarted?.(record.documentId);
   const observation = await api.documents.parse(record.documentId);
+  onParseFinished?.();
   const evidence = await api.documents.evidence(record.documentId);
   const classification = await api.documents.proposeClassification(record.documentId, {});
   return Object.freeze({ state: 'analyzed', documentId: record.documentId, record, observation, evidence, classification });
 }
 
 export function bindDocumentAnalysis({
-  api, pathInput, submitButton, summary, categorySelect = null, confirmButton = null,
+  api, pathInput, submitButton, summary, categorySelect = null, confirmButton = null, cancelButton = null,
 } = {}) {
   if (!pathInput || !submitButton || !summary?.replaceChildren) throw new TypeError('document_analysis_elements_required');
   const confirmationEnabled = Boolean(categorySelect && confirmButton);
+  const cancellationEnabled = Boolean(cancelButton && typeof api?.documents?.cancel === 'function');
   let pendingProposalId = null;
+  let activeDocumentId = null;
+  const setCancellationState = (active) => {
+    if (!cancelButton) return;
+    cancelButton.hidden = !active;
+    cancelButton.disabled = !active || !cancellationEnabled;
+  };
+  setCancellationState(false);
 
   const run = async () => {
     submitButton.disabled = true;
     if (confirmationEnabled) confirmButton.disabled = true;
     pendingProposalId = null;
+    activeDocumentId = null;
+    setCancellationState(false);
     try {
-      const result = await analyzeDocument({ api, path: pathInput.value });
+      const result = await analyzeDocument({
+        api,
+        path: pathInput.value,
+        onParseStarted: (documentId) => {
+          activeDocumentId = documentId;
+          setCancellationState(true);
+        },
+        onParseFinished: () => {
+          activeDocumentId = null;
+          setCancellationState(false);
+        },
+      });
       renderAnalysis(summary, result);
       if (confirmationEnabled && result.state === 'analyzed' && typeof result.classification?.id === 'string') {
         pendingProposalId = result.classification.id;
@@ -143,6 +168,21 @@ export function bindDocumentAnalysis({
       throw error;
     } finally {
       submitButton.disabled = false;
+      activeDocumentId = null;
+      setCancellationState(false);
+    }
+  };
+
+  const cancel = async () => {
+    if (!cancellationEnabled || !activeDocumentId) throw new Error('document_parse_cancellation_unavailable');
+    cancelButton.disabled = true;
+    try {
+      const result = await api.documents.cancel(activeDocumentId);
+      if (result?.cancelled !== true && activeDocumentId) cancelButton.disabled = false;
+      return result;
+    } catch (error) {
+      if (activeDocumentId) cancelButton.disabled = false;
+      throw error;
     }
   };
 
@@ -163,6 +203,7 @@ export function bindDocumentAnalysis({
   };
 
   submitButton.addEventListener('click', () => { void run().catch(() => {}); });
+  cancelButton?.addEventListener('click', () => { void cancel().catch(() => {}); });
   if (confirmationEnabled) confirmButton.addEventListener('click', () => { void confirm().catch(() => {}); });
-  return Object.freeze({ run, confirm });
+  return Object.freeze({ run, cancel, confirm });
 }

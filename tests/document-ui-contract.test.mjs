@@ -143,6 +143,19 @@ describe('document controller: classification uses persisted evidence', () => {
     await expect(handlers.get('mina:documents:evidence')({}, 'document-1'))
       .resolves.toEqual({ documentId: 'document-1', evidence: [] });
   });
+
+  it('routes only a named cancellation request for the active document parsing job', () => {
+    const handlers = new Map();
+    const cancelParse = vi.fn((documentId) => Object.freeze({ documentId, cancelled: true }));
+    registerDocumentIpc({
+      ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
+      controller: { cancelParse },
+    });
+
+    expect(handlers.get('mina:documents:cancel-parse')({}, 'document-1'))
+      .toEqual({ documentId: 'document-1', cancelled: true });
+    expect(cancelParse).toHaveBeenCalledWith('document-1');
+  });
 });
 
 describe('document controller: parse response is redacted for the renderer', () => {
@@ -170,6 +183,57 @@ describe('document controller: parse response is redacted for the renderer', () 
     });
     expect(JSON.stringify(response)).not.toContain('Donnée personnelle');
     expect(response).not.toHaveProperty('blocks');
+  });
+
+  it('annule un parsing actif sans persister d’observation partielle', async () => {
+    const { intake } = buildDocumentWorld();
+    const parserRegistry = {
+      parse: vi.fn((_documentId, { signal } = {}) => new Promise((_resolve, reject) => {
+        if (!signal) {
+          reject(new Error('document_parse_signal_missing'));
+          return;
+        }
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      })),
+    };
+    const evidenceStore = { store: vi.fn(async () => {}) };
+    const controller = createDocumentController({ intake, parserRegistry, evidenceStore });
+
+    const pending = controller.parseDocument('document-1');
+    expect(controller.cancelParse('document-1')).toEqual({ documentId: 'document-1', cancelled: true });
+
+    await expect(pending).rejects.toThrow('document_parse_cancelled');
+    expect(parserRegistry.parse).toHaveBeenCalledWith('document-1', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(evidenceStore.store).not.toHaveBeenCalled();
+    expect(controller.cancelParse('document-1')).toEqual({ documentId: 'document-1', cancelled: false });
+  });
+
+  it('n’annonce plus une annulation une fois la persistance des preuves commencée', async () => {
+    const { intake } = buildDocumentWorld();
+    let resolveStore;
+    let signalStoreStarted;
+    const storeStarted = new Promise((resolve) => { signalStoreStarted = resolve; });
+    const controller = createDocumentController({
+      intake,
+      parserRegistry: {
+        parse: async () => ({
+          documentId: 'document-1', mediaType: 'application/pdf', pageCount: 1,
+          parserId: 'pdf-text-parser', parserVersion: '1', confidence: 1, blocks: [],
+        }),
+      },
+      evidenceStore: {
+        store: vi.fn(() => {
+          signalStoreStarted();
+          return new Promise((resolve) => { resolveStore = resolve; });
+        }),
+      },
+    });
+
+    const pending = controller.parseDocument('document-1');
+    await storeStarted;
+    expect(controller.cancelParse('document-1')).toEqual({ documentId: 'document-1', cancelled: false });
+    resolveStore();
+    await expect(pending).resolves.toMatchObject({ documentId: 'document-1', blockCount: 0 });
   });
 
   it('projects persisted evidence without text, digests, or arbitrary locator fields', async () => {
@@ -214,6 +278,7 @@ describe('IPC channel allowlist: named channels only, never a raw write escape h
     expect(channels).toContain('mina:documents:get');
     expect(channels).toContain('mina:documents:list');
     expect(channels).toContain('mina:documents:intake');
+    expect(channels).toContain('mina:documents:cancel-parse');
     expect(channels).toContain('mina:printing:submit');
     expect(channels).toContain('mina:emergency:activate');
   });

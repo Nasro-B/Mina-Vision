@@ -6,6 +6,7 @@ function workflowDom() {
   const dom = new JSDOM(`
     <input id="document-path">
     <button id="document-analyze" type="button">Analyser</button>
+    <button id="document-cancel" type="button" hidden disabled>Annuler</button>
     <select id="document-category"><option value="other">Autre</option><option value="invoice">Facture</option></select>
     <button id="document-confirm" type="button" disabled>Confirmer</button>
     <div id="documents-summary"></div>
@@ -13,6 +14,7 @@ function workflowDom() {
   return {
     input: dom.window.document.querySelector('#document-path'),
     button: dom.window.document.querySelector('#document-analyze'),
+    cancel: dom.window.document.querySelector('#document-cancel'),
     category: dom.window.document.querySelector('#document-category'),
     confirm: dom.window.document.querySelector('#document-confirm'),
     summary: dom.window.document.querySelector('#documents-summary'),
@@ -131,5 +133,76 @@ describe('parcours d’analyse documentaire', () => {
     const binding = bindDocumentAnalysis({ api, pathInput: input, submitButton: button, summary });
     await expect(binding.run()).rejects.toThrow('document_path_required');
     expect(summary.textContent).toContain('Indiquez le chemin');
+  });
+
+  it('annule un parsing actif puis n’affiche aucun classement', async () => {
+    const { input, button, cancel, summary } = workflowDom();
+    let rejectParse;
+    let startParse;
+    const parseStarted = new Promise((resolve) => { startParse = resolve; });
+    const api = {
+      documentIntake: async () => ({
+        documentId: 'document-1', status: 'inspectable', detectedType: 'application/pdf', reasons: [],
+      }),
+      documents: {
+        parse: () => new Promise((_resolve, reject) => {
+          rejectParse = reject;
+          startParse();
+        }),
+        cancel: async (documentId) => {
+          if (documentId !== 'document-1') throw new Error('document_id_invalid');
+          rejectParse(new Error('document_parse_cancelled'));
+          return { documentId, cancelled: true };
+        },
+        evidence: async () => { throw new Error('evidence_must_not_run'); },
+        proposeClassification: async () => { throw new Error('classifier_must_not_run'); },
+      },
+    };
+    input.value = 'C:\\Documents\\facture.pdf';
+    const binding = bindDocumentAnalysis({ api, pathInput: input, submitButton: button, cancelButton: cancel, summary });
+
+    const pending = binding.run();
+    await parseStarted;
+    expect(cancel.hidden).toBe(false);
+    expect(cancel.disabled).toBe(false);
+
+    await expect(binding.cancel()).resolves.toEqual({ documentId: 'document-1', cancelled: true });
+    await expect(pending).rejects.toThrow('document_parse_cancelled');
+    expect(summary.textContent).toContain('Analyse annulée');
+    expect(summary.textContent).not.toContain('Classement proposé');
+    expect(cancel.hidden).toBe(true);
+    expect(cancel.disabled).toBe(true);
+  });
+
+  it('retire l’annulation dès que le parsing est terminé', async () => {
+    const { input, button, cancel, summary } = workflowDom();
+    let resolveEvidence;
+    let signalEvidenceStarted;
+    const evidenceStarted = new Promise((resolve) => { signalEvidenceStarted = resolve; });
+    const api = {
+      documentIntake: async () => ({
+        documentId: 'document-1', status: 'inspectable', detectedType: 'application/pdf', reasons: [],
+      }),
+      documents: {
+        parse: async () => ({ parserId: 'pdf-text-parser', pageCount: 1, blockCount: 1, confidence: 1 }),
+        cancel: async () => ({ documentId: 'document-1', cancelled: false }),
+        evidence: () => {
+          signalEvidenceStarted();
+          return new Promise((resolve) => { resolveEvidence = resolve; });
+        },
+        proposeClassification: async () => ({ category: 'other', retention: 'P1Y' }),
+      },
+    };
+    input.value = 'C:\\Documents\\facture.pdf';
+    const binding = bindDocumentAnalysis({ api, pathInput: input, submitButton: button, cancelButton: cancel, summary });
+
+    const pending = binding.run();
+    await evidenceStarted;
+    expect(cancel.hidden).toBe(true);
+    expect(cancel.disabled).toBe(true);
+    await expect(binding.cancel()).rejects.toThrow('document_parse_cancellation_unavailable');
+
+    resolveEvidence({ parserId: 'pdf-text-parser', totalBlocks: 0, truncated: false, evidence: [] });
+    await expect(pending).resolves.toMatchObject({ state: 'analyzed', documentId: 'document-1' });
   });
 });

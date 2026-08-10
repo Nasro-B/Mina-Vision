@@ -37,6 +37,7 @@ export function createDocumentController({
   formService = null, converter = null, downloadService = null, printService = null, printerRegistry = null,
 } = {}) {
   if (!intake?.intake || !intake?.inspect || !intake?.promote) throw new TypeError('document_controller_dependencies_required');
+  const activeParses = new Map();
 
   const documentListProjection = (record) => Object.freeze({
     documentId: record.documentId,
@@ -61,16 +62,36 @@ export function createDocumentController({
 
     async parseDocument(documentId) {
       if (!parserRegistry) throw new Error('document_parser_not_configured');
-      const observation = await parserRegistry.parse(documentId);
-      if (evidenceStore) await evidenceStore.store(observation);
+      if (activeParses.has(documentId)) throw new Error('document_parse_in_progress');
+      const cancellation = new AbortController();
+      const operation = { cancellation, cancellable: true };
+      activeParses.set(documentId, operation);
+      try {
+        const observation = await parserRegistry.parse(documentId, { signal: cancellation.signal });
+        if (cancellation.signal.aborted) throw cancellation.signal.reason ?? new Error('document_parse_cancelled');
+        operation.cancellable = false;
+        if (evidenceStore) await evidenceStore.store(observation);
+        return Object.freeze({
+          documentId: observation.documentId,
+          mediaType: observation.mediaType,
+          pageCount: observation.pageCount,
+          confidence: observation.confidence,
+          parserId: observation.parserId,
+          parserVersion: observation.parserVersion,
+          blockCount: observation.blocks.length,
+        });
+      } finally {
+        if (activeParses.get(documentId) === operation) activeParses.delete(documentId);
+      }
+    },
+    cancelParse(documentId) {
+      const operation = activeParses.get(documentId);
+      if (!operation?.cancellable) return Object.freeze({ documentId, cancelled: false });
+      operation.cancellable = false;
+      operation.cancellation.abort(new Error('document_parse_cancelled'));
       return Object.freeze({
-        documentId: observation.documentId,
-        mediaType: observation.mediaType,
-        pageCount: observation.pageCount,
-        confidence: observation.confidence,
-        parserId: observation.parserId,
-        parserVersion: observation.parserVersion,
-        blockCount: observation.blocks.length,
+        documentId,
+        cancelled: true,
       });
     },
 
