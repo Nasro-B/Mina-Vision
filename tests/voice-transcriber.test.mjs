@@ -43,6 +43,19 @@ describe('createVoiceTranscriber', () => {
     expect(decodeAudio).not.toHaveBeenCalled();
   });
 
+  it('charge par défaut la variante q8 compatible avec le runtime CPU local', async () => {
+    const transcribe = createVoiceTranscriber({
+      enabled: true,
+      decodeAudio: decodeOk,
+      loadPipeline: async (_model, policy) => {
+        if (policy?.dtype !== 'q8') throw new Error('stt_cpu_dtype_required');
+        return async () => ({ text: 'transcription q8' });
+      },
+    });
+
+    await expect(transcribe({ audio: Buffer.from([1]) })).resolves.toBe('transcription q8');
+  });
+
   it('hors-ligne : utilise un pipeline déjà présent sans autoriser le réseau', async () => {
     let receivedPolicy = null;
     const transcribe = createVoiceTranscriber({
@@ -57,7 +70,7 @@ describe('createVoiceTranscriber', () => {
     });
 
     await expect(transcribe({ audio: Buffer.from([1]) })).resolves.toBe('transcription locale');
-    expect(receivedPolicy).toEqual({ localFilesOnly: true });
+    expect(receivedPolicy).toEqual({ localFilesOnly: true, dtype: 'q8' });
   });
 
   it('échec de chargement : réessaiera au prochain appel (pas de poison définitif)', async () => {

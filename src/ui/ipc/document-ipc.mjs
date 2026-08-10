@@ -5,6 +5,7 @@ export function registerDocumentIpc({ ipcMain, controller } = {}) {
   ipcMain.handle('mina:documents:list', () => controller.listDocuments());
   ipcMain.handle('mina:documents:promote', (_event, payload) => controller.promoteDocument(payload));
   ipcMain.handle('mina:documents:parse', (_event, payload) => controller.parseDocument(payload));
+  ipcMain.handle('mina:documents:evidence', (_event, payload) => controller.listEvidence(payload));
   ipcMain.handle('mina:documents:propose-classification', (_event, payload) => controller.proposeClassificationForDocument(payload?.documentId, payload?.hints));
   ipcMain.handle('mina:documents:confirm-classification', (_event, payload) => controller.confirmClassification(payload?.proposalId, payload?.overrides));
   ipcMain.handle('mina:documents:index-selection', (_event, payload) => controller.indexSelection(payload));

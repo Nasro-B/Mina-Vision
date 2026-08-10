@@ -165,6 +165,7 @@ function createPreloadApi(ipcRenderer) {
     documents: Object.freeze({
       list: () => ipcRenderer.invoke('mina:documents:list'),
       parse: (documentId) => ipcRenderer.invoke('mina:documents:parse', documentId),
+      evidence: (documentId) => ipcRenderer.invoke('mina:documents:evidence', documentId),
       proposeClassification: (documentId, hints) => ipcRenderer.invoke('mina:documents:propose-classification', { documentId, hints }),
       confirmClassification: (proposalId, overrides) => ipcRenderer.invoke('mina:documents:confirm-classification', { proposalId, overrides }),
     }),

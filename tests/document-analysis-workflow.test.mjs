@@ -39,6 +39,13 @@ describe('parcours d’analyse documentaire', () => {
             blockCount: 1,
           };
         },
+        evidence: async (documentId) => {
+          if (documentId !== 'document-1') throw new Error('document_id_invalid');
+          return {
+            parserId: 'pdf-text-parser', totalBlocks: 1, truncated: false,
+            evidence: [{ blockIndex: 0, locator: { kind: 'pdf_text', page: 2, start: 0, end: 12 }, confidence: 0.93, text: 'Donnée personnelle' }],
+          };
+        },
         proposeClassification: async (documentId) => {
           if (documentId !== 'document-1') throw new Error('document_id_invalid');
           return { category: 'other', retention: 'P1Y' };
@@ -54,6 +61,9 @@ describe('parcours d’analyse documentaire', () => {
     expect(summary.textContent).toContain('2 pages');
     expect(summary.textContent).toContain('93 %');
     expect(summary.textContent).toContain('1 bloc');
+    expect(summary.textContent).toContain('Preuves locales');
+    expect(summary.textContent).toContain('page 2');
+    expect(summary.textContent).not.toContain('Donnée personnelle');
   });
 
   it('s’arrête après une quarantaine bloquée sans appeler un parseur', async () => {
@@ -64,6 +74,7 @@ describe('parcours d’analyse documentaire', () => {
       }),
       documents: {
         parse: async () => { throw new Error('parser_must_not_run'); },
+        evidence: async () => { throw new Error('evidence_must_not_run'); },
         proposeClassification: async () => { throw new Error('classifier_must_not_run'); },
       },
     };
@@ -84,6 +95,7 @@ describe('parcours d’analyse documentaire', () => {
       }),
       documents: {
         parse: async () => ({ parserId: 'pdf-text-parser', pageCount: 1, blockCount: 1, confidence: 1 }),
+        evidence: async () => ({ parserId: 'pdf-text-parser', totalBlocks: 1, truncated: false, evidence: [] }),
         proposeClassification: async () => ({ id: 'proposal-1', category: 'other', retention: 'P1Y' }),
         confirmClassification: async (proposalId, overrides) => {
           if (proposalId !== 'proposal-1' || JSON.stringify(overrides) !== JSON.stringify({ category: 'invoice' })) {

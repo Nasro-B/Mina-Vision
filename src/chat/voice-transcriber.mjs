@@ -13,11 +13,13 @@
 import { VOICE_SAMPLE_RATE_HZ, isVoicePcmMime, pcm16leToFloat32 } from './voice-pcm.mjs';
 
 const DEFAULT_MODEL = 'Xenova/whisper-small';
+const DEFAULT_DTYPE = 'q8';
 
 export function createVoiceTranscriber({
   enabled = false,
   offline = false,
   model = DEFAULT_MODEL,
+  dtype = DEFAULT_DTYPE,
   decodeAudio, // async ({ bytesBase64, mimeType }) => { pcm: Float32Array, sampleRate: number }
   loadPipeline, // async (model, { localFilesOnly }) => (pcm|{...}) => { text } — chargé UNE fois puis réutilisé
   logger = null,
@@ -31,7 +33,7 @@ export function createVoiceTranscriber({
   const pipelineOnce = () => {
     pipelinePromise ??= (async () => {
       const started = Date.now();
-      const pipeline = await loadPipeline(model, { localFilesOnly: offline });
+      const pipeline = await loadPipeline(model, { localFilesOnly: offline, dtype });
       logger?.append?.({ event: 'stt_local_charge', model, loadMs: Date.now() - started });
       return pipeline;
     })();
@@ -55,4 +57,7 @@ export function createVoiceTranscriber({
   };
 }
 
-export { DEFAULT_MODEL as VOICE_TRANSCRIBER_DEFAULT_MODEL };
+export {
+  DEFAULT_DTYPE as VOICE_TRANSCRIBER_DEFAULT_DTYPE,
+  DEFAULT_MODEL as VOICE_TRANSCRIBER_DEFAULT_MODEL,
+};

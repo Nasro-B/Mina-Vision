@@ -115,6 +115,7 @@ import { createMediaStore } from '../chat/media-store.mjs';
 import { createMediaPerception } from '../chat/media-perception.mjs';
 import { createMediaPurge } from '../chat/media-purge.mjs';
 import { createTesseractOcrProvider } from '../providers/tesseract-ocr.mjs';
+import { createLocalAsrPipelineLoader } from '../chat/local-asr-pipeline-loader.mjs';
 import { createVoiceTranscriber } from '../chat/voice-transcriber.mjs';
 import { createCallPolicy } from '../telephony/call-policy.mjs';
 import { createChatResponder } from '../devices/chat-responder.mjs';
@@ -2810,11 +2811,7 @@ app.whenReady().then(async () => {
         offline: process.env.MINA_OFFLINE === 'true',
         model: process.env.MINA_STT_MODEL?.trim() || undefined,
         decodeAudio: decodeAudioViaRenderer,
-        loadPipeline: async (model, { localFilesOnly = false } = {}) => {
-          const { pipeline } = await import('@huggingface/transformers');
-          const asr = await pipeline('automatic-speech-recognition', model, { local_files_only: localFilesOnly });
-          return async (pcm) => asr(pcm);
-        },
+        loadPipeline: createLocalAsrPipelineLoader(),
         logger: { append: (entry) => void activityJournal?.append(entry.event ?? 'stt_local', entry) },
       });
 

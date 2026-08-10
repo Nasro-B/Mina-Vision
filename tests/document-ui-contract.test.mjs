@@ -130,6 +130,19 @@ describe('document controller: classification uses persisted evidence', () => {
     await expect(handlers.get('mina:documents:list')({}))
       .resolves.toEqual([{ documentId: 'document-1', declaredName: 'facture.pdf' }]);
   });
+
+  it('routes a document evidence projection by documentId only', async () => {
+    const handlers = new Map();
+    registerDocumentIpc({
+      ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
+      controller: {
+        listEvidence: async (documentId) => Object.freeze({ documentId, evidence: Object.freeze([]) }),
+      },
+    });
+
+    await expect(handlers.get('mina:documents:evidence')({}, 'document-1'))
+      .resolves.toEqual({ documentId: 'document-1', evidence: [] });
+  });
 });
 
 describe('document controller: parse response is redacted for the renderer', () => {
@@ -157,6 +170,35 @@ describe('document controller: parse response is redacted for the renderer', () 
     });
     expect(JSON.stringify(response)).not.toContain('Donnée personnelle');
     expect(response).not.toHaveProperty('blocks');
+  });
+
+  it('projects persisted evidence without text, digests, or arbitrary locator fields', async () => {
+    const { intake } = buildDocumentWorld();
+    const controller = createDocumentController({
+      intake,
+      evidenceStore: {
+        get: async () => Object.freeze({
+          documentId: 'document-1', parserId: 'tesseract-image-ocr-parser', parserVersion: '1',
+          blocks: Object.freeze([Object.freeze({
+            text: 'Donnée personnelle à ne pas envoyer au renderer',
+            ocrCropDigest: 'sha256:confidentiel',
+            sourceOffset: Object.freeze({ kind: 'ocr', page: 1, box: [10, 20, 30, 40], private: 'ne jamais exposer' }),
+            confidence: 0.94,
+          })]),
+        }),
+      },
+    });
+
+    const response = await controller.listEvidence('document-1');
+
+    expect(response).toEqual({
+      documentId: 'document-1', parserId: 'tesseract-image-ocr-parser', parserVersion: '1',
+      totalBlocks: 1, truncated: false,
+      evidence: [{ blockIndex: 0, locator: { kind: 'ocr', page: 1, box: [10, 20, 30, 40] }, confidence: 0.94 }],
+    });
+    expect(JSON.stringify(response)).not.toContain('Donnée personnelle');
+    expect(JSON.stringify(response)).not.toContain('confidentiel');
+    expect(JSON.stringify(response)).not.toContain('ne jamais exposer');
   });
 });
 

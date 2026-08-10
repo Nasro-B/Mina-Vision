@@ -41,6 +41,31 @@ function addCard(summary, label, value) {
   summary.append(card);
 }
 
+function evidenceLocatorLabel(locator) {
+  const kind = locator?.kind === 'pdf_text' || locator?.kind === 'ocr' ? locator.kind : 'inconnu';
+  const page = Number.isInteger(locator?.page) && locator.page > 0 ? `page ${locator.page}` : 'page non disponible';
+  if (kind === 'pdf_text' && Number.isInteger(locator?.start) && Number.isInteger(locator?.end)) {
+    return `${page} · texte ${locator.start}–${locator.end}`;
+  }
+  if (kind === 'ocr' && Array.isArray(locator?.box) && locator.box.length === 4 && locator.box.every(Number.isFinite)) {
+    return `${page} · zone OCR ${locator.box.join(', ')}`;
+  }
+  return `${page} · repère ${kind}`;
+}
+
+function renderEvidence(summary, projection) {
+  const evidence = Array.isArray(projection?.evidence) ? projection.evidence : [];
+  const parserId = typeof projection?.parserId === 'string' ? projection.parserId : 'parseur inconnu';
+  const totalBlocks = Number.isInteger(projection?.totalBlocks) && projection.totalBlocks >= 0 ? projection.totalBlocks : evidence.length;
+  const suffix = projection?.truncated === true ? ' · aperçu limité' : '';
+  addCard(summary, 'Preuves locales', `${parserId} · ${evidence.length}/${totalBlocks} repère(s)${suffix}`);
+  for (const item of evidence) {
+    const confidence = confidenceLabel(item?.confidence);
+    const index = Number.isInteger(item?.blockIndex) && item.blockIndex >= 0 ? item.blockIndex + 1 : '?';
+    addCard(summary, `Preuve ${index}`, `${evidenceLocatorLabel(item?.locator)} · ${confidence}`);
+  }
+}
+
 function renderAnalysis(summary, result) {
   summary.hidden = false;
   summary.replaceChildren();
@@ -52,6 +77,7 @@ function renderAnalysis(summary, result) {
   addCard(summary, 'Quarantaine', result.record.status);
   addCard(summary, 'Type détecté', documentTypeLabel(result.record.detectedType));
   addCard(summary, 'Extraction locale', `${result.observation.parserId} · ${result.observation.pageCount} pages · ${blockCountLabel(result.observation.blockCount)} · ${confidenceLabel(result.observation.confidence)}`);
+  renderEvidence(summary, result.evidence);
   addCard(summary, 'Classement proposé', `${result.classification.category ?? 'non défini'} · conservation ${result.classification.retention ?? 'non définie'}`);
 }
 
@@ -75,7 +101,7 @@ function setProposedCategory(categorySelect, category) {
 export async function analyzeDocument({ api, path } = {}) {
   const selected = selectedPath(path);
   if (typeof api?.documentIntake !== 'function' || typeof api?.documents?.parse !== 'function'
-    || typeof api.documents.proposeClassification !== 'function') {
+    || typeof api.documents.evidence !== 'function' || typeof api.documents.proposeClassification !== 'function') {
     throw new TypeError('document_analysis_api_required');
   }
   const record = await api.documentIntake({
@@ -87,8 +113,9 @@ export async function analyzeDocument({ api, path } = {}) {
   if (record.status === 'blocked') return Object.freeze({ state: 'blocked', documentId: record.documentId, record });
 
   const observation = await api.documents.parse(record.documentId);
+  const evidence = await api.documents.evidence(record.documentId);
   const classification = await api.documents.proposeClassification(record.documentId, {});
-  return Object.freeze({ state: 'analyzed', documentId: record.documentId, record, observation, classification });
+  return Object.freeze({ state: 'analyzed', documentId: record.documentId, record, observation, evidence, classification });
 }
 
 export function bindDocumentAnalysis({
