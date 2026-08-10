@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createImageOcrDocumentParser,
   createPdfTextDocumentParser,
@@ -77,6 +77,46 @@ describe('parseurs document locaux', () => {
     });
 
     await expect(parser.parse({ bytes: Buffer.from('%PDF-fake') })).rejects.toThrow('document_pdf_text_empty');
+  });
+
+  it('bascule un PDF sans couche texte vers le fallback OCR local', async () => {
+    const ocrFallback = vi.fn(async () => ({
+      pageCount: 1,
+      blocks: [{
+        text: 'Facture scannée',
+        sourceOffset: { kind: 'ocr', page: 1, box: [1, 2, 30, 18] },
+        confidence: 0.91,
+      }],
+    }));
+    const parser = createPdfTextDocumentParser({
+      pdfExtractor: async () => ({ pages: 1, pageTexts: ['   '] }),
+      ocrFallback,
+    });
+
+    await expect(parser.parse({ bytes: Buffer.from('%PDF-fake') })).resolves.toEqual({
+      pageCount: 1,
+      blocks: [{
+        text: 'Facture scannée',
+        sourceOffset: { kind: 'ocr', page: 1, box: [1, 2, 30, 18] },
+        confidence: 0.91,
+      }],
+    });
+    expect(ocrFallback).toHaveBeenCalledOnce();
+  });
+
+  it('ne lance jamais le fallback OCR quand le PDF contient déjà du texte', async () => {
+    const ocrFallback = vi.fn(async () => {
+      throw new Error('ocr_should_not_run');
+    });
+    const parser = createPdfTextDocumentParser({
+      pdfExtractor: async () => ({ pages: 1, pageTexts: ['Texte natif'] }),
+      ocrFallback,
+    });
+
+    await expect(parser.parse({ bytes: Buffer.from('%PDF-fake') })).resolves.toMatchObject({
+      blocks: [{ sourceOffset: { kind: 'pdf_text', page: 1 } }],
+    });
+    expect(ocrFallback).not.toHaveBeenCalled();
   });
 
   it('refuse une sortie OCR vide au lieu de la présenter comme une lecture', async () => {

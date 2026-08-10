@@ -144,6 +144,7 @@ import { createDocumentParserRegistry } from '../documents/document-parser-regis
 import { createDocumentEvidenceStore } from '../documents/document-evidence-store.mjs';
 import { createDocumentClassifier } from '../documents/document-classifier.mjs';
 import { createPdfTextDocumentParser, createImageOcrDocumentParser } from '../documents/local-document-parsers.mjs';
+import { createPdfPageRasterizer, createPdfScannedOcrFallback } from '../documents/pdf-scanned-ocr.mjs';
 import { createDocumentController } from './pages/document-controller.mjs';
 import { createEmergencyController } from './pages/emergency-controller.mjs';
 import { createPersonalityService } from '../personality/personality-service.mjs';
@@ -3231,10 +3232,18 @@ app.whenReady().then(async () => {
       realpathProvider: documentPaths,
       clock: Date.now,
     });
+    const documentOcrProvider = createTesseractOcrProvider();
+    const documentPdfOcrFallback = createPdfScannedOcrFallback({
+      rasterizePdfPages: createPdfPageRasterizer(),
+      ocrProvider: documentOcrProvider,
+    });
     const parserRegistry = createDocumentParserRegistry({
       parsers: [
-        createPdfTextDocumentParser({ pdfExtractor: createPdfTextExtractor() }),
-        createImageOcrDocumentParser({ ocrProvider: createTesseractOcrProvider() }),
+        createPdfTextDocumentParser({
+          pdfExtractor: createPdfTextExtractor(),
+          ocrFallback: documentPdfOcrFallback,
+        }),
+        createImageOcrDocumentParser({ ocrProvider: documentOcrProvider }),
       ],
       quarantineStore: documentQuarantineStore,
       clock: Date.now,
@@ -3242,7 +3251,11 @@ app.whenReady().then(async () => {
     documentEvidenceRepository = createJsonRepository({
       filename: path.join(app.getPath('userData'), 'mina-document-evidence.sqlite'), table: 'evidence', nativeBinding,
     });
-    const evidenceStore = createDocumentEvidenceStore({ repository: documentEvidenceRepository, clock: Date.now });
+    const evidenceStore = createDocumentEvidenceStore({
+      repository: documentEvidenceRepository,
+      clock: Date.now,
+      storageMode: 'metadata-only',
+    });
     documentClassificationRepository = createJsonRepository({
       filename: path.join(app.getPath('userData'), 'mina-document-classifications.sqlite'), table: 'classifications', nativeBinding,
     });

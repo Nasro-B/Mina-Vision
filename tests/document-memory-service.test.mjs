@@ -34,7 +34,7 @@ const observation = Object.freeze({
 
 async function buildWorld() {
   const classifier = createDocumentClassifier({ repository: fakeRepository(), clock: () => 0 });
-  const evidenceStore = createDocumentEvidenceStore({ repository: fakeRepository(), clock: () => 0 });
+  const evidenceStore = createDocumentEvidenceStore({ repository: fakeRepository(), clock: () => 0, storageMode: 'full' });
   await evidenceStore.store(observation);
   const rag = fakeRag();
   const memory = createDocumentMemoryService({ classifier, evidenceStore, ragRepository: rag, clock: () => 0 });

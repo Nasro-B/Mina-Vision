@@ -8,8 +8,25 @@ function freezeBlock({ text, sourceOffset, confidence }) {
   });
 }
 
-export function createPdfTextDocumentParser({ pdfExtractor } = {}) {
+function freezePdfOcrBlock(block, pageCount) {
+  const text = typeof block?.text === 'string' ? block.text.trim() : '';
+  const sourceOffset = block?.sourceOffset;
+  if (!text || sourceOffset?.kind !== 'ocr' || !Number.isInteger(sourceOffset.page)
+    || sourceOffset.page < 1 || sourceOffset.page > pageCount
+    || !Array.isArray(sourceOffset.box) || sourceOffset.box.length !== 4 || !sourceOffset.box.every(Number.isFinite)
+    || !Number.isFinite(block.confidence) || block.confidence < 0 || block.confidence > 1) {
+    throw new Error('document_pdf_ocr_result_invalid');
+  }
+  return freezeBlock({
+    text,
+    sourceOffset: { kind: 'ocr', page: sourceOffset.page, box: [...sourceOffset.box] },
+    confidence: block.confidence,
+  });
+}
+
+export function createPdfTextDocumentParser({ pdfExtractor, ocrFallback = null } = {}) {
   if (typeof pdfExtractor !== 'function') throw new TypeError('document_pdf_parser_extractor_required');
+  if (ocrFallback !== null && typeof ocrFallback !== 'function') throw new TypeError('document_pdf_parser_ocr_fallback_invalid');
 
   return Object.freeze({
     id: 'pdf-text-parser',
@@ -34,7 +51,17 @@ export function createPdfTextDocumentParser({ pdfExtractor } = {}) {
           confidence: 1,
         })];
       });
-      if (blocks.length === 0) throw new Error('document_pdf_text_empty');
+      if (blocks.length === 0) {
+        if (!ocrFallback) throw new Error('document_pdf_text_empty');
+        const ocrResult = await ocrFallback(bytes, { signal });
+        signal?.throwIfAborted();
+        if (!Number.isInteger(ocrResult?.pageCount) || ocrResult.pageCount !== extracted.pages || !Array.isArray(ocrResult.blocks)) {
+          throw new Error('document_pdf_ocr_result_invalid');
+        }
+        const ocrBlocks = ocrResult.blocks.map((block) => freezePdfOcrBlock(block, extracted.pages));
+        if (ocrBlocks.length === 0) throw new Error('document_pdf_ocr_text_empty');
+        return Object.freeze({ pageCount: extracted.pages, blocks: Object.freeze(ocrBlocks) });
+      }
       return Object.freeze({ pageCount: extracted.pages, blocks: Object.freeze(blocks) });
     },
   });
