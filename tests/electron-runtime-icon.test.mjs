@@ -21,6 +21,17 @@ describe('Electron Windows runtime identity', () => {
     expect(source).toContain('$runtimeResult.exe');
   });
 
+  it('normal launch scripts go through the Mina runtime launcher instead of raw electron', async () => {
+    const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
+    const startScript = await readFile('scripts/start-mina.ps1', 'utf8');
+
+    expect(packageJson.scripts.start).toContain('scripts/launch-mina.ps1');
+    expect(packageJson.scripts.start).not.toBe('electron .');
+    expect(packageJson.scripts.smoke).toContain('scripts/launch-mina.ps1');
+    expect(startScript).toContain('launch-mina.ps1');
+    expect(startScript).not.toContain('npm start');
+  });
+
   it('desktop shortcut carries the same Windows AppUserModelID as the app', async () => {
     const source = await readFile('scripts/install-shortcut.ps1', 'utf8');
 

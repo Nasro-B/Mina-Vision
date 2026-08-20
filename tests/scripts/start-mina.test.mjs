@@ -22,12 +22,13 @@ describe('start-mina.ps1: mode flags stay process-scoped, no side effects at sta
     expect(executableLines).not.toMatch(/tcpip\s+5555|adb\s+connect/iu);
   });
 
-  it('calls verify-mina.ps1 before npm start', async () => {
+  it('calls verify-mina.ps1 before the Mina runtime launcher', async () => {
     const script = await readFile(new URL('../../scripts/start-mina.ps1', import.meta.url), 'utf8');
     const verifyIndex = script.indexOf('verify-mina.ps1');
-    const startIndex = script.indexOf('npm start');
+    const startIndex = script.indexOf('launch-mina.ps1');
     expect(verifyIndex).toBeGreaterThan(-1);
     expect(startIndex).toBeGreaterThan(verifyIndex);
+    expect(script).not.toContain('npm start');
   });
 });
 

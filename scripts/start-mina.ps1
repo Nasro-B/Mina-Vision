@@ -27,5 +27,5 @@ if ($LASTEXITCODE -ne 0) {
     Write-Warning "Verification non entierement prete (voir le rapport ci-dessus) - demarrage quand meme en mode degrade."
 }
 
-npm start
+& "$PSScriptRoot/launch-mina.ps1" -Wait
 exit $LASTEXITCODE
