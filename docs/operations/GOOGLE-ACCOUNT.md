@@ -14,16 +14,20 @@ happens in your own browser, on the official Google consent screen.
 
 ## Step 1 — Create an OAuth client in Google Cloud Console (owner only)
 
+For this installation, the target project must be **`mina-vision`** with the operator account
+**`mina.vision.ai@gmail.com`**. Do not use an OAuth client from another project, including
+`mina-vission`: the connector refuses it when the downloaded file exposes its `project_id`.
+
 1. Go to [console.cloud.google.com](https://console.cloud.google.com), sign in with
-   `<your-account>@gmail.com`.
-2. Create a project (e.g. "Mina Vision") or select an existing one.
+   `mina.vision.ai@gmail.com`.
+2. Select the Google Cloud/Firebase project **`mina-vision`**.
 3. **APIs & Services → Library**: enable *Gmail API*, *Google Calendar API*, *People API*,
    *Google Tasks API*.
 4. **APIs & Services → OAuth consent screen**:
    - Type: *External* (standard Gmail account, not Google Workspace).
    - Fill in the app name ("Mina Vision") and a contact e-mail.
-   - Add `<your-account>@gmail.com` as a **test user** (avoids Google's verification review for
-     personal use).
+   - Add `mina.vision.ai@gmail.com` as a **test user** (avoids Google's verification review
+     for personal use).
    - If Google shows `Error 403: access_denied` with "Mina Vision has not completed Google's
      verification process", the address currently used in Chrome is not yet in the OAuth test-user
      list for the project owning the **Client ID**. Add the address, save, wait a few seconds, then
@@ -31,21 +35,27 @@ happens in your own browser, on the official Google consent screen.
 5. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
    - Application type: **Desktop app** — not "Web application". This type automatically accepts
      any `127.0.0.1` port, so there is no redirect URI to enter manually.
-   - Note the displayed **Client ID** and **Client Secret**.
+   - Download Google's `client_secret_*.json` file and place it in
+     `C:\Serveurs\Mina Vision\env\`. This is preferred over manual typing because the file
+     contains `project_id` and lets Mina refuse a client from the wrong project.
+   - If an old `client_secret_*.json` from another project is present in `env\`, move it out of
+     `env\` or into `env\archive-oauth-mismatch\` before retrying.
 
 ## Step 2 — Connect the account
 
 ```powershell
 Set-Location 'C:\Serveurs\Mina Vision'
+$env:MINA_GOOGLE_ACCOUNT='mina.vision.ai@gmail.com'
 npm run connect:google
 ```
 
-- First run: the tool asks for the Client ID and Client Secret from step 1 (typed visibly in
-  this terminal, never logged nor transmitted anywhere else), then stores them encrypted for
-  next time.
+- First run: if the `client_secret_*.json` file is present in `env\`, the tool uses it without
+  printing the secret, then stores it encrypted for next time. Without that JSON file, the tool can
+  ask for Client ID/Secret manually, but manual typing does not prove the Google project: for Mina
+  Vision, use the downloaded JSON.
 - The Gmail address can be provided through `MINA_GOOGLE_ACCOUNT` or typed at prompt if the variable is missing.
 - The default browser opens on the Google consent screen — sign in with
-  `<your-account>@gmail.com`, accept the requested permissions (Gmail, Calendar, Contacts,
+  `mina.vision.ai@gmail.com`, accept the requested permissions (Gmail, Calendar, Contacts,
   Tasks).
 - Once validated, a "Account connected" tab appears — the terminal confirms the connection and
   the encrypted token is stored in the local vault.
@@ -62,7 +72,8 @@ the main process). That wiring is the logical next step, not blocked on you.
 The Google Home SDK 1.9 is a separate download from an authenticated Google page (not the same
 thing as the OAuth above):
 
-1. Sign in on the official Google Home Developer page with `<your-account>@gmail.com`.
+1. Sign in on the official Google Home Developer page with `mina.vision.ai@gmail.com`.
 2. Download SDK 1.9.
 3. Drop its contents under `%USERPROFILE%\.mina\sdk\google-home\1.9` (or set
-   `MINA_GOOGLE_HOME_SDK_PATH` to the directory containing `manifest.json`).
+   `MINA_GOOGLE_HOME_SDK_PATH` to the directory containing `manifest.json`). Mina's probe only
+   reports the SDK as ready if this `manifest.json` exists.
