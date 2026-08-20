@@ -36,8 +36,9 @@ For this installation, the target project must be **`mina-vision`** with the ope
    - Application type: **Desktop app** — not "Web application". This type automatically accepts
      any `127.0.0.1` port, so there is no redirect URI to enter manually.
    - Download Google's `client_secret_*.json` file and place it in
-     `C:\Serveurs\Mina Vision\env\`. This is preferred over manual typing because the file
-     contains `project_id` and lets Mina refuse a client from the wrong project.
+     `C:\Serveurs\Mina Vision\env\`. For `mina-vision`, this file is required: the connector
+     blocks manual Client ID/Secret entry to avoid reconnecting Mina to an OAuth client from the
+     wrong project.
    - If an old `client_secret_*.json` from another project is present in `env\`, move it out of
      `env\` or into `env\archive-oauth-mismatch\` before retrying.
 
@@ -49,10 +50,9 @@ $env:MINA_GOOGLE_ACCOUNT='mina.vision.ai@gmail.com'
 npm run connect:google
 ```
 
-- First run: if the `client_secret_*.json` file is present in `env\`, the tool uses it without
-  printing the secret, then stores it encrypted for next time. Without that JSON file, the tool can
-  ask for Client ID/Secret manually, but manual typing does not prove the Google project: for Mina
-  Vision, use the downloaded JSON.
+- First run: the `client_secret_*.json` file must be present in `env\`. The tool uses it without
+  printing the secret, then stores it encrypted for next time. If `FIREBASE_PROJECT_ID=mina-vision`
+  and the JSON file is absent, the tool stops before Chrome with `client_config_file_required`.
 - The Gmail address can be provided through `MINA_GOOGLE_ACCOUNT` or typed at prompt if the variable is missing.
 - The default browser opens on the Google consent screen — sign in with
   `mina.vision.ai@gmail.com`, accept the requested permissions (Gmail, Calendar, Contacts,

@@ -100,6 +100,12 @@ function printProjectMismatchHelp({ oauthProjectId, firebaseProjectId }) {
   console.error('ou ajoute le compte Gmail comme testeur OAuth dans le projet qui possède réellement ce Client ID si ce projet est volontaire.\n');
 }
 
+function printClientConfigFileRequiredHelp({ firebaseProjectId }) {
+  console.error(`Client OAuth Desktop Google requis pour le projet "${firebaseProjectId}".`);
+  console.error('Télécharge le JSON Google Cloud "Application de bureau" depuis le projet mina-vision et place-le dans env/client_secret_*.json.');
+  console.error('La saisie manuelle Client ID/Secret est bloquée ici pour éviter de reconnecter Mina au mauvais projet OAuth.\n');
+}
+
 async function main() {
   await app.whenReady();
 
@@ -148,6 +154,7 @@ async function main() {
     accountId: 'google-primary',
     // Le compte vient de l'environnement — jamais d'adresse en dur dans le dépôt public.
     address,
+    manualClientConfigAllowed: Boolean(fileConfig || !process.env.FIREBASE_PROJECT_ID?.trim()),
   });
 
   const result = await connector.connect();
@@ -161,6 +168,10 @@ async function main() {
       return;
     case 'client_config_required':
       console.error('Client ID / Client Secret requis.\n');
+      app.exit(1);
+      return;
+    case 'client_config_file_required':
+      printClientConfigFileRequiredHelp({ firebaseProjectId: process.env.FIREBASE_PROJECT_ID?.trim() || 'mina-vision' });
       app.exit(1);
       return;
     case 'denied':

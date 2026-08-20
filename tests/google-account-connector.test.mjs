@@ -52,6 +52,7 @@ function buildConnector(overrides = {}) {
     accountId: 'google-primary',
     address: 'owner@example.com',
     clock: () => 1_700_000_000_000,
+    manualClientConfigAllowed: overrides.manualClientConfigAllowed,
   });
   return { connector, keyring, mailAccountStore, oauthClient, loopbackServer, openExternal, onConsentUrl, prompt, storage };
 }
@@ -98,6 +99,18 @@ describe('createGoogleAccountConnector.connect: client config is prompted once, 
     const { connector, keyring } = buildConnector({ prompt });
     const result = await connector.connect();
     expect(result).toEqual({ status: 'client_config_required' });
+    expect(keyring.setSecret).not.toHaveBeenCalled();
+  });
+
+  it('refuses manual Client ID entry when a project-bound desktop JSON file is required', async () => {
+    const prompt = vi.fn(async () => 'wrong-project-client');
+    const { connector, openExternal, keyring } = buildConnector({ prompt, manualClientConfigAllowed: false });
+
+    const result = await connector.connect();
+
+    expect(result).toEqual({ status: 'client_config_file_required' });
+    expect(prompt).not.toHaveBeenCalled();
+    expect(openExternal).not.toHaveBeenCalled();
     expect(keyring.setSecret).not.toHaveBeenCalled();
   });
 

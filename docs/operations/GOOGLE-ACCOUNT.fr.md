@@ -24,7 +24,7 @@ Pour cette installation, le projet cible doit être **`mina-vision`** avec le co
    - Si Google affiche `Erreur 403 : access_denied` avec « Mina Vision n'a pas terminé la procédure de validation de Google », l'adresse utilisée dans Chrome n'est pas encore dans cette liste de testeurs OAuth du projet du **Client ID**. Ajouter l'adresse, enregistrer, attendre quelques secondes, puis relancer `npm run connect:google`.
 5. **APIs et services → Identifiants → Créer des identifiants → ID client OAuth** :
    - Type d'application : **Application de bureau** (« Desktop app ») — pas « Application Web ». Ce type accepte automatiquement n'importe quel port `127.0.0.1`, donc aucune URI de redirection à saisir manuellement.
-   - Télécharger le JSON Google `client_secret_*.json` et le placer dans `C:\Serveurs\Mina Vision\env\`. C'est préférable à la saisie manuelle, car le fichier contient `project_id` et permet à Mina de refuser un client du mauvais projet.
+   - Télécharger le JSON Google `client_secret_*.json` et le placer dans `C:\Serveurs\Mina Vision\env\`. Pour `mina-vision`, ce fichier est obligatoire : le connecteur bloque la saisie manuelle Client ID/Secret afin d'éviter de reconnecter Mina à un client OAuth d'un autre projet.
    - Si un ancien `client_secret_*.json` d'un autre projet est présent dans `env\`, le déplacer hors de `env\` ou dans `env\archive-oauth-mismatch\` avant de relancer.
 
 ## Étape 2 — Connecter le compte
@@ -35,7 +35,7 @@ $env:MINA_GOOGLE_ACCOUNT='mina.vision.ai@gmail.com'
 npm run connect:google
 ```
 
-- Première exécution : si le JSON `client_secret_*.json` est présent dans `env\`, l'outil l'utilise sans afficher le secret, puis l'enregistre chiffré pour les prochaines fois. Sans fichier JSON, l'outil peut demander Client ID/Secret à la main, mais cette saisie ne prouve pas le projet Google : pour Mina Vision, utiliser le JSON téléchargé.
+- Première exécution : le JSON `client_secret_*.json` doit être présent dans `env\`. L'outil l'utilise sans afficher le secret, puis l'enregistre chiffré pour les prochaines fois. Si `FIREBASE_PROJECT_ID=mina-vision` et que le JSON est absent, l'outil s'arrête avant Chrome avec `client_config_file_required`.
 - L'adresse Gmail peut être fournie via `MINA_GOOGLE_ACCOUNT` ou saisie à l'invite si la variable n'est pas définie.
 - Le navigateur par défaut s'ouvre sur l'écran de consentement Google — se connecter avec `mina.vision.ai@gmail.com`, accepter les permissions demandées (Gmail, Calendrier, Contacts, Tâches).
 - Une fois validé, un onglet « Compte connecté » s'affiche — le terminal confirme la connexion et le jeton chiffré est enregistré dans le coffre local.

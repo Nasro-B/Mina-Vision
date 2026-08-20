@@ -15,6 +15,7 @@ export function createGoogleAccountConnector({
   createOAuthClient = createGoogleOAuthClient,
   generateState = () => randomBytes(16).toString('hex'),
   scopes, accountId, address, clock = Date.now, onConsentUrl = () => {},
+  manualClientConfigAllowed = true,
 } = {}) {
   if (!keyring?.getSecret || !keyring?.setSecret) throw new TypeError('google_account_connector_keyring_required');
   if (!storage?.read) throw new TypeError('google_account_connector_storage_required');
@@ -39,6 +40,7 @@ export function createGoogleAccountConnector({
       if (clientConfigRaw) {
         ({ clientId, clientSecret } = JSON.parse(clientConfigRaw));
       } else {
+        if (manualClientConfigAllowed === false) return Object.freeze({ status: 'client_config_file_required' });
         clientId = await prompt('Client ID Google : ');
         clientSecret = await prompt('Client Secret Google : ');
         if (!clientId || !clientSecret) return Object.freeze({ status: 'client_config_required' });
