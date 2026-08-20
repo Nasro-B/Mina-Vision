@@ -102,6 +102,7 @@ describe('contrat de composition des domaines (main.mjs)', () => {
       'classifier,',
       'memoryService: documentMemoryService,',
       'sourceStore: documentQuarantineStore,',
+      'void documentMemoryService.purgeExpiredDocuments()',
       'mina-document-evidence.sqlite',
       'mina-document-classifications.sqlite',
       'mina-document-rag.sqlite',

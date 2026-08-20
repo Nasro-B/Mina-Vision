@@ -5,7 +5,13 @@ import { createDocumentMemoryService } from '../src/documents/document-memory-se
 
 function fakeRepository() {
   const rows = new Map();
-  return { async put(id, r) { rows.set(id, r); }, async get(id) { return rows.get(id) ?? null; } };
+  return {
+    rows,
+    async put(id, r) { rows.set(id, r); },
+    async get(id) { return rows.get(id) ?? null; },
+    async list() { return [...rows.values()]; },
+    async delete(id) { return rows.delete(id); },
+  };
 }
 
 function fakeRag() {
@@ -25,8 +31,8 @@ function fakeRag() {
 }
 
 function fakeSourceStore() {
-  const bytes = new Set(['d1']);
-  const records = new Set(['d1']);
+  const bytes = new Set(['d1', 'd2']);
+  const records = new Set(['d1', 'd2']);
   return {
     bytes,
     records,
@@ -43,10 +49,18 @@ const observation = Object.freeze({
   ],
 });
 
+const freshObservation = Object.freeze({
+  documentId: 'd2', mediaType: 'application/pdf', digest: 'sha256:def',
+  blocks: [
+    { text: 'bloc frais', sourceOffset: { page: 1, start: 0, end: 10 }, confidence: 0.9 },
+  ],
+});
+
 async function buildWorld(overrides = {}) {
   const classifier = createDocumentClassifier({ repository: fakeRepository(), clock: () => 0 });
   const evidenceStore = createDocumentEvidenceStore({ repository: fakeRepository(), clock: () => 0, storageMode: 'full' });
   await evidenceStore.store(observation);
+  await evidenceStore.store(freshObservation);
   const rag = fakeRag();
   const sourceStore = overrides.sourceStore ?? null;
   const memory = createDocumentMemoryService({ classifier, evidenceStore, ragRepository: rag, sourceStore, clock: () => 0 });
@@ -134,5 +148,32 @@ describe('createDocumentMemoryService.forgetDocument', () => {
     expect(await rag.countByDocument('d1')).toBe(0);
     expect(sourceStore.bytes.has('d1')).toBe(false);
     expect(sourceStore.records.has('d1')).toBe(false);
+  });
+});
+
+describe('createDocumentMemoryService.purgeExpiredDocuments', () => {
+  it('purge seulement les documents confirmés au-delà de leur rétention', async () => {
+    const sourceStore = fakeSourceStore();
+    const { classifier, evidenceStore, memory, rag } = await buildWorld({ sourceStore });
+    const expired = await classifier.proposeClassification(observation);
+    await classifier.confirmClassification(expired.id, { date: '2025-08-19', retention: 'P1Y' });
+    const fresh = await classifier.proposeClassification(freshObservation);
+    await classifier.confirmClassification(fresh.id, { date: '2025-08-21', retention: 'P1Y' });
+    await memory.indexSelection({ proposalId: expired.id, blockIds: ['b0', 'b1'] });
+    await memory.indexSelection({ proposalId: fresh.id, blockIds: ['b0'] });
+
+    const result = await memory.purgeExpiredDocuments({ now: Date.parse('2026-08-20T00:00:00.000Z') });
+
+    expect(result).toMatchObject({ scanned: 2, purged: 1, kept: 1, failed: 0 });
+    expect(await rag.countByDocument('d1')).toBe(0);
+    expect(await rag.countByDocument('d2')).toBe(1);
+    expect(await evidenceStore.get('d1')).toBeNull();
+    expect(await evidenceStore.get('d2')).not.toBeNull();
+    expect(await classifier.getProposal(expired.id)).toBeNull();
+    expect(await classifier.getProposal(fresh.id)).not.toBeNull();
+    expect(sourceStore.bytes.has('d1')).toBe(false);
+    expect(sourceStore.records.has('d1')).toBe(false);
+    expect(sourceStore.bytes.has('d2')).toBe(true);
+    expect(sourceStore.records.has('d2')).toBe(true);
   });
 });

@@ -64,6 +64,11 @@ export function createDocumentEvidenceStore({ repository, clock, storageMode = '
 
     get,
 
+    async delete(documentId) {
+      if (typeof repository.delete !== 'function') throw new TypeError('document_evidence_store_delete_unsupported');
+      return repository.delete(documentId);
+    },
+
     async getBlock(documentId, blockIndex) {
       const observation = await get(documentId);
       return observation?.blocks?.[blockIndex] ?? null;

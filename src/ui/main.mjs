@@ -3322,6 +3322,16 @@ app.whenReady().then(async () => {
       sourceStore: documentQuarantineStore,
       clock: Date.now,
     });
+    void documentMemoryService.purgeExpiredDocuments()
+      .then((summary) => {
+        if (summary.purged > 0 || summary.failed > 0) {
+          void activityJournal?.append('document_retention_purge', summary);
+        }
+      })
+      .catch((error) => technicalLog.record({
+        severity: 'warning', scope: 'documents', code: 'document_retention_purge_failed',
+        message: String(error?.message ?? error).slice(0, 160),
+      }));
     documentController = {
       ...createDocumentController({
         intake: documentIntake,

@@ -55,5 +55,15 @@ export function createDocumentClassifier({ repository, clock } = {}) {
     async getProposal(proposalId) {
       return (await repository.get(proposalId)) ?? null;
     },
+
+    async listConfirmed() {
+      if (typeof repository.list !== 'function') throw new TypeError('document_classifier_list_unsupported');
+      return Object.freeze((await repository.list()).filter((record) => record?.status === 'confirmed'));
+    },
+
+    async deleteProposal(proposalId) {
+      if (typeof repository.delete !== 'function') throw new TypeError('document_classifier_delete_unsupported');
+      return repository.delete(proposalId);
+    },
   });
 }
