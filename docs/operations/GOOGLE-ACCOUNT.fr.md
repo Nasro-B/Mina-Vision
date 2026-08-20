@@ -40,9 +40,13 @@ npm run connect:google
 - Le navigateur par défaut s'ouvre sur l'écran de consentement Google — se connecter avec `mina.vision.ai@gmail.com`, accepter les permissions demandées (Gmail, Calendrier, Contacts, Tâches).
 - Une fois validé, un onglet « Compte connecté » s'affiche — le terminal confirme la connexion et le jeton chiffré est enregistré dans le coffre local.
 
-## Ce qui reste après la connexion
+## Après la connexion
 
-Les identifiants sont stockés et prêts, mais le câblage de `src/ui/main.mjs` pour utiliser réellement ce compte Gmail/Calendrier/Contacts/Tâches dans l'application n'est pas encore fait (les adaptateurs `gmail.mjs`/`google-personal.mjs` existent et sont testés, mais ne sont pas encore branchés dans le process principal — même limite documentée pour tous les domaines v4 dans `docs/superpowers/EXECUTION-LOG.md`). Ce câblage est la suite logique, pas bloqué sur toi.
+Les identifiants sont stockés dans le coffre local et le process principal compose déjà les adaptateurs
+Gmail, Calendar, Contacts et Tasks via `createGoogleRuntimeAdapters`. La capacité devient
+opérationnelle seulement si le coffre contient à la fois le client OAuth et le compte connecté ; sinon
+`npm run verify` affiche la raison exacte (`google_oauth_client_config_missing`,
+`mail_account_missing`, etc.).
 
 ## Google Home SDK (séparé, pour la maison connectée)
 

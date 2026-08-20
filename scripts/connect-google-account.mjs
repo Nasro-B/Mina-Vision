@@ -171,8 +171,8 @@ async function main() {
     case 'connected':
       console.log('\nCompte Google connecté et jeton de rafraîchissement chiffré dans le coffre local.');
       console.log(`Identifiant de compte enregistré : ${result.accountId} (Gmail, Calendrier, Contacts, Tâches).`);
-      console.log('Câblage réel dans l\'application (main.mjs) pour Gmail/Calendrier/Contacts/Tâches reste une');
-      console.log('étape séparée non encore faite — les identifiants sont prêts et attendent ce câblage.\n');
+      console.log('Le runtime principal compose déjà Gmail/Calendrier/Contacts/Tâches via ce compte.');
+      console.log('Si une capacité reste marquée dégradée, relance npm run verify pour obtenir la raison exacte.\n');
       app.exit(0);
       return;
     default:

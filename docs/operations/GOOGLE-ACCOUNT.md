@@ -60,12 +60,13 @@ npm run connect:google
 - Once validated, a "Account connected" tab appears — the terminal confirms the connection and
   the encrypted token is stored in the local vault.
 
-## What remains after connecting
+## After connecting
 
-The credentials are stored and ready, but the wiring in `src/ui/main.mjs` to actually use this
-Gmail/Calendar/Contacts/Tasks account in the application is not done yet (the
-`gmail.mjs`/`google-personal.mjs` adapters exist and are tested, but are not yet plugged into
-the main process). That wiring is the logical next step, not blocked on you.
+The credentials are stored in the local vault and the main process already composes the Gmail,
+Calendar, Contacts and Tasks adapters through `createGoogleRuntimeAdapters`. The capability becomes
+operational only when the vault contains both the OAuth client and the connected account; otherwise
+`npm run verify` prints the exact reason (`google_oauth_client_config_missing`,
+`mail_account_missing`, etc.).
 
 ## Google Home SDK (separate, for the smart home)
 
