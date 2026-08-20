@@ -18,6 +18,12 @@ export function createDocumentQuarantineStore({ filesystem, repository, quaranti
       return filesystem.readFile(pathFor(documentId));
     },
 
+    async deleteBytes(documentId) {
+      if (typeof filesystem.rm !== 'function') throw new TypeError('document_quarantine_delete_bytes_unsupported');
+      await filesystem.rm(pathFor(documentId), { force: true });
+      return true;
+    },
+
     async putRecord(item) {
       const validated = validateDocumentItem(item);
       await repository.put(validated.documentId, validated);
@@ -26,6 +32,11 @@ export function createDocumentQuarantineStore({ filesystem, repository, quaranti
 
     async getRecord(documentId) {
       return (await repository.get(documentId)) ?? null;
+    },
+
+    async deleteRecord(documentId) {
+      if (typeof repository.delete !== 'function') throw new TypeError('document_quarantine_delete_record_unsupported');
+      return repository.delete(documentId);
     },
 
     async listRecords() {

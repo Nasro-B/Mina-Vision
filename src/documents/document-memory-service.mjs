@@ -4,7 +4,7 @@ function blockIdToIndex(blockId) {
   return Number(match[1]);
 }
 
-export function createDocumentMemoryService({ classifier, evidenceStore, ragRepository, clock } = {}) {
+export function createDocumentMemoryService({ classifier, evidenceStore, ragRepository, sourceStore = null, clock } = {}) {
   if (!classifier?.getProposal) throw new TypeError('document_memory_service_classifier_required');
   if (!evidenceStore?.get || !evidenceStore?.markSelected) throw new TypeError('document_memory_service_evidence_store_required');
   if (!ragRepository?.indexChunk || !ragRepository?.countByDocument) throw new TypeError('document_memory_service_rag_repository_required');
@@ -44,9 +44,20 @@ export function createDocumentMemoryService({ classifier, evidenceStore, ragRepo
       return Object.freeze({ documentId: proposal.documentId, indexed: indexed.length });
     },
 
-    async forgetDocument(documentId) {
+    async forgetDocument(input) {
+      const request = typeof input === 'object' && input !== null ? input : { documentId: input };
+      const { documentId } = request;
       const removed = await ragRepository.deleteByDocument(documentId);
-      return Object.freeze({ documentId, chunksRemoved: removed ?? 0, sourceFileDeleted: false });
+      let sourceFileDeleted = false;
+      if (request.deleteSource === true) {
+        if (!sourceStore?.deleteBytes || !sourceStore?.deleteRecord) {
+          throw new TypeError('document_memory_source_store_required');
+        }
+        await sourceStore.deleteBytes(documentId);
+        await sourceStore.deleteRecord(documentId);
+        sourceFileDeleted = true;
+      }
+      return Object.freeze({ documentId, chunksRemoved: removed ?? 0, sourceFileDeleted });
     },
   });
 }

@@ -18,6 +18,7 @@ export function createJsonRepository({ filename, table, Database = BetterSqlite3
     ON CONFLICT(id) DO UPDATE SET record = excluded.record, updated_at = excluded.updated_at`);
   const selectOne = db.prepare(`SELECT record FROM "${table}" WHERE id = ?`);
   const selectAll = db.prepare(`SELECT record FROM "${table}"`);
+  const deleteOne = db.prepare(`DELETE FROM "${table}" WHERE id = ?`);
 
   return Object.freeze({
     async put(id, record) { upsert.run(String(id), JSON.stringify(record), Date.now()); },
@@ -26,6 +27,7 @@ export function createJsonRepository({ filename, table, Database = BetterSqlite3
       return row ? JSON.parse(row.record) : null;
     },
     async list() { return selectAll.all().map((row) => JSON.parse(row.record)); },
+    async delete(id) { return deleteOne.run(String(id)).changes > 0; },
     close: () => db.close(),
   });
 }

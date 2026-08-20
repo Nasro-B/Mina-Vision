@@ -7,6 +7,7 @@ function fakeFilesystem() {
     files,
     writeFile: vi.fn(async (path, bytes) => { files.set(path, bytes); }),
     readFile: vi.fn(async (path) => { if (!files.has(path)) throw new Error('ENOENT'); return files.get(path); }),
+    rm: vi.fn(async (path) => { files.delete(path); }),
   };
 }
 
@@ -16,6 +17,7 @@ function fakeRepository() {
     put: vi.fn(async (id, record) => { rows.set(id, record); }),
     get: vi.fn(async (id) => rows.get(id) ?? null),
     list: vi.fn(async () => [...rows.values()]),
+    delete: vi.fn(async (id) => rows.delete(id)),
   };
 }
 
@@ -90,5 +92,28 @@ describe('createDocumentQuarantineStore.findByDigest', () => {
   it('returns null when no record matches the digest', async () => {
     const store = createDocumentQuarantineStore({ filesystem: fakeFilesystem(), repository: fakeRepository() });
     expect(await store.findByDigest(`sha256:${'c'.repeat(64)}`)).toBeNull();
+  });
+});
+
+describe('createDocumentQuarantineStore: deleteBytes / deleteRecord', () => {
+  it('deletes only the targeted quarantined byte file', async () => {
+    const filesystem = fakeFilesystem();
+    const store = createDocumentQuarantineStore({ filesystem, repository: fakeRepository() });
+    await store.writeBytes('d1', Buffer.from('hello'));
+    await store.writeBytes('d2', Buffer.from('other'));
+    await expect(store.deleteBytes('d1')).resolves.toBe(true);
+    await expect(store.readBytes('d1')).rejects.toThrow('ENOENT');
+    await expect(store.readBytes('d2')).resolves.toEqual(Buffer.from('other'));
+    expect(filesystem.rm).toHaveBeenCalledWith('quarantine/d1', expect.objectContaining({ force: true }));
+  });
+
+  it('deletes only the targeted quarantine metadata record', async () => {
+    const repository = fakeRepository();
+    const store = createDocumentQuarantineStore({ filesystem: fakeFilesystem(), repository });
+    await store.putRecord(validItem({ documentId: 'd1' }));
+    await store.putRecord(validItem({ documentId: 'd2', digest: `sha256:${'b'.repeat(64)}` }));
+    await expect(store.deleteRecord('d1')).resolves.toBe(true);
+    await expect(store.getRecord('d1')).resolves.toBeNull();
+    await expect(store.getRecord('d2')).resolves.toMatchObject({ documentId: 'd2' });
   });
 });

@@ -26,6 +26,16 @@ describe('createJsonRepository', () => {
     await expect(repository.list()).resolves.toHaveLength(1);
   });
 
+  it('delete() removes one JSON record and leaves other records intact', async () => {
+    const repository = createJsonRepository({ filename: ':memory:', table: 'documents' });
+    await repository.put('d1', { documentId: 'd1' });
+    await repository.put('d2', { documentId: 'd2' });
+    await expect(repository.delete('d1')).resolves.toBe(true);
+    await expect(repository.get('d1')).resolves.toBeNull();
+    await expect(repository.list()).resolves.toEqual([{ documentId: 'd2' }]);
+    await expect(repository.delete('missing')).resolves.toBe(false);
+  });
+
   it('two different tables in the same file stay isolated', async () => {
     const { mkdtemp, rm } = await import('node:fs/promises');
     const { tmpdir } = await import('node:os');

@@ -24,6 +24,17 @@ function fakeRag() {
   };
 }
 
+function fakeSourceStore() {
+  const bytes = new Set(['d1']);
+  const records = new Set(['d1']);
+  return {
+    bytes,
+    records,
+    deleteBytes: vi.fn(async (documentId) => bytes.delete(documentId)),
+    deleteRecord: vi.fn(async (documentId) => records.delete(documentId)),
+  };
+}
+
 const observation = Object.freeze({
   documentId: 'd1', mediaType: 'application/pdf', digest: 'sha256:abc',
   blocks: [
@@ -32,13 +43,14 @@ const observation = Object.freeze({
   ],
 });
 
-async function buildWorld() {
+async function buildWorld(overrides = {}) {
   const classifier = createDocumentClassifier({ repository: fakeRepository(), clock: () => 0 });
   const evidenceStore = createDocumentEvidenceStore({ repository: fakeRepository(), clock: () => 0, storageMode: 'full' });
   await evidenceStore.store(observation);
   const rag = fakeRag();
-  const memory = createDocumentMemoryService({ classifier, evidenceStore, ragRepository: rag, clock: () => 0 });
-  return { classifier, evidenceStore, rag, memory };
+  const sourceStore = overrides.sourceStore ?? null;
+  const memory = createDocumentMemoryService({ classifier, evidenceStore, ragRepository: rag, sourceStore, clock: () => 0 });
+  return { classifier, evidenceStore, rag, memory, sourceStore };
 }
 
 describe('createDocumentMemoryService: constructor guards', () => {
@@ -101,5 +113,19 @@ describe('createDocumentMemoryService.forgetDocument', () => {
     const result = await memory.forgetDocument('d1');
     expect(result).toMatchObject({ documentId: 'd1', chunksRemoved: 2, sourceFileDeleted: false });
     expect(await rag.countByDocument('d1')).toBe(0);
+  });
+
+  it('deletes the local quarantined source only when explicitly requested', async () => {
+    const sourceStore = fakeSourceStore();
+    const { classifier, memory, rag } = await buildWorld({ sourceStore });
+    const proposal = await classifier.proposeClassification(observation);
+    await memory.indexSelection({ proposalId: proposal.id, blockIds: ['b0', 'b1'] });
+
+    const result = await memory.forgetDocument({ documentId: 'd1', deleteSource: true });
+
+    expect(result).toMatchObject({ documentId: 'd1', chunksRemoved: 2, sourceFileDeleted: true });
+    expect(await rag.countByDocument('d1')).toBe(0);
+    expect(sourceStore.bytes.has('d1')).toBe(false);
+    expect(sourceStore.records.has('d1')).toBe(false);
   });
 });
