@@ -21,20 +21,27 @@ export function createMailController({
     throw new TypeError('mail_controller_dependencies_required');
   }
 
-  async function exportAttachment({ digest, suggestedName } = {}) {
+  async function exportAttachment({ messageId, digest, suggestedName } = {}) {
     if (!DIGEST.test(digest ?? '')) throw new TypeError('mail_attachment_export_digest_invalid');
-    if (!attachmentRepository?.getAttachmentBytes || typeof confirmLocal !== 'function'
+    if (!attachmentRepository?.getAttachmentForMessage || !attachmentRepository?.getAttachmentBytes || typeof confirmLocal !== 'function'
       || typeof selectAttachmentExportPath !== 'function' || !writer?.writeAtomic) {
       throw new Error('mail_attachment_export_not_configured');
     }
+    if (typeof messageId !== 'string' || messageId.length === 0) throw new TypeError('mail_attachment_export_message_invalid');
+    const attachment = await attachmentRepository.getAttachmentForMessage({ messageId, digest });
+    if (!attachment) throw new Error('mail_attachment_unlinked');
+    if (attachment.status !== 'inspectable') throw new Error('mail_attachment_not_exportable');
     const confirmed = await confirmLocal({
       reason: 'Exporter cette pièce jointe e-mail vers un fichier local.',
-      action: { name: 'mail.attachment.export', digest },
+      action: { name: 'mail.attachment.export', messageId, digest },
     });
     if (!Boolean(confirmed?.approved ?? confirmed)) throw new Error('mail_attachment_export_refused');
     const content = await attachmentRepository.getAttachmentBytes(digest);
     if (!Buffer.isBuffer(content) || content.length < 1) throw new Error('mail_attachment_blob_missing');
-    const path = await selectAttachmentExportPath({ digest, suggestedName: safeSuggestedName(suggestedName, digest) });
+    const path = await selectAttachmentExportPath({
+      digest,
+      suggestedName: safeSuggestedName(suggestedName ?? attachment.declaredFilename, digest),
+    });
     if (typeof path !== 'string' || path.length === 0) throw new Error('mail_attachment_export_cancelled');
     const written = await writer.writeAtomic({ path, content, encoding: null });
     return Object.freeze({ exported: true, digest, path, bytes: written?.bytes ?? content.length });

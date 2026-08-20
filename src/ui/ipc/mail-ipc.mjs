@@ -28,6 +28,6 @@ export function registerMailIpc({ ipcMain, controller } = {}) {
     controller.commit(exact(payload, ['proposalId'], 'mail_ui_request_invalid').proposalId)
   ));
   ipcMain.handle('mina:mail:export-attachment', async (_event, payload) => (
-    controller.exportAttachment(objectWithOnly(payload, ['digest', 'suggestedName'], 'mail_ui_request_invalid'))
+    controller.exportAttachment(objectWithOnly(payload, ['messageId', 'digest', 'suggestedName'], 'mail_ui_request_invalid'))
   ));
 }

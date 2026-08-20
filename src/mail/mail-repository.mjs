@@ -9,10 +9,15 @@ const MIGRATIONS = Object.freeze([
   Object.freeze({ version: 2, name: 'mail_attachment_blobs', sql: MAIL_002_SQL }),
 ]);
 const ID = /^[A-Za-z0-9._:-]{1,300}$/u;
+const DIGEST = /^sha256:[a-f0-9]{64}$/u;
 const ATTACHMENT_STATUS = new Set(['inspectable', 'quarantined', 'blocked']);
 
 function migrationChecksum(migration) {
   return createHash('sha256').update(`${migration.version}\0${migration.name}\0${migration.sql}`).digest('hex');
+}
+
+function digestFor(bytes) {
+  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 }
 
 export function applyMailMigrations(db) {
@@ -72,6 +77,11 @@ export function createMailRepository({ db, encryptionKey } = {}) {
     SELECT a.digest, a.detected_type, a.status, a.size_bytes, m.declared_filename
     FROM mail_message_attachments m JOIN mail_attachments a ON a.digest = m.digest
     WHERE m.message_id = ?
+  `);
+  const findAttachmentForMessage = db.prepare(`
+    SELECT a.digest, a.detected_type, a.status, a.size_bytes, m.declared_filename
+    FROM mail_message_attachments m JOIN mail_attachments a ON a.digest = m.digest
+    WHERE m.message_id = @messageId AND m.digest = @digest
   `);
   const getCursorStmt = db.prepare('SELECT cursor_json, paused FROM mail_sync_cursors WHERE account_id = ?');
   const upsertCursorStmt = db.prepare(`
@@ -134,7 +144,8 @@ export function createMailRepository({ db, encryptionKey } = {}) {
     },
 
     async saveAttachmentBlob({ digest, bytes } = {}) {
-      if (typeof digest !== 'string' || !Buffer.isBuffer(bytes) || bytes.length < 1) throw new TypeError('mail_attachment_blob_invalid');
+      if (!DIGEST.test(digest ?? '') || !Buffer.isBuffer(bytes) || bytes.length < 1) throw new TypeError('mail_attachment_blob_invalid');
+      if (digestFor(bytes) !== digest) throw new Error('mail_attachment_blob_digest_mismatch');
       const bytesCiphertext = sealRecord({
         key, type: 'mail_attachment_blob', id: digest, value: { bytesBase64: bytes.toString('base64') },
       });
@@ -143,12 +154,26 @@ export function createMailRepository({ db, encryptionKey } = {}) {
     },
 
     async getAttachmentBytes(digest) {
-      if (typeof digest !== 'string') throw new TypeError('mail_attachment_digest_invalid');
+      if (!DIGEST.test(digest ?? '')) throw new TypeError('mail_attachment_digest_invalid');
       const row = findAttachmentBlob.get(digest);
       if (!row) return null;
       const opened = openRecord({ key, type: 'mail_attachment_blob', id: digest, ciphertext: row.bytes_ciphertext });
       if (typeof opened?.bytesBase64 !== 'string') throw new Error('mail_attachment_blob_invalid');
-      return Buffer.from(opened.bytesBase64, 'base64');
+      const bytes = Buffer.from(opened.bytesBase64, 'base64');
+      if (digestFor(bytes) !== digest) throw new Error('mail_attachment_blob_digest_mismatch');
+      return bytes;
+    },
+
+    getAttachmentForMessage({ messageId, digest } = {}) {
+      if (typeof messageId !== 'string' || !DIGEST.test(digest ?? '')) throw new TypeError('mail_attachment_link_invalid');
+      const row = findAttachmentForMessage.get({ messageId, digest });
+      return row ? Object.freeze({
+        digest: row.digest,
+        detectedType: row.detected_type,
+        status: row.status,
+        sizeBytes: row.size_bytes,
+        declaredFilename: row.declared_filename,
+      }) : null;
     },
 
     async linkAttachment({ messageId, digest, declaredFilename } = {}) {

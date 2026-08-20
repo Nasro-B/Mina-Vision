@@ -80,11 +80,15 @@ export const mailMessageRow = (message) => ({
     ? `${message.attachments.length} pièce(s) jointe(s)`
     : null].filter(Boolean).join(' · ') || null,
   actions: (Array.isArray(message?.attachments) ? message.attachments : [])
-    .filter((attachment) => DIGEST.test(attachment?.digest ?? ''))
+    .filter((attachment) => DIGEST.test(attachment?.digest ?? '') && attachment?.status === 'inspectable' && typeof message?.messageId === 'string')
     .map((attachment) => ({
       label: `Exporter ${attachment.declaredFilename ?? 'pièce jointe'}`,
       name: 'mail-export-attachment',
-      value: attachment.digest,
+      value: JSON.stringify({
+        messageId: message.messageId,
+        digest: attachment.digest,
+        suggestedName: attachment.declaredFilename ?? null,
+      }),
     })),
 });
 

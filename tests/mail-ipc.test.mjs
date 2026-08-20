@@ -3,6 +3,7 @@ import { createMailController } from '../src/ui/pages/mail-controller.mjs';
 import { registerMailIpc } from '../src/ui/ipc/mail-ipc.mjs';
 
 function harness(overrides = {}) {
+  const digest = `sha256:${'a'.repeat(64)}`;
   const deps = {
     mailAccountStore: { listStatus: vi.fn(async () => [{ accountId: 'personal-imap', provider: 'imap-smtp', mode: 3, configured: true }]) },
     mailSyncService: { pause: vi.fn(async () => {}), resume: vi.fn(async () => {}) },
@@ -10,7 +11,12 @@ function harness(overrides = {}) {
       propose: vi.fn(async (request) => ({ proposalId: 'p1', digest: 'd1', requiresConfirmation: request.action === 'send' })),
       commit: vi.fn(async () => ({ state: 'accepted_by_provider', providerMessageId: 'm1' })),
     },
-    attachmentRepository: { getAttachmentBytes: vi.fn(async () => Buffer.from('PDF bytes')) },
+    attachmentRepository: {
+      getAttachmentForMessage: vi.fn(async () => ({
+        digest, detectedType: 'pdf', status: 'inspectable', sizeBytes: 9, declaredFilename: 'devis.pdf',
+      })),
+      getAttachmentBytes: vi.fn(async () => Buffer.from('PDF bytes')),
+    },
     confirmLocal: vi.fn(async () => true),
     selectAttachmentExportPath: vi.fn(async () => 'C:\\Exports\\mail-attachment.bin'),
     writer: { writeAtomic: vi.fn(async ({ content }) => ({ bytes: content.length })) },
@@ -47,7 +53,7 @@ describe('mail controller: bounded operations', () => {
 
   it('exports one attachment by digest only after local confirmation and save-path selection', async () => {
     const { controller, deps } = harness();
-    const result = await controller.exportAttachment({ digest: `sha256:${'a'.repeat(64)}`, suggestedName: 'devis.pdf' });
+    const result = await controller.exportAttachment({ messageId: 'mail-message-1', digest: `sha256:${'a'.repeat(64)}`, suggestedName: 'devis.pdf' });
     expect(result).toEqual({
       exported: true,
       digest: `sha256:${'a'.repeat(64)}`,
@@ -57,12 +63,39 @@ describe('mail controller: bounded operations', () => {
     expect(deps.confirmLocal).toHaveBeenCalledWith(expect.objectContaining({
       action: expect.objectContaining({ name: 'mail.attachment.export', digest: `sha256:${'a'.repeat(64)}` }),
     }));
+    expect(deps.attachmentRepository.getAttachmentForMessage).toHaveBeenCalledWith({
+      messageId: 'mail-message-1',
+      digest: `sha256:${'a'.repeat(64)}`,
+    });
     expect(deps.selectAttachmentExportPath).toHaveBeenCalledWith(expect.objectContaining({ suggestedName: 'devis.pdf' }));
     expect(deps.writer.writeAtomic).toHaveBeenCalledWith({
       path: 'C:\\Exports\\mail-attachment.bin',
       content: Buffer.from('PDF bytes'),
       encoding: null,
     });
+  });
+
+  it('refuses to export a blocked or unlinked attachment before reading its bytes', async () => {
+    const getAttachmentBytes = vi.fn(async () => Buffer.from('blocked'));
+    const { controller } = harness({
+      attachmentRepository: {
+        getAttachmentForMessage: vi.fn(async () => ({
+          digest: `sha256:${'a'.repeat(64)}`,
+          detectedType: 'executable',
+          status: 'blocked',
+          sizeBytes: 9,
+          declaredFilename: 'blocked.exe',
+        })),
+        getAttachmentBytes,
+      },
+    });
+
+    await expect(controller.exportAttachment({
+      messageId: 'mail-message-1',
+      digest: `sha256:${'a'.repeat(64)}`,
+      suggestedName: 'blocked.exe',
+    })).rejects.toThrow('mail_attachment_not_exportable');
+    expect(getAttachmentBytes).not.toHaveBeenCalled();
   });
 });
 
@@ -86,7 +119,7 @@ describe('mail IPC: named allowlist only', () => {
     await expect(handlers.get('mina:mail:pause')({}, { accountId: 'personal-imap', extra: true }))
       .rejects.toThrow('mail_ui_request_invalid');
     await handlers.get('mina:mail:pause')({}, { accountId: 'personal-imap' });
-    await expect(handlers.get('mina:mail:export-attachment')({}, { digest: `sha256:${'a'.repeat(64)}`, path: 'C:\\unsafe' }))
+    await expect(handlers.get('mina:mail:export-attachment')({}, { messageId: 'mail-message-1', digest: `sha256:${'a'.repeat(64)}`, path: 'C:\\unsafe' }))
       .rejects.toThrow('mail_ui_request_invalid');
   });
 });

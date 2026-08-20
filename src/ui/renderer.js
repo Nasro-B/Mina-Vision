@@ -2485,7 +2485,8 @@ document.querySelector('#mail-results')?.addEventListener('click', async (event)
   const button = event.target.closest('button[data-action="mail-export-attachment"]');
   if (!button) return;
   try {
-    const result = await api.exportMailAttachment({ digest: button.dataset.value });
+    const request = JSON.parse(button.dataset.value || '{}');
+    const result = await api.exportMailAttachment(request);
     log(result?.exported
       ? `Pièce jointe exportée (${result.bytes} octets).`
       : 'Export de pièce jointe non effectué.');

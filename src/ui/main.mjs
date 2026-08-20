@@ -206,6 +206,7 @@ import { createCalendarService } from '../personal/calendar-service.mjs';
 import { createContactRepository } from '../personal/contact-repository.mjs';
 import { createContactService } from '../personal/contact-service.mjs';
 import { createHostWritePolicy } from '../files/host-write-policy.mjs';
+import { writeExclusiveFile } from '../files/exclusive-file-writer.mjs';
 import { createMinaFileWorkspace } from '../files/mina-file-workspace.mjs';
 import { createYouTubeDataClient } from '../media/youtube-data-client.mjs';
 
@@ -3074,7 +3075,7 @@ app.whenReady().then(async () => {
       mailService,
       searchMessages: async () => [],
       attachmentRepository: mailRepository,
-      confirmLocal: confirmSensitiveAction,
+      confirmLocal: confirmDigestAction,
       selectAttachmentExportPath: async ({ suggestedName }) => {
         const selected = await dialog.showSaveDialog(mainWindow, {
           title: 'Exporter une pièce jointe Mina Vision',
@@ -3086,14 +3087,7 @@ app.whenReady().then(async () => {
       writer: {
         writeAtomic: async ({ path: filename, content, encoding }) => {
           const authorizedFilename = await hostWritePolicy.authorize(filename);
-          const temporary = `${authorizedFilename}.${process.pid}.${randomUUID()}.tmp`;
-          try {
-            await writeFile(temporary, content, { encoding: encoding ?? undefined, flag: 'wx' });
-            await rename(temporary, authorizedFilename);
-            return { bytes: Buffer.isBuffer(content) ? content.length : Buffer.byteLength(content, encoding ?? undefined) };
-          } finally {
-            await rm(temporary, { force: true }).catch(() => {});
-          }
+          return writeExclusiveFile({ path: authorizedFilename, content, encoding });
         },
       },
     });
