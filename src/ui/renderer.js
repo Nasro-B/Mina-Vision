@@ -3,6 +3,7 @@ import { createMinaDialogue, SELF_KNOWLEDGE_FALLBACK } from '../personality/mina
 import { composeCapabilityBrief } from '../core/capability-brief.mjs';
 import { describeCircle } from '../core/domain-circles.mjs';
 import { composeJournalBrief } from '../diagnostics/journal-brief.mjs';
+import { normalizeSmartHomeIntent } from '../home/intent-normalizer.mjs';
 import {
   contactRow, homeDeviceRow, mailAccountRow, mailMessageRow, personalityRow,
   chatDeviceRow, printerRow, renderList, renderUnavailable, routineRow, taskRow,
@@ -2585,18 +2586,58 @@ const refreshHome = async () => {
 document.querySelector('#home-refresh')?.addEventListener('click', () => {
   refreshHome().catch(failed('#home-devices'));
 });
+
+const HOME_COMMAND_ALIASES = Object.freeze({
+  allumer: 'turn_on',
+  on: 'turn_on',
+  eteindre: 'turn_off',
+  off: 'turn_off',
+  etat: 'read_state',
+  status: 'read_state',
+});
+
+const normalizeHomeCommandText = (value) => {
+  const normalized = String(value ?? '').trim().toLowerCase()
+    .normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  const action = HOME_COMMAND_ALIASES[normalized] ?? normalized;
+  if (['turn_on', 'turn_off', 'read_state'].includes(action)) return action;
+  throw new TypeError('home_command_unsupported');
+};
+
+const createHomeCommandId = () => {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  window.crypto?.getRandomValues?.(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  return [...bytes].map((byte, index) => `${[4, 6, 8, 10].includes(index) ? '-' : ''}${byte.toString(16).padStart(2, '0')}`).join('');
+};
+
+const homeCommandRequest = ({ targetText, commandText }) => Object.freeze({
+  commandId: createHomeCommandId(),
+  intent: normalizeSmartHomeIntent({
+    action: normalizeHomeCommandText(commandText),
+    targetText,
+    sourceChannel: 'local_ui',
+    sessionId: 'home-ui',
+  }),
+  expiresAt: Date.now() + 60_000,
+  confirmedLocally: false,
+  offline: false,
+});
+
 // Piloter un appareil : action à EFFET réel — la politique maison et le broker décident, l'UI
 // ne fait que transmettre. Un refus est affiché tel quel, jamais masqué.
 document.querySelector('#home-execute')?.addEventListener('click', async () => {
-  const deviceId = document.querySelector('#home-target')?.value?.trim();
+  const targetText = document.querySelector('#home-target')?.value?.trim();
   const command = document.querySelector('#home-command')?.value?.trim();
-  if (!deviceId || !command) {
+  if (!targetText || !command) {
     log('Maison : indiquez l’appareil ET la commande.');
     return;
   }
   try {
-    const receipt = await api.executeHomeCommand({ deviceId, command });
-    log(`Maison : ${command} sur ${deviceId} — ${receipt?.status ?? 'transmis'}.`);
+    const receipt = await api.executeHomeCommand(homeCommandRequest({ targetText, commandText: command }));
+    log(`Maison : ${command} sur ${targetText} — ${receipt?.state ?? receipt?.status ?? 'transmis'}.`);
     await refreshHome().catch(() => {});
   } catch (error) {
     log(`Maison : ${error.message}`);
