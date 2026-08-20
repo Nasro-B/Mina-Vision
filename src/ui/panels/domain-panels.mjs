@@ -3,6 +3,7 @@
 // 2026-07-22). Aucune innerHTML non plus : le contrat de sécurité UI interdit l'injection HTML.
 
 const EMPTY = 'Rien à afficher.';
+const DIGEST = /^sha256:[a-f0-9]{64}$/u;
 
 function listItem(text, { badge = null, badgeClass = 'badge', muted = null, action = null, actions = null } = {}) {
   const item = document.createElement('li');
@@ -75,7 +76,16 @@ export const mailAccountRow = (account) => ({
 
 export const mailMessageRow = (message) => ({
   text: message?.subject ?? '(sans objet)',
-  muted: [message?.from, message?.date].filter(Boolean).join(' · ') || null,
+  muted: [message?.from, message?.date, Array.isArray(message?.attachments) && message.attachments.length > 0
+    ? `${message.attachments.length} pièce(s) jointe(s)`
+    : null].filter(Boolean).join(' · ') || null,
+  actions: (Array.isArray(message?.attachments) ? message.attachments : [])
+    .filter((attachment) => DIGEST.test(attachment?.digest ?? ''))
+    .map((attachment) => ({
+      label: `Exporter ${attachment.declaredFilename ?? 'pièce jointe'}`,
+      name: 'mail-export-attachment',
+      value: attachment.digest,
+    })),
 });
 
 export const taskRow = (task) => ({

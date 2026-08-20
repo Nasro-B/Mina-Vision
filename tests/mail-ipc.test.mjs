@@ -10,6 +10,10 @@ function harness(overrides = {}) {
       propose: vi.fn(async (request) => ({ proposalId: 'p1', digest: 'd1', requiresConfirmation: request.action === 'send' })),
       commit: vi.fn(async () => ({ state: 'accepted_by_provider', providerMessageId: 'm1' })),
     },
+    attachmentRepository: { getAttachmentBytes: vi.fn(async () => Buffer.from('PDF bytes')) },
+    confirmLocal: vi.fn(async () => true),
+    selectAttachmentExportPath: vi.fn(async () => 'C:\\Exports\\mail-attachment.bin'),
+    writer: { writeAtomic: vi.fn(async ({ content }) => ({ bytes: content.length })) },
     searchMessages: vi.fn(async () => [{ subject: 'Facture', from: 'fournisseur@example.test' }]),
     ...overrides,
   };
@@ -40,6 +44,26 @@ describe('mail controller: bounded operations', () => {
     await controller.commit(proposal.proposalId);
     expect(deps.mailService.commit).toHaveBeenCalledWith({ proposalId: 'p1' });
   });
+
+  it('exports one attachment by digest only after local confirmation and save-path selection', async () => {
+    const { controller, deps } = harness();
+    const result = await controller.exportAttachment({ digest: `sha256:${'a'.repeat(64)}`, suggestedName: 'devis.pdf' });
+    expect(result).toEqual({
+      exported: true,
+      digest: `sha256:${'a'.repeat(64)}`,
+      path: 'C:\\Exports\\mail-attachment.bin',
+      bytes: 9,
+    });
+    expect(deps.confirmLocal).toHaveBeenCalledWith(expect.objectContaining({
+      action: expect.objectContaining({ name: 'mail.attachment.export', digest: `sha256:${'a'.repeat(64)}` }),
+    }));
+    expect(deps.selectAttachmentExportPath).toHaveBeenCalledWith(expect.objectContaining({ suggestedName: 'devis.pdf' }));
+    expect(deps.writer.writeAtomic).toHaveBeenCalledWith({
+      path: 'C:\\Exports\\mail-attachment.bin',
+      content: Buffer.from('PDF bytes'),
+      encoding: null,
+    });
+  });
 });
 
 describe('mail IPC: named allowlist only', () => {
@@ -57,9 +81,12 @@ describe('mail IPC: named allowlist only', () => {
       'mina:mail:propose-draft',
       'mina:mail:propose-send',
       'mina:mail:commit',
+      'mina:mail:export-attachment',
     ]);
     await expect(handlers.get('mina:mail:pause')({}, { accountId: 'personal-imap', extra: true }))
       .rejects.toThrow('mail_ui_request_invalid');
     await handlers.get('mina:mail:pause')({}, { accountId: 'personal-imap' });
+    await expect(handlers.get('mina:mail:export-attachment')({}, { digest: `sha256:${'a'.repeat(64)}`, path: 'C:\\unsafe' }))
+      .rejects.toThrow('mail_ui_request_invalid');
   });
 });

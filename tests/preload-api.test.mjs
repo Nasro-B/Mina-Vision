@@ -70,6 +70,7 @@ describe('preload API', () => {
     await api.queryAnalytics({ from: '2026-07-01T00:00:00.000Z', to: '2026-07-15T23:59:59.999Z' });
     await api.analyticsBudgets({ type: 'daily' });
     await api.exportAnalytics({ from: '2026-07-01T00:00:00.000Z', to: '2026-07-15T23:59:59.999Z', format: 'json' });
+    await api.exportMailAttachment({ digest: `sha256:${'a'.repeat(64)}`, suggestedName: 'devis.pdf' });
     await api.connectGoogleBrowser();
     await api.searchYouTube({ query: 'Daft Punk', maxResults: 1 });
 
@@ -102,6 +103,7 @@ describe('preload API', () => {
       'mina:analytics:query',
       'mina:analytics:budgets',
       'mina:analytics:export',
+      'mina:mail:export-attachment',
       'mina:browser:google-login',
       'mina:youtube-search',
     ]);

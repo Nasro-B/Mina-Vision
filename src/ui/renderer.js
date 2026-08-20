@@ -2463,6 +2463,18 @@ document.querySelector('#mail-search')?.addEventListener('click', async () => {
     renderUnavailable('#mail-results', String(error?.message ?? error).slice(0, 160));
   }
 });
+document.querySelector('#mail-results')?.addEventListener('click', async (event) => {
+  const button = event.target.closest('button[data-action="mail-export-attachment"]');
+  if (!button) return;
+  try {
+    const result = await api.exportMailAttachment({ digest: button.dataset.value });
+    log(result?.exported
+      ? `Pièce jointe exportée (${result.bytes} octets).`
+      : 'Export de pièce jointe non effectué.');
+  } catch (error) {
+    log(`Export pièce jointe : ${String(error?.message ?? error).slice(0, 160)}`);
+  }
+});
 
 const refreshPersonal = async () => {
   await Promise.all([

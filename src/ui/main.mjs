@@ -3045,7 +3045,35 @@ app.whenReady().then(async () => {
     mailOperational = mailOperationalAccountIds.length > 0;
     const mailSyncService = createMailSyncService({ repository: mailRepository, adapters: mailAdapters });
     const mailService = createMailService({ policy: mailPolicy, adapters: mailAdapters, confirmLocal: confirmDigestAction });
-    mailController = createMailController({ mailAccountStore, mailSyncService, mailService, searchMessages: async () => [] });
+    mailController = createMailController({
+      mailAccountStore,
+      mailSyncService,
+      mailService,
+      searchMessages: async () => [],
+      attachmentRepository: mailRepository,
+      confirmLocal: confirmSensitiveAction,
+      selectAttachmentExportPath: async ({ suggestedName }) => {
+        const selected = await dialog.showSaveDialog(mainWindow, {
+          title: 'Exporter une pièce jointe Mina Vision',
+          defaultPath: suggestedName,
+          filters: [{ name: 'Tous les fichiers', extensions: ['*'] }],
+        });
+        return selected.canceled ? null : selected.filePath;
+      },
+      writer: {
+        writeAtomic: async ({ path: filename, content, encoding }) => {
+          const authorizedFilename = await hostWritePolicy.authorize(filename);
+          const temporary = `${authorizedFilename}.${process.pid}.${randomUUID()}.tmp`;
+          try {
+            await writeFile(temporary, content, { encoding: encoding ?? undefined, flag: 'wx' });
+            await rename(temporary, authorizedFilename);
+            return { bytes: Buffer.isBuffer(content) ? content.length : Buffer.byteLength(content, encoding ?? undefined) };
+          } finally {
+            await rm(temporary, { force: true }).catch(() => {});
+          }
+        },
+      },
+    });
     mailAccountStoreRef = mailAccountStore;
     mailSyncServiceRef = mailSyncService;
     mailPolicyRef = mailPolicy;

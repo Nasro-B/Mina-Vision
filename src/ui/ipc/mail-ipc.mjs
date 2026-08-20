@@ -4,6 +4,12 @@ function exact(value, fields, error) {
   return value;
 }
 
+function objectWithOnly(value, fields, error) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || Object.keys(value).some((key) => !fields.includes(key))) throw new TypeError(error);
+  return value;
+}
+
 export function registerMailIpc({ ipcMain, controller } = {}) {
   if (!ipcMain?.handle || !controller) throw new TypeError('mail_ipc_dependencies_required');
   ipcMain.handle('mina:mail:list-accounts', () => controller.listAccounts());
@@ -20,5 +26,8 @@ export function registerMailIpc({ ipcMain, controller } = {}) {
   ipcMain.handle('mina:mail:propose-send', async (_event, payload) => controller.proposeSend(payload));
   ipcMain.handle('mina:mail:commit', async (_event, payload) => (
     controller.commit(exact(payload, ['proposalId'], 'mail_ui_request_invalid').proposalId)
+  ));
+  ipcMain.handle('mina:mail:export-attachment', async (_event, payload) => (
+    controller.exportAttachment(objectWithOnly(payload, ['digest', 'suggestedName'], 'mail_ui_request_invalid'))
   ));
 }

@@ -72,6 +72,7 @@ function createPreloadApi(ipcRenderer) {
     proposeMailDraft: (request) => ipcRenderer.invoke('mina:mail:propose-draft', request),
     proposeMailSend: (request) => ipcRenderer.invoke('mina:mail:propose-send', request),
     commitMailProposal: (request) => ipcRenderer.invoke('mina:mail:commit', request),
+    exportMailAttachment: (request) => ipcRenderer.invoke('mina:mail:export-attachment', request),
     homeConnectorHealth: () => ipcRenderer.invoke('mina:home:connector-health'),
     requestHomePermission: (request) => ipcRenderer.invoke('mina:home:request-permission', request),
     discoverHomeDevices: (request) => ipcRenderer.invoke('mina:home:discover', request),
