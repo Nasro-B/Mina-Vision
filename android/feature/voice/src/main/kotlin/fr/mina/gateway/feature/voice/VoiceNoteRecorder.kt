@@ -1,6 +1,9 @@
 package fr.mina.gateway.feature.voice
 
+import android.annotation.SuppressLint
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -105,6 +108,11 @@ class VoiceNoteRecorder internal constructor(
 
         val recorder = try {
             audioRecordFactory.create()
+        } catch (error: SecurityException) {
+            endOpening()
+            audioFocus.abandon()
+            sink.discard()
+            return publish(VoiceCaptureResult.Failed("voice_audio_record_permission_refusee"))
         } catch (error: Exception) {
             endOpening()
             audioFocus.abandon()
@@ -319,15 +327,21 @@ class VoiceNoteRecorder internal constructor(
 
     companion object {
         fun create(context: Context): VoiceNoteRecorder = VoiceNoteRecorder(
-            audioRecordFactory = AndroidPcmAudioRecordFactory,
+            audioRecordFactory = AndroidPcmAudioRecordFactory(context.applicationContext),
             audioFocus = AndroidVoiceAudioFocus(context.applicationContext),
             worker = CoroutineVoiceCaptureWorker(),
         )
     }
 }
 
-private object AndroidPcmAudioRecordFactory : PcmAudioRecordFactory {
+private class AndroidPcmAudioRecordFactory(
+    private val context: Context,
+) : PcmAudioRecordFactory {
+    @SuppressLint("MissingPermission")
     override fun create(): PcmAudioRecord {
+        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            throw SecurityException("voice_record_audio_permission_missing")
+        }
         val minBuffer = AudioRecord.getMinBufferSize(
             VoicePcmFormat.SAMPLE_RATE_HZ,
             AudioFormat.CHANNEL_IN_MONO,
