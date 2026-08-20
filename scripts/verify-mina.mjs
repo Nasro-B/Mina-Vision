@@ -11,7 +11,13 @@ import { probeLmStudio } from '../src/diagnostics/lm-studio-health.mjs';
 import { loadConfig } from '../src/config.mjs';
 import { parseAuthorizedAdbTransports } from '../src/devices/adb-devices.mjs';
 import { loadGoogleClientConfigFromEnvDir } from '../src/mail/oauth/google-client-config-file.mjs';
-import { probeGoogleHomeSdk, probeMailAccounts, probeHomeDomain, resolveMailUserDataDirs } from './verify-mina-probes.mjs';
+import {
+  probeGoogleHomeSdk,
+  probeHomeDomain,
+  probeMailAccounts,
+  probeWindowsSandbox,
+  resolveMailUserDataDirs,
+} from './verify-mina-probes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 dotenv.config({ path: path.join(ROOT, '.env'), quiet: true });
@@ -65,6 +71,7 @@ const probes = {
     });
   },
   home: async () => probeHomeDomain({ env: process.env }),
+  windowsSandbox: async () => probeWindowsSandbox({ env: process.env }),
   firebase: async () => ({
     ...await probeFirebaseBackupConfiguration({
       projectId: process.env.FIREBASE_PROJECT_ID?.trim(),
@@ -85,6 +92,7 @@ function capabilitiesFromHealth(report) {
     'home': capabilityFromReadiness({ id: 'home', implemented: true, probe: report.home }),
     mail: capabilityFromReadiness({ id: 'mail', implemented: true, probe: report.mailAccounts }),
     'backup.firebase': capabilityFromReadiness({ id: 'backup.firebase', implemented: true, probe: report.firebase }),
+    sandbox: capabilityFromReadiness({ id: 'sandbox', implemented: true, probe: report.windowsSandbox }),
   });
 }
 

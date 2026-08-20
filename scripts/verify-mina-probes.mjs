@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { composeHomeDomain } from '../src/home/compose-home-domain.mjs';
+import { createRuntimeManifest } from '../src/sandbox/runtime-manifest.mjs';
+import { createDefaultWindowsSandboxProbes } from '../src/sandbox/windows-sandbox.mjs';
+import { resolveStorageRoots } from '../src/system/storage-roots.mjs';
 
 const GOOGLE_OAUTH_CLIENT_CONFIG_SECRET = 'google/oauth/client-config';
 const MAIL_ACCOUNT_PREFIX = 'mail/account/';
@@ -103,6 +106,59 @@ export async function probeGoogleHomeSdk({
   } catch {
     return { ready: false, reason: 'google_home_sdk_unavailable', expectedPath: sdkPath, manifestPath };
   }
+}
+
+export async function probeWindowsSandbox({
+  env = process.env,
+  platform = process.platform,
+  userDataPath,
+  sandboxExecutable = 'C:\\Windows\\System32\\WindowsSandbox.exe',
+  probes,
+  runPowerShell,
+} = {}) {
+  if (platform !== 'win32') return { ready: false, reason: 'windows_required' };
+
+  const resolvedUserData = userDataPath?.trim?.()
+    || env.MINA_USERDATA_PATH?.trim?.()
+    || (env.APPDATA?.trim?.() ? path.join(env.APPDATA.trim(), 'Mina Vision') : null);
+  if (!resolvedUserData) return { ready: false, reason: 'sandbox_user_data_unavailable' };
+
+  const roots = resolveStorageRoots({ userDataPath: resolvedUserData, env });
+  const manifestPath = path.join(roots.sandboxRuntimeRoot, 'runtime-manifest.json');
+  const runtimeManifest = createRuntimeManifest({ manifestPath, runtimeRoot: roots.sandboxRuntimeRoot });
+  const activeProbes = probes ?? createDefaultWindowsSandboxProbes({
+    sandboxExecutable,
+    workspaceRoot: roots.sandboxRoot,
+    runtimeManifest,
+    ...(runPowerShell ? { runPowerShell } : {}),
+  });
+
+  const checks = [];
+  for (const [probe, reason] of [
+    ['feature', 'windows_sandbox_feature_disabled'],
+    ['executable', 'windows_sandbox_executable_missing'],
+    ['virtualization', 'virtualization_unavailable'],
+    ['ntfs', 'sandbox_workspace_not_ntfs'],
+    ['runtimes', 'sandbox_runtimes_unavailable'],
+  ]) {
+    try {
+      const passed = await activeProbes[probe]();
+      checks.push({ name: probe, ready: passed === true });
+      if (passed !== true) {
+        const output = { ready: false, reason, checks, sandboxRoot: roots.sandboxRoot, sandboxRuntimeRoot: roots.sandboxRuntimeRoot };
+        if (probe === 'runtimes') {
+          const runtimeCheck = await runtimeManifest.verify();
+          output.runtimeReason = runtimeCheck.reason;
+          output.manifestPath = manifestPath;
+        }
+        return output;
+      }
+    } catch {
+      return { ready: false, reason: `sandbox_probe_failed:${probe}`, checks, sandboxRoot: roots.sandboxRoot, sandboxRuntimeRoot: roots.sandboxRuntimeRoot };
+    }
+  }
+
+  return { ready: true, checks, sandboxRoot: roots.sandboxRoot, sandboxRuntimeRoot: roots.sandboxRuntimeRoot, manifestPath };
 }
 
 export function probeHomeDomain({ env = process.env } = {}) {

@@ -6,6 +6,7 @@ import {
   probeGoogleHomeSdk,
   probeHomeDomain,
   probeMailAccounts,
+  probeWindowsSandbox,
   resolveGoogleHomeSdkPath,
   resolveMailUserDataDirs,
 } from '../scripts/verify-mina-probes.mjs';
@@ -157,6 +158,90 @@ describe('verify-mina probes: google home sdk', () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('verify-mina probes: Windows Sandbox', () => {
+  it('reports a non-Windows host without touching system probes', async () => {
+    const probes = {
+      feature: async () => { throw new Error('not-called'); },
+    };
+    await expect(probeWindowsSandbox({ platform: 'linux', probes })).resolves
+      .toEqual({ ready: false, reason: 'windows_required' });
+  });
+
+  it('reports the first failing sandbox probe with bounded paths', async () => {
+    await expect(probeWindowsSandbox({
+      platform: 'win32',
+      userDataPath: 'C:\\Users\\Test\\AppData\\Roaming\\Mina Vision',
+      env: {},
+      probes: {
+        feature: async () => true,
+        executable: async () => true,
+        virtualization: async () => false,
+        ntfs: async () => { throw new Error('not-called'); },
+        runtimes: async () => { throw new Error('not-called'); },
+      },
+    })).resolves.toMatchObject({
+      ready: false,
+      reason: 'virtualization_unavailable',
+      sandboxRoot: 'C:\\Users\\Test\\AppData\\Roaming\\Mina Vision\\cache\\sandbox',
+      sandboxRuntimeRoot: 'C:\\Users\\Test\\AppData\\Roaming\\Mina Vision\\cache\\sandbox-runtime',
+      checks: [
+        { name: 'feature', ready: true },
+        { name: 'executable', ready: true },
+        { name: 'virtualization', ready: false },
+      ],
+    });
+  });
+
+  it('reports missing runtimes with the manifest reason', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'mina-verify-sandbox-'));
+    try {
+      await expect(probeWindowsSandbox({
+        platform: 'win32',
+        userDataPath: root,
+        env: {},
+        probes: {
+          feature: async () => true,
+          executable: async () => true,
+          virtualization: async () => true,
+          ntfs: async () => true,
+          runtimes: async () => false,
+        },
+      })).resolves.toMatchObject({
+        ready: false,
+        reason: 'sandbox_runtimes_unavailable',
+        runtimeReason: 'runtime_manifest_invalid',
+        manifestPath: path.join(root, 'cache', 'sandbox-runtime', 'runtime-manifest.json'),
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('marks sandbox ready when every non-destructive probe passes', async () => {
+    await expect(probeWindowsSandbox({
+      platform: 'win32',
+      userDataPath: 'C:\\MinaData',
+      env: {},
+      probes: {
+        feature: async () => true,
+        executable: async () => true,
+        virtualization: async () => true,
+        ntfs: async () => true,
+        runtimes: async () => true,
+      },
+    })).resolves.toMatchObject({
+      ready: true,
+      checks: [
+        { name: 'feature', ready: true },
+        { name: 'executable', ready: true },
+        { name: 'virtualization', ready: true },
+        { name: 'ntfs', ready: true },
+        { name: 'runtimes', ready: true },
+      ],
+    });
   });
 });
 
