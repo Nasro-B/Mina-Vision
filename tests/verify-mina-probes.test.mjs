@@ -63,6 +63,32 @@ describe('verify-mina probes: mail', () => {
       await rm(second, { recursive: true, force: true });
     }
   });
+
+  it('exposes non-sensitive OAuth project details when the account is not connected', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'mina-verify-mail-'));
+    try {
+      await writeFile(path.join(root, 'mina-keyring.json'), JSON.stringify({
+        version: 1,
+        secrets: { 'google/oauth/client-config': '{}' },
+      }), 'utf8');
+
+      const result = await probeMailAccounts({
+        userDataDirs: [root],
+        googleClientConfig: { projectId: 'mina-vission' },
+        firebaseProjectId: 'mina-vision',
+      });
+
+      expect(result).toEqual({
+        ready: false,
+        reason: 'mail_account_missing',
+        oauthProjectId: 'mina-vission',
+        firebaseProjectId: 'mina-vision',
+        oauthProjectMatchesFirebase: false,
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('verify-mina probes: home', () => {

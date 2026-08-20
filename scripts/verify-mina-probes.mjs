@@ -36,6 +36,19 @@ export function resolveGoogleHomeSdkPath({ env = process.env } = {}) {
   return path.join(userProfile, '.mina', 'sdk', 'google-home', '1.9');
 }
 
+function mailOAuthDetails({ googleClientConfig, firebaseProjectId } = {}) {
+  const oauthProjectId = googleClientConfig?.projectId?.trim();
+  const targetFirebaseProjectId = firebaseProjectId?.trim();
+  if (!oauthProjectId) return {};
+  return {
+    oauthProjectId,
+    ...(targetFirebaseProjectId ? {
+      firebaseProjectId: targetFirebaseProjectId,
+      oauthProjectMatchesFirebase: oauthProjectId === targetFirebaseProjectId,
+    } : {}),
+  };
+}
+
 async function readJsonFile(filename, read = readFile) {
   try {
     const raw = await read(filename, 'utf8');
@@ -49,8 +62,11 @@ async function readJsonFile(filename, read = readFile) {
 export async function probeMailAccounts({
   userDataDirs = resolveMailUserDataDirs(),
   readFileImpl = readFile,
+  googleClientConfig,
+  firebaseProjectId,
 } = {}) {
   if (!Array.isArray(userDataDirs)) throw new TypeError('mail_probe_user_data_dirs_invalid');
+  const oauthDetails = mailOAuthDetails({ googleClientConfig, firebaseProjectId });
 
   let lastReason = 'mail_keyring_missing';
   for (const userDataDir of userDataDirs) {
@@ -67,8 +83,8 @@ export async function probeMailAccounts({
     const hasClientConfig = Object.hasOwn(secrets, GOOGLE_OAUTH_CLIENT_CONFIG_SECRET);
     if (!hasClientConfig) return { ready: false, reason: 'google_oauth_client_config_missing' };
     const hasMailAccount = Object.keys(secrets).some((key) => key.startsWith(MAIL_ACCOUNT_PREFIX));
-    if (!hasMailAccount) return { ready: false, reason: 'mail_account_missing' };
-    return { ready: true };
+    if (!hasMailAccount) return { ready: false, reason: 'mail_account_missing', ...oauthDetails };
+    return { ready: true, ...oauthDetails };
   }
 
   return { ready: false, reason: lastReason };

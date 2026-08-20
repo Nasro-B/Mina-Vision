@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -9,6 +10,7 @@ import { probeFirebaseBackupConfiguration } from '../src/diagnostics/firebase-he
 import { probeLmStudio } from '../src/diagnostics/lm-studio-health.mjs';
 import { loadConfig } from '../src/config.mjs';
 import { parseAuthorizedAdbTransports } from '../src/devices/adb-devices.mjs';
+import { loadGoogleClientConfigFromEnvDir } from '../src/mail/oauth/google-client-config-file.mjs';
 import { probeGoogleHomeSdk, probeMailAccounts, probeHomeDomain, resolveMailUserDataDirs } from './verify-mina-probes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,7 +57,12 @@ const probes = {
   },
   mailAccounts: async () => {
     const userDataDirs = resolveMailUserDataDirs();
-    return probeMailAccounts({ userDataDirs });
+    const googleClientConfig = loadGoogleClientConfigFromEnvDir(path.join(ROOT, 'env'), { readdirSync, readFileSync });
+    return probeMailAccounts({
+      userDataDirs,
+      googleClientConfig,
+      firebaseProjectId: process.env.FIREBASE_PROJECT_ID?.trim(),
+    });
   },
   home: async () => probeHomeDomain({ env: process.env }),
   firebase: async () => ({
