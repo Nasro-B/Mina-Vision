@@ -143,6 +143,8 @@ import { createDocumentDestinationResolver } from '../documents/document-destina
 import { createDocumentParserRegistry } from '../documents/document-parser-registry.mjs';
 import { createDocumentEvidenceStore } from '../documents/document-evidence-store.mjs';
 import { createDocumentClassifier } from '../documents/document-classifier.mjs';
+import { createDocumentMemoryService } from '../documents/document-memory-service.mjs';
+import { createDocumentRagRepository } from '../documents/document-rag-repository.mjs';
 import { createPdfTextDocumentParser, createImageOcrDocumentParser } from '../documents/local-document-parsers.mjs';
 import { createPdfPageRasterizer, createPdfScannedOcrFallback } from '../documents/pdf-scanned-ocr.mjs';
 import { createDocumentController } from './pages/document-controller.mjs';
@@ -214,6 +216,16 @@ const APP_ICON = path.join(
   ROOT_DIR, 'assets', 'Logo',
   process.platform === 'win32' ? 'mina-vision.ico' : 'mina-vision-256.png',
 );
+
+function deriveDocumentRagKey(masterKey) {
+  const source = Buffer.from(masterKey ?? []);
+  try {
+    if (source.length !== 32) return null;
+    return Buffer.from(hkdfSync('sha256', source, Buffer.from('Mina Vision local memory v1', 'utf8'), Buffer.from('document-rag', 'utf8'), 32));
+  } finally {
+    source.fill(0);
+  }
+}
 
 // Ramène la fenêtre au premier plan (la recrée si elle a été détruite) — utilisée par le tray et
 // le clic sur l'icône du bureau (second-instance).
@@ -377,6 +389,7 @@ let printerRepository = null;
 let documentQuarantineRepository = null;
 let documentEvidenceRepository = null;
 let documentClassificationRepository = null;
+let documentRagRepository = null;
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
@@ -3288,12 +3301,26 @@ app.whenReady().then(async () => {
       filename: path.join(app.getPath('userData'), 'mina-document-classifications.sqlite'), table: 'classifications', nativeBinding,
     });
     const classifier = createDocumentClassifier({ repository: documentClassificationRepository, clock: Date.now });
+    documentRagRepository = createJsonRepository({
+      filename: path.join(app.getPath('userData'), 'mina-document-rag.sqlite'), table: 'chunks', nativeBinding,
+    });
+    const documentMemoryService = createDocumentMemoryService({
+      classifier,
+      evidenceStore,
+      ragRepository: createDocumentRagRepository({
+        repository: documentRagRepository,
+        getEncryptionKey: () => deriveDocumentRagKey(chatMasterKey),
+      }),
+      sourceStore: documentQuarantineStore,
+      clock: Date.now,
+    });
     documentController = {
       ...createDocumentController({
         intake: documentIntake,
         parserRegistry,
         evidenceStore,
         classifier,
+        memoryService: documentMemoryService,
         printService,
         printerRegistry,
       }),
@@ -3301,7 +3328,7 @@ app.whenReady().then(async () => {
       // qui portent la confirmation locale (voir document-ipc.mjs).
       registerPrinting: false,
     };
-    reportCapability('documents', 'degraded', 'document_memory_form_conversion_download_not_configured');
+    reportCapability('documents', 'degraded', 'document_form_conversion_download_not_configured');
     reportCapability('printing', 'degraded', 'printing_physical_receipt_unverified');
   });
 
@@ -3654,6 +3681,7 @@ app.on('before-quit', (event) => {
     documentQuarantineRepository?.close();
     documentEvidenceRepository?.close();
     documentClassificationRepository?.close();
+    documentRagRepository?.close();
     if (personalCalendarDatabase?.open) personalCalendarDatabase.close();
     if (browserExecutor) await browserExecutor.close();
     if (researchBrowser) await researchBrowser.close();

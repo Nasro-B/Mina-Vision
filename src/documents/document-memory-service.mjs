@@ -7,7 +7,9 @@ function blockIdToIndex(blockId) {
 export function createDocumentMemoryService({ classifier, evidenceStore, ragRepository, sourceStore = null, clock } = {}) {
   if (!classifier?.getProposal) throw new TypeError('document_memory_service_classifier_required');
   if (!evidenceStore?.get || !evidenceStore?.markSelected) throw new TypeError('document_memory_service_evidence_store_required');
-  if (!ragRepository?.indexChunk || !ragRepository?.countByDocument) throw new TypeError('document_memory_service_rag_repository_required');
+  if (!ragRepository?.indexChunk || !ragRepository?.countByDocument || !ragRepository?.deleteByDocument) {
+    throw new TypeError('document_memory_service_rag_repository_required');
+  }
   if (!clock || (typeof clock !== 'function' && typeof clock.now !== 'function')) {
     throw new TypeError('document_memory_service_clock_required');
   }

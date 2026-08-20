@@ -59,6 +59,13 @@ describe('createDocumentMemoryService: constructor guards', () => {
     expect(() => createDocumentMemoryService({ evidenceStore, ragRepository: rag, clock: () => 0 }))
       .toThrow('document_memory_service_classifier_required');
   });
+
+  it('requires RAG deletion support because forgetDocument cascades chunk removal', async () => {
+    const { classifier, evidenceStore, rag } = await buildWorld();
+    delete rag.deleteByDocument;
+    expect(() => createDocumentMemoryService({ classifier, evidenceStore, ragRepository: rag, clock: () => 0 }))
+      .toThrow('document_memory_service_rag_repository_required');
+  });
 });
 
 describe('createDocumentMemoryService.indexSelection: nothing is indexed until explicitly selected', () => {
