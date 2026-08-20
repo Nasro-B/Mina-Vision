@@ -32,6 +32,16 @@ if (-not (Test-Path -LiteralPath $electronPath)) {
   if ($LASTEXITCODE -ne 0) { throw 'Installation du binaire Electron échouée.' }
 }
 
+$runtimeScript = Join-Path $ProjectRoot 'scripts\prepare-electron-runtime.mjs'
+if (Test-Path -LiteralPath $runtimeScript) {
+  $runtimeJson = & node $runtimeScript
+  if ($LASTEXITCODE -ne 0) { throw 'Préparation du runtime Electron Mina échouée.' }
+  $runtimeResult = $runtimeJson | ConvertFrom-Json
+  if ($runtimeResult.ok -and $runtimeResult.exe -and (Test-Path -LiteralPath $runtimeResult.exe)) {
+    $electronPath = $runtimeResult.exe
+  }
+}
+
 $arguments = @('.')
 if ($Smoke) { $arguments += '--mina-smoke' }
 $process = Start-Process -FilePath $electronPath -ArgumentList $arguments -WorkingDirectory $ProjectRoot -WindowStyle Normal -PassThru

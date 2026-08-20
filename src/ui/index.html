@@ -70,7 +70,7 @@
             <button id="welcome-mem-init" class="primary-button" type="button">Initialiser la mémoire</button>
           </div>
           <div id="welcome-mem-repair" class="welcome-repair" hidden>
-            <p class="welcome-warn">⚠️ Une mémoire existe déjà mais elle est <strong>illisible</strong> (le chiffrement Windows a changé et la phrase de récupération n'a pas été notée). Elle sera <strong>archivée, jamais supprimée</strong>, et Mina repartira sur une mémoire neuve.</p>
+            <p class="welcome-warn"><span class="alert-mark" aria-hidden="true">!</span> Une mémoire existe déjà mais elle est <strong>illisible</strong> (le chiffrement Windows a changé et la phrase de récupération n'a pas été notée). Elle sera <strong>archivée, jamais supprimée</strong>, et Mina repartira sur une mémoire neuve.</p>
             <button id="welcome-mem-reinit" class="danger-button" type="button">Repartir sur une mémoire neuve</button>
           </div>
           <pre id="welcome-phrase" class="welcome-phrase" hidden></pre>
@@ -276,7 +276,7 @@
               <button class="ghost-button" id="profile-toggle" type="button" aria-expanded="true" aria-controls="profile-collapsible">
                 <span id="profile-toggle-label">Masquer</span>
               </button>
-              <button id="profile-save" type="button">Enregistrer</button>
+              <button id="profile-save" class="action-button primary compact" type="button">Enregistrer</button>
             </div>
           </div>
           <div class="collapsible" id="profile-collapsible">
@@ -360,7 +360,7 @@
             <button class="ghost-button" id="settings-toggle" type="button" aria-expanded="true" aria-controls="settings-collapsible">
               <span id="settings-toggle-label">Masquer</span>
             </button>
-            <button id="settings-save" type="button">Enregistrer dans .env</button>
+            <button id="settings-save" class="action-button primary compact" type="button">Enregistrer dans .env</button>
           </div>
         </div>
         <div class="collapsible" id="settings-collapsible">
@@ -399,18 +399,18 @@
             <div class="memory-controls">
               <label for="recovery-phrase" class="visually-hidden">Phrase de récupération du coffre mémoire</label>
               <input id="recovery-phrase" type="password" autocomplete="off" placeholder="Phrase de récupération (si nécessaire)">
-              <button id="memory-initialize" type="button">Initialiser</button>
-              <button id="memory-unlock" type="button">Déverrouiller</button>
-              <button id="memory-lock" type="button">Verrouiller</button>
+              <button id="memory-initialize" class="action-button ghost compact" type="button">Initialiser</button>
+              <button id="memory-unlock" class="action-button primary compact" type="button">Déverrouiller</button>
+              <button id="memory-lock" class="action-button ghost compact" type="button">Verrouiller</button>
             </div>
             <pre id="recovery-output" class="recovery-output" hidden></pre>
             <div class="source-grid">
               <label><span>Recherche mémoire</span><input id="memory-query" type="search" maxlength="1000" placeholder="Ex. rendez-vous mardi"></label>
-              <button id="memory-search" type="button">Rechercher</button>
+              <button id="memory-search" class="action-button primary compact" type="button">Rechercher</button>
               <label><span>Lire un fichier</span><input id="file-path" type="text" maxlength="4000" placeholder="C:\Documents\note.pdf"></label>
-              <button id="file-read" type="button">Lire</button>
+              <button id="file-read" class="action-button ghost compact" type="button">Lire</button>
               <label><span>Lire une page web</span><input id="web-url" type="url" maxlength="4000" placeholder="https://example.com"></label>
-              <button id="web-read" type="button">Lire</button>
+              <button id="web-read" class="action-button ghost compact" type="button">Lire</button>
             </div>
             <ol id="memory-results" class="memory-results" aria-live="polite"></ol>
             <div class="settings-mode-row">
@@ -430,9 +430,9 @@
               <span id="analytics-toggle-label">Masquer</span>
             </button>
             <div class="sandbox-actions">
-              <button id="analytics-refresh" type="button">Actualiser</button>
-              <button id="analytics-export-csv" type="button">Exporter CSV</button>
-              <button id="analytics-export-json" type="button">Exporter JSON</button>
+              <button id="analytics-refresh" class="action-button ghost compact" type="button">Actualiser</button>
+              <button id="analytics-export-csv" class="action-button ghost compact" type="button">Exporter CSV</button>
+              <button id="analytics-export-json" class="action-button ghost compact" type="button">Exporter JSON</button>
             </div>
           </div>
         </div>
@@ -496,8 +496,8 @@
           <div class="collapsible-inner">
             <p id="sandbox-remediation" class="sandbox-remediation"></p>
             <div class="sandbox-actions">
-              <button id="choose-skill" type="button">Auditer un skill ZIP</button>
-              <button id="install-skill" type="button" disabled>Installer après validation</button>
+              <button id="choose-skill" class="action-button primary compact" type="button">Auditer un skill ZIP</button>
+              <button id="install-skill" class="action-button ghost compact" type="button" disabled>Installer après validation</button>
               <span>Les chemins et le code ne traversent jamais le renderer pour l’installation ou l’exécution.</span>
             </div>
             <pre id="quarantine-report" class="recovery-output" hidden></pre>
@@ -519,7 +519,7 @@
             <button class="ghost-button section-toggle" id="automation-toggle" type="button" aria-expanded="true" aria-controls="automation-collapsible">
               <span id="automation-toggle-label">Masquer</span>
             </button>
-            <button id="automation-refresh" type="button">Actualiser</button>
+            <button id="automation-refresh" class="action-button ghost compact" type="button">Actualiser</button>
           </div>
         </div>
         <div class="collapsible" id="automation-collapsible">
@@ -537,7 +537,7 @@
             <button class="ghost-button section-toggle" id="extensions-toggle" type="button" aria-expanded="true" aria-controls="extensions-collapsible">
               <span id="extensions-toggle-label">Masquer</span>
             </button>
-            <button id="extensions-refresh" type="button">Actualiser</button>
+            <button id="extensions-refresh" class="action-button ghost compact" type="button">Actualiser</button>
           </div>
         </div>
         <div class="collapsible" id="extensions-collapsible">
@@ -636,7 +636,7 @@
             <button class="ghost-button section-toggle" id="today-toggle" type="button" aria-expanded="true" aria-controls="today-collapsible">
               <span id="today-toggle-label">Masquer</span>
             </button>
-            <button id="today-refresh" type="button">Actualiser</button>
+            <button id="today-refresh" class="action-button ghost compact" type="button">Actualiser</button>
           </div>
         </div>
         <div class="collapsible" id="today-collapsible">

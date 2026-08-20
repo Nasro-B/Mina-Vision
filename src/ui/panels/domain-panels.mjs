@@ -27,7 +27,7 @@ function listItem(text, { badge = null, badgeClass = 'badge', muted = null, acti
     if (!entry?.label || !entry?.name) continue;
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'ghost-button';
+    button.className = 'action-button ghost compact';
     button.textContent = entry.label;
     button.dataset.action = entry.name;
     button.dataset.value = String(entry.value ?? '');

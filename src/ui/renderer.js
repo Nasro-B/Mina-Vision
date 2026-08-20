@@ -633,6 +633,26 @@ const renderMemoryItems = (items, kind = 'memory') => {
 
 const refreshMemoryStatus = async () => updateMemoryStatus(await api.memoryStatus());
 
+const showMemoryRecoveryPhrase = (phrase) => {
+  elements.recoveryOutput.hidden = false;
+  elements.recoveryOutput.textContent = `À conserver hors du PC — affichée une seule fois :\n${phrase}`;
+};
+
+const repairUnrecoverableMemoryIfNeeded = async () => {
+  if (typeof api.probeMemory !== 'function' || typeof api.reinitializeMemoryFresh !== 'function') return false;
+  const probe = await api.probeMemory();
+  if (probe?.state !== 'dpapi_unrecoverable') return false;
+  const result = await api.reinitializeMemoryFresh();
+  if (!result?.ok) {
+    log(`Ré-initialisation mémoire refusée : ${result?.reason ?? 'inconnu'}`);
+    return true;
+  }
+  showMemoryRecoveryPhrase(result.recoveryPhrase);
+  await refreshMemoryStatus();
+  log('Mémoire Mina Vision réinitialisée et déverrouillée. Sauvegardez la nouvelle phrase hors du PC.');
+  return true;
+};
+
 const settingValue = (key, state) => {
   const providers = state.config.providers;
   const values = {
@@ -752,6 +772,7 @@ const refreshSettings = async () => {
       card.append(secretInput);
       const save = document.createElement('button');
       save.type = 'button';
+      save.className = 'action-button primary compact';
       save.textContent = 'Chiffrer le secret';
       save.addEventListener('click', async () => {
         try {
@@ -765,6 +786,7 @@ const refreshSettings = async () => {
       card.append(save);
       const revoke = document.createElement('button');
       revoke.type = 'button';
+      revoke.className = 'action-button danger compact';
       revoke.textContent = 'Révoquer localement';
       revoke.disabled = !configured;
       revoke.addEventListener('click', async () => { await api.revokeProviderSecret({ providerId: provider.id }); await refreshSettings(); });
@@ -772,6 +794,7 @@ const refreshSettings = async () => {
     }
     const test = document.createElement('button');
     test.type = 'button';
+    test.className = 'action-button ghost compact';
     test.textContent = 'Valider la configuration';
     test.addEventListener('click', async () => {
       try { await api.testProvider({ providerId: provider.id }); log(`Configuration ${provider.id} valide.`); }
@@ -904,6 +927,7 @@ const listEntry = (title, detail, buttonLabel, onClick, disabled = false) => {
   if (buttonLabel) {
     const button = document.createElement('button');
     button.type = 'button';
+    button.className = 'action-button ghost compact';
     button.textContent = buttonLabel;
     button.disabled = disabled;
     button.addEventListener('click', () => { void onClick(); });
@@ -2095,10 +2119,10 @@ elements.memoryInitialize.addEventListener('click', async () => {
   try {
     const state = await api.initializeMemory();
     updateMemoryStatus(state);
-    elements.recoveryOutput.hidden = false;
-    elements.recoveryOutput.textContent = `À conserver hors du PC — affichée une seule fois :\n${state.recoveryPhrase}`;
+    showMemoryRecoveryPhrase(state.recoveryPhrase);
     log('Mémoire Mina Vision initialisée et déverrouillée. Sauvegardez la phrase de récupération hors du PC.');
   } catch (error) {
+    if (await repairUnrecoverableMemoryIfNeeded()) return;
     log(`Mémoire : ${error.message}`);
   }
 });
