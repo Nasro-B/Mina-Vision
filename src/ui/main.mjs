@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { createHash, createPublicKey, hkdfSync, randomUUID } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { access, appendFile, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { access, appendFile, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, safeStorage, screen, session, Tray } from 'electron';
@@ -147,8 +147,11 @@ import { createDocumentClassifier } from '../documents/document-classifier.mjs';
 import { createDocumentMemoryService } from '../documents/document-memory-service.mjs';
 import { createDocumentRagRepository } from '../documents/document-rag-repository.mjs';
 import { createFormService } from '../documents/form-service.mjs';
+import { createDocumentConverter } from '../documents/document-converter.mjs';
+import { createLibreOfficeDocumentConversionPort } from '../documents/libreoffice-document-conversion-port.mjs';
 import { createDownloadService } from '../documents/download-service.mjs';
 import { createHttpDocumentDownloadPort } from '../documents/http-download-port.mjs';
+import { createLibreOfficeConverter } from '../publication/libreoffice-converter.mjs';
 import { createPdfTextDocumentParser, createImageOcrDocumentParser } from '../documents/local-document-parsers.mjs';
 import { createPdfPageRasterizer, createPdfScannedOcrFallback } from '../documents/pdf-scanned-ocr.mjs';
 import { createDocumentController } from './pages/document-controller.mjs';
@@ -213,6 +216,7 @@ import { createHostWritePolicy } from '../files/host-write-policy.mjs';
 import { writeExclusiveFile } from '../files/exclusive-file-writer.mjs';
 import { createMinaFileWorkspace } from '../files/mina-file-workspace.mjs';
 import { createYouTubeDataClient } from '../media/youtube-data-client.mjs';
+import { createCommandRunner } from '../code/run-command.mjs';
 
 const UI_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(UI_DIR, '../..');
@@ -239,6 +243,22 @@ function deriveDocumentRagKey(masterKey) {
 
 function deriveDocumentQuarantineKey(masterKey) {
   return deriveDocumentLocalKey(masterKey, 'document-quarantine');
+}
+
+function resolveMinaDocumentOutputPath(filename) {
+  if (path.isAbsolute(filename)) return filename;
+  const root = path.resolve(app.getPath('documents'), 'Mina Vision');
+  const target = path.resolve(root, filename);
+  if (target !== root && !target.startsWith(`${root}${path.sep}`)) throw new Error('document_output_path_escape');
+  return target;
+}
+
+function findLibreOfficeExecutable() {
+  const candidates = [
+    path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'LibreOffice', 'program', 'soffice.exe'),
+    path.join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'LibreOffice', 'program', 'soffice.exe'),
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
 }
 
 // Ramène la fenêtre au premier plan (la recrée si elle a été détruite) — utilisée par le tray et
@@ -3353,6 +3373,29 @@ app.whenReady().then(async () => {
       confirmationService: { confirm: async ({ reason }) => confirmSensitiveAction({ reason, action: { name: 'documents.form_fill' } }) },
       clock: Date.now,
     });
+    const commandRunner = createCommandRunner();
+    const documentConversionService = createDocumentConverter({
+      conversionPort: createLibreOfficeDocumentConversionPort({
+        libreOfficeConverter: createLibreOfficeConverter({
+          runProcess: (command, args, options = {}) => commandRunner.run(command, args, { timeout: options.timeoutMs }),
+          access,
+          readFile,
+          hash: (bytes) => createHash('sha256').update(bytes).digest('hex'),
+          sofficePath: findLibreOfficeExecutable(),
+        }),
+        makeTempDir: () => mkdtemp(path.join(app.getPath('temp'), 'mina-document-conversion-')),
+        readFile,
+        removeDir: (directory) => rm(directory, { recursive: true, force: true }),
+      }),
+      fileWriter: {
+        writeAtomic: async ({ path: filename, content, encoding }) => {
+          const authorizedFilename = await hostWritePolicy.authorize(resolveMinaDocumentOutputPath(filename));
+          await mkdir(path.dirname(authorizedFilename), { recursive: true });
+          return writeExclusiveFile({ path: authorizedFilename, content, encoding });
+        },
+      },
+      clock: Date.now,
+    });
     const documentDownloadService = createDownloadService({
       browserDownloadPort: createHttpDocumentDownloadPort(),
       filesystem: {
@@ -3393,6 +3436,7 @@ app.whenReady().then(async () => {
         classifier,
         memoryService: documentMemoryService,
         formService: documentFormService,
+        converter: documentConversionService,
         downloadService: documentDownloadService,
         printService,
         printerRegistry,
@@ -3401,7 +3445,7 @@ app.whenReady().then(async () => {
       // qui portent la confirmation locale (voir document-ipc.mjs).
       registerPrinting: false,
     };
-    reportCapability('documents', 'degraded', 'document_form_commit_conversion_not_configured');
+    reportCapability('documents', 'degraded', 'document_form_commit_not_configured');
     reportCapability('printing', 'degraded', 'printing_physical_receipt_unverified');
   });
 

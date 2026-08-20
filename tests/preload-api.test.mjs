@@ -22,6 +22,7 @@ describe('preload API', () => {
     await api.documents.confirmClassification('proposal-1', { category: 'invoice' });
     await api.documents.proposeFill({ documentId: 'document-1', values: { name: 'Nasro' } });
     await api.documents.renderFormPreview('form-proposal-1');
+    await api.documents.convert({ documentId: 'document-1', inputPath: 'C:\\Docs\\source.docx', fromFormat: 'docx', toFormat: 'pdf', destinationPath: 'C:\\Docs\\source.pdf' });
     await api.documents.download({ finalUrl: 'https://example.test/facture.pdf', digest: `sha256:${'a'.repeat(64)}`, destination: 'C:\\Docs\\facture.pdf' });
     await api.documents.forget({ documentId: 'document-1', deleteSource: true });
 
@@ -34,6 +35,7 @@ describe('preload API', () => {
       ['mina:documents:confirm-classification', { proposalId: 'proposal-1', overrides: { category: 'invoice' } }],
       ['mina:documents:propose-fill', { documentId: 'document-1', values: { name: 'Nasro' } }],
       ['mina:documents:render-form-preview', 'form-proposal-1'],
+      ['mina:documents:convert', { documentId: 'document-1', inputPath: 'C:\\Docs\\source.docx', fromFormat: 'docx', toFormat: 'pdf', destinationPath: 'C:\\Docs\\source.pdf' }],
       ['mina:documents:download', { finalUrl: 'https://example.test/facture.pdf', digest: `sha256:${'a'.repeat(64)}`, destination: 'C:\\Docs\\facture.pdf' }],
       ['mina:documents:forget', { documentId: 'document-1', deleteSource: true }],
     ]);

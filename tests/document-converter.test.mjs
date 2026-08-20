@@ -35,6 +35,21 @@ describe('createDocumentConverter.convert: allowlisted conversions only', () => 
     expect(result).toMatchObject({ documentId: 'd1', outputDigest: 'sha256:abc', outputType: 'application/pdf' });
     expect(fileWriter.writes[0].path).toBe('documents/converted/d1.pdf');
   });
+
+  it('converts through a real conversion port before writing the validated output', async () => {
+    const outputBytes = Buffer.from('%PDF-1.7 from port');
+    const outputDigest = `sha256:${'c'.repeat(64)}`;
+    const conversionPort = {
+      convert: vi.fn(async () => ({ outputBytes, outputDigest, outputType: 'application/pdf' })),
+    };
+    const fileWriter = fakeFileWriter();
+    const converter = createDocumentConverter({ conversionPort, fileWriter, clock: () => 1_700_000_000_000 });
+    const result = await converter.convert({ documentId: 'd1', inputPath: 'in.docx', fromFormat: 'docx', toFormat: 'pdf' });
+
+    expect(result).toMatchObject({ documentId: 'd1', outputDigest, outputType: 'application/pdf' });
+    expect(conversionPort.convert).toHaveBeenCalledWith({ inputPath: 'in.docx', fromFormat: 'docx', toFormat: 'pdf' });
+    expect(fileWriter.writes[0]).toEqual({ path: 'documents/converted/d1.pdf', content: outputBytes });
+  });
 });
 
 describe('createDocumentConverter.convert: sandbox invocation is bounded (one input, network off, limits)', () => {
