@@ -134,13 +134,18 @@ describe('verify-mina probes: google home sdk', () => {
   });
 
   it('reports the expected Google Home SDK manifest path without marking it ready', async () => {
-    await expect(probeGoogleHomeSdk({ env: { USERPROFILE: 'C:\\Users\\Nasro' } })).resolves
-      .toEqual({
-        ready: false,
-        reason: 'google_home_sdk_unavailable',
-        expectedPath: 'C:\\Users\\Nasro\\.mina\\sdk\\google-home\\1.9',
-        manifestPath: 'C:\\Users\\Nasro\\.mina\\sdk\\google-home\\1.9\\manifest.json',
-      });
+    const root = await mkdtemp(path.join(tmpdir(), 'mina-google-home-empty-'));
+    try {
+      await expect(probeGoogleHomeSdk({ env: { USERPROFILE: root } })).resolves
+        .toEqual({
+          ready: false,
+          reason: 'google_home_sdk_unavailable',
+          expectedPath: path.join(root, '.mina', 'sdk', 'google-home', '1.9'),
+          manifestPath: path.join(root, '.mina', 'sdk', 'google-home', '1.9', 'manifest.json'),
+        });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('marks the Google Home SDK ready only when its manifest is present', async () => {
@@ -154,6 +159,29 @@ describe('verify-mina probes: google home sdk', () => {
           ready: true,
           expectedPath: path.resolve(root),
           manifestPath: path.join(path.resolve(root), 'manifest.json'),
+        });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('marks the Google Home SDK ready when the installed sample app exposes its knowledge base', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'mina-google-home-sdk-'));
+    const sdkRoot = path.join(root, '.mina', 'sdk', 'google-home');
+    const sample = path.join(sdkRoot, '1.9.1');
+    const knowledgeBasePath = path.join(sample, 'tools', 'google-home-api-knowledge-base.txt');
+    try {
+      await mkdir(path.dirname(knowledgeBasePath), { recursive: true });
+      await writeFile(knowledgeBasePath, '# Source: https://developers.home.google.com/apis/android/sample-app/build\n', 'utf8');
+
+      await expect(probeGoogleHomeSdk({ env: { USERPROFILE: root } })).resolves
+        .toEqual({
+          ready: true,
+          expectedPath: path.join(sdkRoot, '1.9'),
+          manifestPath: path.join(sdkRoot, '1.9', 'manifest.json'),
+          detectedPath: sample,
+          knowledgeBasePath,
+          detection: 'google_home_api_sample_app',
         });
     } finally {
       await rm(root, { recursive: true, force: true });

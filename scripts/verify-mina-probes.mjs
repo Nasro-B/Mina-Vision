@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { composeHomeDomain } from '../src/home/compose-home-domain.mjs';
 import { createRuntimeManifest } from '../src/sandbox/runtime-manifest.mjs';
@@ -37,6 +37,39 @@ export function resolveGoogleHomeSdkPath({ env = process.env } = {}) {
   const userProfile = env.USERPROFILE?.trim();
   if (!userProfile) return null;
   return path.join(userProfile, '.mina', 'sdk', 'google-home', '1.9');
+}
+
+async function hasGoogleHomeSampleKnowledgeBase(sdkPath, readFileImpl) {
+  const knowledgeBasePath = path.join(sdkPath, 'tools', 'google-home-api-knowledge-base.txt');
+  try {
+    await readFileImpl(knowledgeBasePath, 'utf8');
+    return knowledgeBasePath;
+  } catch {
+    return null;
+  }
+}
+
+async function discoverGoogleHomeSampleSdk({ sdkPath, env, readFileImpl, readdirImpl }) {
+  const directKnowledgeBasePath = await hasGoogleHomeSampleKnowledgeBase(sdkPath, readFileImpl);
+  if (directKnowledgeBasePath) return { detectedPath: sdkPath, knowledgeBasePath: directKnowledgeBasePath };
+
+  if (env.MINA_GOOGLE_HOME_SDK_PATH?.trim()) return null;
+  const candidatesRoot = path.dirname(sdkPath);
+  let entries = [];
+  try {
+    entries = await readdirImpl(candidatesRoot, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const candidates = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(candidatesRoot, entry.name))
+    .sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
+  for (const candidate of candidates) {
+    const knowledgeBasePath = await hasGoogleHomeSampleKnowledgeBase(candidate, readFileImpl);
+    if (knowledgeBasePath) return { detectedPath: candidate, knowledgeBasePath };
+  }
+  return null;
 }
 
 function mailOAuthDetails({ googleClientConfig, firebaseProjectId } = {}) {
@@ -96,6 +129,7 @@ export async function probeMailAccounts({
 export async function probeGoogleHomeSdk({
   env = process.env,
   readFileImpl = readFile,
+  readdirImpl = readdir,
 } = {}) {
   const sdkPath = resolveGoogleHomeSdkPath({ env });
   if (!sdkPath) return { ready: false, reason: 'google_home_sdk_unavailable' };
@@ -104,6 +138,16 @@ export async function probeGoogleHomeSdk({
     await readFileImpl(manifestPath, 'utf8');
     return { ready: true, expectedPath: sdkPath, manifestPath };
   } catch {
+    const sample = await discoverGoogleHomeSampleSdk({ sdkPath, env, readFileImpl, readdirImpl });
+    if (sample) {
+      return {
+        ready: true,
+        expectedPath: sdkPath,
+        manifestPath,
+        ...sample,
+        detection: 'google_home_api_sample_app',
+      };
+    }
     return { ready: false, reason: 'google_home_sdk_unavailable', expectedPath: sdkPath, manifestPath };
   }
 }
