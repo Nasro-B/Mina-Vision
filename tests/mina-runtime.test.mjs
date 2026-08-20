@@ -63,6 +63,34 @@ describe('Mina runtime composition root', () => {
     expect(run).toHaveBeenCalledWith({ evidence, workSessionId: expect.any(String) });
   });
 
+  it('records a claim id for completed mission result text', async () => {
+    const { runtime, claimLedger } = createHarness();
+    await runtime.start();
+
+    const result = await runtime.runWork({
+      channel: 'local',
+      identityId: 'owner',
+      goal: 'Mission avec actions vérifiées',
+      run: async () => Object.freeze({
+        status: 'completed',
+        result: 'Mission terminée : 1 action vérifiée.',
+        actionCount: 1,
+      }),
+    });
+
+    expect(result).toMatchObject({
+      status: 'completed',
+      result: 'Mission terminée : 1 action vérifiée.',
+      resultClaimId: expect.any(String),
+    });
+    expect(claimLedger.get(result.resultClaimId)).toMatchObject({
+      sessionId: expect.any(String),
+      text: 'Mission terminée : 1 action vérifiée.',
+      claimType: 'mission_result',
+      status: 'verified',
+    });
+  });
+
   it('ends active work on emergency stop and ends the runtime on shutdown', async () => {
     const { runtime, store } = createHarness();
     await runtime.start();

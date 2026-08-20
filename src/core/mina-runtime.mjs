@@ -15,6 +15,26 @@ export function createMinaRuntime({
   let emergencyGeneration = 0;
   const activeWork = new Map();
 
+  function withResultClaim(value, workSessionId) {
+    if (!value || typeof value !== 'object'
+      || value.status !== 'completed'
+      || typeof value.result !== 'string'
+      || value.result.trim().length < 1
+      || !Number.isInteger(value.actionCount)
+      || Object.hasOwn(value, 'resultClaimId')) {
+      return value;
+    }
+    const claim = claimLedger.add({
+      sessionId: workSessionId,
+      text: value.result,
+      kind: 'mission_result',
+      sourceRefs: [],
+      status: 'verified',
+      sensitivity: 'internal',
+    });
+    return Object.freeze({ ...value, resultClaimId: claim.claimId });
+  }
+
   async function start() {
     if (runtimeStatus !== 'created') throw new Error('runtime_already_started');
     runtimeStatus = 'starting';
@@ -41,7 +61,8 @@ export function createMinaRuntime({
       await sessionManager.beforeTurn({ workSessionId: work.workSessionId });
       const evidence = await evidenceProvider({ channel, identityId, goal, memoryRequired });
       if (!Array.isArray(evidence)) throw new TypeError('runtime_evidence_must_be_array');
-      const value = await run({ evidence: Object.freeze([...evidence]), workSessionId: work.workSessionId });
+      const rawValue = await run({ evidence: Object.freeze([...evidence]), workSessionId: work.workSessionId });
+      const value = withResultClaim(rawValue, work.workSessionId);
       if (entry.canceled) return value;
       const after = await sessionManager.afterTurn({ workSessionId: work.workSessionId });
       if (!work.microSession && after.status === 'active') {
