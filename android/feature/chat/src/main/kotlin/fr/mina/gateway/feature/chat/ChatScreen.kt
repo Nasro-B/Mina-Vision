@@ -644,11 +644,11 @@ private fun Composer(
                 }
                 Spacer(Modifier.size(6.dp))
             }
-            Row(verticalAlignment = Alignment.Bottom) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(
                     onClick = { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                     enabled = !voice.isRecording,
-                    modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = "Envoyer une photo" },
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Envoyer une photo" },
                 ) { Text("Photo") }
                 Spacer(Modifier.size(4.dp))
                 TextButton(
@@ -659,7 +659,7 @@ private fun Composer(
                             null -> if (!listening) requestMicrophone(MicrophoneAction.NOTE)
                         }
                     },
-                    modifier = Modifier.heightIn(min = 56.dp).semantics {
+                    modifier = Modifier.heightIn(min = 48.dp).semantics {
                         contentDescription = if (voice.mode == VoiceCaptureMode.NOTE) {
                             "Terminer et envoyer la note vocale"
                         } else {
@@ -670,7 +670,7 @@ private fun Composer(
                 if (voice.mode == VoiceCaptureMode.NOTE) {
                     TextButton(
                         onClick = onCancelVoice,
-                        modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = "Annuler la note vocale" },
+                        modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Annuler la note vocale" },
                     ) { Text("Annuler") }
                 }
                 Spacer(Modifier.size(4.dp))
@@ -682,7 +682,7 @@ private fun Composer(
                     },
                     shape = RoundedCornerShape(24.dp),
                     modifier = Modifier
-                        .heightIn(min = 56.dp)
+                        .heightIn(min = 48.dp)
                         .semantics { contentDescription = "Maintenir pour parler" }
                         .pointerInput(Unit) {
                             awaitEachGesture {
@@ -704,23 +704,11 @@ private fun Composer(
                 ) {
                     Text(
                         "PTT",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
                 }
                 Spacer(Modifier.size(4.dp))
-                OutlinedTextField(
-                    value = draft,
-                    onValueChange = onDraftChange,
-                    modifier = Modifier.weight(1f).heightIn(min = 56.dp),
-                    label = { Text(if (listening) "Dictée en cours…" else "Message à Mina") },
-                    maxLines = 5,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = {
-                        if (draft.isNotBlank() && !sending) onSend()
-                    }),
-                )
-                Spacer(Modifier.size(8.dp))
                 TextButton(
                     onClick = {
                         if (voice.isRecording) return@TextButton
@@ -738,11 +726,25 @@ private fun Composer(
                         requestMicrophone(MicrophoneAction.DICTATION)
                     },
                     enabled = !voice.isRecording,
-                    modifier = Modifier.heightIn(min = 56.dp).semantics {
+                    modifier = Modifier.heightIn(min = 48.dp).semantics {
                         contentDescription = if (listening) "Arrêter la dictée" else "Dicter le message"
                     },
                 ) { Text(if (listening) "Stop" else "Micro") }
-                Spacer(Modifier.size(4.dp))
+            }
+            Spacer(Modifier.size(6.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = onDraftChange,
+                    modifier = Modifier.weight(1f).heightIn(min = 56.dp),
+                    label = { Text(if (listening) "Dictée en cours…" else "Message à Mina") },
+                    maxLines = 5,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = {
+                        if (draft.isNotBlank() && !sending) onSend()
+                    }),
+                )
+                Spacer(Modifier.size(8.dp))
                 Button(
                     onClick = onSend,
                     enabled = draft.isNotBlank() && !sending,
