@@ -218,14 +218,22 @@ const APP_ICON = path.join(
   process.platform === 'win32' ? 'mina-vision.ico' : 'mina-vision-256.png',
 );
 
-function deriveDocumentRagKey(masterKey) {
+function deriveDocumentLocalKey(masterKey, purpose) {
   const source = Buffer.from(masterKey ?? []);
   try {
     if (source.length !== 32) return null;
-    return Buffer.from(hkdfSync('sha256', source, Buffer.from('Mina Vision local memory v1', 'utf8'), Buffer.from('document-rag', 'utf8'), 32));
+    return Buffer.from(hkdfSync('sha256', source, Buffer.from('Mina Vision local memory v1', 'utf8'), Buffer.from(purpose, 'utf8'), 32));
   } finally {
     source.fill(0);
   }
+}
+
+function deriveDocumentRagKey(masterKey) {
+  return deriveDocumentLocalKey(masterKey, 'document-rag');
+}
+
+function deriveDocumentQuarantineKey(masterKey) {
+  return deriveDocumentLocalKey(masterKey, 'document-quarantine');
 }
 
 // Ramène la fenêtre au premier plan (la recrée si elle a été détruite) — utilisée par le tray et
@@ -3274,6 +3282,7 @@ app.whenReady().then(async () => {
       filesystem: { writeFile, readFile, mkdir, rm },
       repository: documentQuarantineRepository,
       quarantineDir: path.join(app.getPath('userData'), 'document-quarantine'),
+      getEncryptionKey: () => deriveDocumentQuarantineKey(chatMasterKey),
     });
     const documentIntake = createDocumentIntake({
       quarantineStore: documentQuarantineStore,

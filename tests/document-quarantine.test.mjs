@@ -54,6 +54,47 @@ describe('createDocumentQuarantineStore: writeBytes / readBytes', () => {
     await store.writeBytes('d1', Buffer.from('hello'));
     expect(await store.readBytes('d1')).toEqual(Buffer.from('hello'));
   });
+
+  it('encrypts quarantined source bytes when an encryption key provider is configured', async () => {
+    const filesystem = fakeFilesystem();
+    const plaintext = Buffer.from('facture sensible mina');
+    const store = createDocumentQuarantineStore({
+      filesystem,
+      repository: fakeRepository(),
+      getEncryptionKey: () => Buffer.alloc(32, 7),
+    });
+
+    await store.writeBytes('d1', plaintext);
+    const stored = filesystem.files.get('quarantine/d1');
+
+    expect(stored).not.toEqual(plaintext);
+    expect(Buffer.from(stored).toString('utf8')).not.toContain('facture sensible mina');
+    expect(await store.readBytes('d1')).toEqual(Buffer.from('facture sensible mina'));
+  });
+
+  it('fails closed when encryption is configured but the key is unavailable', async () => {
+    const filesystem = fakeFilesystem();
+    const store = createDocumentQuarantineStore({
+      filesystem,
+      repository: fakeRepository(),
+      getEncryptionKey: () => null,
+    });
+
+    await expect(store.writeBytes('d1', Buffer.from('secret'))).rejects.toThrow('document_quarantine_encryption_key_required');
+    expect(filesystem.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('reads legacy raw source files even after encryption is configured', async () => {
+    const filesystem = fakeFilesystem();
+    filesystem.files.set('quarantine/d1', Buffer.from('legacy raw bytes'));
+    const store = createDocumentQuarantineStore({
+      filesystem,
+      repository: fakeRepository(),
+      getEncryptionKey: () => Buffer.alloc(32, 7),
+    });
+
+    expect(await store.readBytes('d1')).toEqual(Buffer.from('legacy raw bytes'));
+  });
 });
 
 describe('createDocumentQuarantineStore: putRecord / getRecord / listRecords', () => {

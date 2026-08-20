@@ -84,6 +84,7 @@ describe('contrat de composition des domaines (main.mjs)', () => {
       "import { createPdfPageRasterizer, createPdfScannedOcrFallback } from '../documents/pdf-scanned-ocr.mjs';",
       "import { createPdfTextExtractor } from '../research/pdf-text-extractor.mjs';",
       'const documentQuarantineStore = createDocumentQuarantineStore({',
+      'getEncryptionKey: () => deriveDocumentQuarantineKey(chatMasterKey),',
       'const documentOcrProvider = createTesseractOcrProvider();',
       'const documentPdfOcrFallback = createPdfScannedOcrFallback({',
       'rasterizePdfPages: createPdfPageRasterizer(),',
