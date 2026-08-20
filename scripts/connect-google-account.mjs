@@ -6,7 +6,7 @@
 // navigateur par défaut, via l'écran de consentement officiel Google. Toute la logique de décision
 // vit dans src/mail/oauth/google-account-connector.mjs (testée à fond, tests/google-account-connector.test.mjs)
 // — ce fichier ne fait que fournir les dépendances réelles liées à Electron et afficher les messages.
-import { app, safeStorage, shell } from 'electron';
+import { app, clipboard, safeStorage, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +16,9 @@ import { createKeyringFileStorage } from '../src/crypto/keyring-file-storage.mjs
 import { createMailAccountStore } from '../src/mail/mail-account-store.mjs';
 import { GMAIL_SCOPES } from '../src/mail/oauth/google-oauth.mjs';
 import { createGoogleAccountConnector } from '../src/mail/oauth/google-account-connector.mjs';
+import { createOAuthLoopbackServer } from '../src/mail/oauth/oauth-loopback-server.mjs';
 import { loadGoogleClientConfigFromEnvDir } from '../src/mail/oauth/google-client-config-file.mjs';
+import { resolveUserDataStrategy } from '../src/ui/user-data-path.mjs';
 
 // Scopes couvrant Gmail (déjà câblé) + Calendrier/Contacts/Tâches (adaptateurs prêts, jamais encore
 // connectés à un vrai compte) — un seul écran de consentement pour tout, jamais répété.
@@ -27,6 +29,15 @@ const SCOPES = Object.freeze([
   'https://www.googleapis.com/auth/tasks',
 ]);
 
+app.setName('Mina Vision');
+{
+  const { preserveExplicitUserData, namedUserData } = resolveUserDataStrategy({
+    argv: process.argv,
+    appDataPath: app.getPath('appData'),
+  });
+  if (!preserveExplicitUserData) app.setPath('userData', namedUserData);
+}
+
 // Saisie visible dans ce terminal local uniquement (readline n'a pas de mode masqué portable sans
 // dépendance native) — jamais journalisée, jamais transmise ailleurs.
 async function promptStdin(question) {
@@ -34,6 +45,13 @@ async function promptStdin(question) {
   const answer = await rl.question(question);
   rl.close();
   return answer.trim();
+}
+
+async function resolveGoogleAddress() {
+  const configuredAddress = process.env.MINA_GOOGLE_ACCOUNT?.trim();
+  if (configuredAddress) return configuredAddress;
+  const typedAddress = await promptStdin("Adresse Gmail à connecter : ");
+  return typedAddress.trim();
 }
 
 // Si un fichier client_secret_*.json (téléchargement standard Google Cloud Console, type
@@ -47,12 +65,26 @@ function buildPrompt(envDir) {
   return async (question) => {
     calls += 1;
     if (calls === 1) {
-      console.log('Client ID/Secret Google trouvés automatiquement dans env/ (fichier téléchargé depuis Google Cloud Console) — utilisation directe.\n');
+      const project = fileConfig.projectId ? ` Projet Google Cloud détecté : ${fileConfig.projectId}.` : '';
+      console.log(`Client ID/Secret Google trouvés automatiquement dans env/ (fichier téléchargé depuis Google Cloud Console) — utilisation directe.${project}\n`);
       return fileConfig.clientId;
     }
     if (calls === 2) return fileConfig.clientSecret;
     return promptStdin(question);
   };
+}
+
+function oauthTimeoutMs() {
+  const parsed = Number.parseInt(process.env.MINA_GOOGLE_OAUTH_TIMEOUT_MS ?? '600000', 10);
+  return Number.isInteger(parsed) && parsed >= 120_000 ? parsed : 600_000;
+}
+
+function printDeniedHelp(reason) {
+  const value = String(reason ?? '');
+  if (!value.includes('access_denied') && !value.includes('oauth_loopback_timeout')) return;
+  console.error('Si Chrome affiche « Accès bloqué : Mina Vision n’a pas terminé la procédure de validation de Google »,');
+  console.error('ajoute l’adresse Gmail utilisée comme utilisateur de test OAuth dans Google Cloud Console :');
+  console.error('APIs & Services → OAuth consent screen → Audience/Test users → Add users, puis relance cette commande.\n');
 }
 
 async function main() {
@@ -63,6 +95,13 @@ async function main() {
   const mailAccountStore = createMailAccountStore({ keyring });
   const envDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'env');
   const prompt = buildPrompt(envDir);
+  const address = await resolveGoogleAddress();
+
+  if (!address) {
+    console.error("Adresse Google requise. Définis MINA_GOOGLE_ACCOUNT ou saisis une adresse Gmail.");
+    app.exit(1);
+    return;
+  }
 
   console.log('\nCréer un client OAuth desktop dans Google Cloud Console si pas déjà fait (une seule fois) :');
   console.log('console.cloud.google.com → APIs & Services → Identifiants → Créer des identifiants → ID client OAuth');
@@ -70,11 +109,22 @@ async function main() {
 
   const connector = createGoogleAccountConnector({
     storage, keyring, mailAccountStore, prompt,
+    createLoopbackServer: ({ expectedState }) => createOAuthLoopbackServer({ expectedState, timeoutMs: oauthTimeoutMs() }),
     openExternal: (url) => shell.openExternal(url),
+    onConsentUrl: (url) => {
+      console.log('URL de secours OAuth Google (si Chrome ne s’ouvre pas ou reste sur la mauvaise page) :');
+      console.log(url);
+      try {
+        clipboard.writeText(url);
+        console.log('URL OAuth copiée dans le presse-papiers.\n');
+      } catch {
+        console.log('');
+      }
+    },
     scopes: SCOPES,
     accountId: 'google-primary',
     // Le compte vient de l'environnement — jamais d'adresse en dur dans le dépôt public.
-    address: process.env.MINA_GOOGLE_ACCOUNT ?? '',
+    address,
   });
 
   const result = await connector.connect();
@@ -92,6 +142,7 @@ async function main() {
       return;
     case 'denied':
       console.error(`Connexion échouée ou refusée : ${result.reason}\n`);
+      printDeniedHelp(result.reason);
       app.exit(1);
       return;
     case 'connected':

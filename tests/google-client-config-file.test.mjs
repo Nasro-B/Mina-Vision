@@ -32,7 +32,11 @@ describe('loadGoogleClientConfigFromEnvDir', () => {
     const readdirSync = vi.fn(() => ['client_secret_486101146642-fake.apps.googleusercontent.com.json']);
     const readFileSync = vi.fn(() => REAL_SHAPE_JSON);
     const result = loadGoogleClientConfigFromEnvDir('C:\\env', { readdirSync, readFileSync });
-    expect(result).toEqual({ clientId: '486101146642-fake.apps.googleusercontent.com', clientSecret: 'GOCSPX-fake-secret-value' });
+    expect(result).toEqual({
+      clientId: '486101146642-fake.apps.googleusercontent.com',
+      clientSecret: 'GOCSPX-fake-secret-value',
+      projectId: 'mina-vission',
+    });
     expect(readFileSync).toHaveBeenCalledWith('C:\\env/client_secret_486101146642-fake.apps.googleusercontent.com.json', 'utf8');
   });
 

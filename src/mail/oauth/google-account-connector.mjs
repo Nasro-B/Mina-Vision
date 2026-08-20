@@ -14,7 +14,7 @@ export function createGoogleAccountConnector({
   createLoopbackServer = createOAuthLoopbackServer,
   createOAuthClient = createGoogleOAuthClient,
   generateState = () => randomBytes(16).toString('hex'),
-  scopes, accountId, address, clock = Date.now,
+  scopes, accountId, address, clock = Date.now, onConsentUrl = () => {},
 } = {}) {
   if (!keyring?.getSecret || !keyring?.setSecret) throw new TypeError('google_account_connector_keyring_required');
   if (!storage?.read) throw new TypeError('google_account_connector_storage_required');
@@ -50,6 +50,7 @@ export function createGoogleAccountConnector({
       const redirectUri = `http://127.0.0.1:${port}/oauth/callback`;
       const oauth = await createOAuthClient({ clientId, clientSecret, redirectUri });
       const consentUrl = oauth.generateConsentUrl(scopes, { state });
+      onConsentUrl(consentUrl);
       await openExternal(consentUrl);
 
       let result;

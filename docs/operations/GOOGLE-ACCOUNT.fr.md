@@ -17,6 +17,7 @@ Couvre Gmail, Google Calendar, Google Contacts (People API) et Google Tasks en u
    - Type : *Externe* (compte Gmail standard, pas Google Workspace).
    - Renseigner nom de l'app (« Mina Vision »), e-mail de contact.
    - Ajouter `<votre-compte>@gmail.com` comme **utilisateur de test** (évite la revue de vérification Google pour un usage personnel).
+   - Si Google affiche `Erreur 403 : access_denied` avec « Mina Vision n'a pas terminé la procédure de validation de Google », l'adresse utilisée dans Chrome n'est pas encore dans cette liste de testeurs OAuth du projet du **Client ID**. Ajouter l'adresse, enregistrer, attendre quelques secondes, puis relancer `npm run connect:google`.
 5. **APIs et services → Identifiants → Créer des identifiants → ID client OAuth** :
    - Type d'application : **Application de bureau** (« Desktop app ») — pas « Application Web ». Ce type accepte automatiquement n'importe quel port `127.0.0.1`, donc aucune URI de redirection à saisir manuellement.
    - Noter le **Client ID** et le **Client Secret** affichés.
@@ -29,6 +30,7 @@ npm run connect:google
 ```
 
 - Première exécution : l'outil demande le Client ID et le Client Secret de l'étape 1 (saisie visible dans ce terminal, jamais journalisée ni transmise ailleurs), puis les enregistre chiffrés pour les prochaines fois.
+- L'adresse Gmail peut être fournie via `MINA_GOOGLE_ACCOUNT` ou saisie à l'invite si la variable n'est pas définie.
 - Le navigateur par défaut s'ouvre sur l'écran de consentement Google — se connecter avec `<votre-compte>@gmail.com`, accepter les permissions demandées (Gmail, Calendrier, Contacts, Tâches).
 - Une fois validé, un onglet « Compte connecté » s'affiche — le terminal confirme la connexion et le jeton chiffré est enregistré dans le coffre local.
 
@@ -42,6 +44,6 @@ Le SDK Google Home 1.9 est un téléchargement distinct depuis une page Google a
 
 1. Se connecter sur la page officielle Google Home Developer avec `<votre-compte>@gmail.com`.
 2. Télécharger le SDK 1.9.
-3. Déposer le contenu sous `%USERPROFILE%\.mina\sdk\google-home\1.9`.
+3. Déposer le contenu sous `%USERPROFILE%\.mina\sdk\google-home\1.9` (ou définir `MINA_GOOGLE_HOME_SDK_PATH` vers le dossier contenant `manifest.json`).
 
 Détail : voir `Pour Nasro.md`.

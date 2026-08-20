@@ -16,5 +16,9 @@ export function loadGoogleClientConfigFromEnvDir(envDir, { readdirSync, readFile
   const parsed = JSON.parse(readFileSync(`${envDir}/${match}`, 'utf8'));
   const section = parsed.installed ?? parsed.web;
   if (!section?.client_id || !section?.client_secret) return null;
-  return { clientId: section.client_id, clientSecret: section.client_secret };
+  return {
+    clientId: section.client_id,
+    clientSecret: section.client_secret,
+    ...(section.project_id ? { projectId: section.project_id } : {}),
+  };
 }

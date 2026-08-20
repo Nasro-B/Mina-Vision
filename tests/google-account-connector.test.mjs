@@ -39,11 +39,12 @@ function buildConnector(overrides = {}) {
   const oauthClient = overrides.oauthClient ?? fakeOAuthClient();
   const loopbackServer = overrides.loopbackServer ?? fakeLoopbackServer();
   const openExternal = overrides.openExternal ?? vi.fn(async () => {});
+  const onConsentUrl = overrides.onConsentUrl ?? vi.fn(() => {});
   const prompt = overrides.prompt ?? vi.fn(async () => 'never-called');
   const storage = overrides.storage ?? { read: vi.fn(async () => ({ version: 1 })) };
 
   const connector = createGoogleAccountConnector({
-    storage, keyring, mailAccountStore, openExternal, prompt,
+    storage, keyring, mailAccountStore, openExternal, prompt, onConsentUrl,
     createLoopbackServer: () => loopbackServer,
     createOAuthClient: async () => oauthClient,
     generateState: () => 'expected-state',
@@ -52,7 +53,7 @@ function buildConnector(overrides = {}) {
     address: 'owner@example.com',
     clock: () => 1_700_000_000_000,
   });
-  return { connector, keyring, mailAccountStore, oauthClient, loopbackServer, openExternal, prompt, storage };
+  return { connector, keyring, mailAccountStore, oauthClient, loopbackServer, openExternal, onConsentUrl, prompt, storage };
 }
 
 describe('createGoogleAccountConnector: constructor guards', () => {
@@ -104,10 +105,11 @@ describe('createGoogleAccountConnector.connect: client config is prompted once, 
 describe('createGoogleAccountConnector.connect: exact plan scenario (consent, callback, exchange, save)', () => {
   it('opens the real consent URL with all requested scopes and a fresh state, never a static one', async () => {
     const oauthClient = fakeOAuthClient();
-    const { connector, openExternal } = buildConnector({ oauthClient });
+    const { connector, openExternal, onConsentUrl } = buildConnector({ oauthClient });
     await connector.connect();
     expect(oauthClient.generateConsentUrl).toHaveBeenCalledWith(['scope-a', 'scope-b'], { state: 'expected-state' });
     expect(openExternal).toHaveBeenCalledWith(expect.stringContaining('state=expected-state'));
+    expect(onConsentUrl).toHaveBeenCalledWith(expect.stringContaining('state=expected-state'));
   });
 
   it('saves the exchanged tokens into mail-account-store under the configured accountId', async () => {

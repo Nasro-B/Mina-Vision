@@ -24,6 +24,10 @@ happens in your own browser, on the official Google consent screen.
    - Fill in the app name ("Mina Vision") and a contact e-mail.
    - Add `<your-account>@gmail.com` as a **test user** (avoids Google's verification review for
      personal use).
+   - If Google shows `Error 403: access_denied` with "Mina Vision has not completed Google's
+     verification process", the address currently used in Chrome is not yet in the OAuth test-user
+     list for the project owning the **Client ID**. Add the address, save, wait a few seconds, then
+     run `npm run connect:google` again.
 5. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
    - Application type: **Desktop app** — not "Web application". This type automatically accepts
      any `127.0.0.1` port, so there is no redirect URI to enter manually.
@@ -39,6 +43,7 @@ npm run connect:google
 - First run: the tool asks for the Client ID and Client Secret from step 1 (typed visibly in
   this terminal, never logged nor transmitted anywhere else), then stores them encrypted for
   next time.
+- The Gmail address can be provided through `MINA_GOOGLE_ACCOUNT` or typed at prompt if the variable is missing.
 - The default browser opens on the Google consent screen — sign in with
   `<your-account>@gmail.com`, accept the requested permissions (Gmail, Calendar, Contacts,
   Tasks).
@@ -59,4 +64,5 @@ thing as the OAuth above):
 
 1. Sign in on the official Google Home Developer page with `<your-account>@gmail.com`.
 2. Download SDK 1.9.
-3. Drop its contents under `%USERPROFILE%\.mina\sdk\google-home\1.9`.
+3. Drop its contents under `%USERPROFILE%\.mina\sdk\google-home\1.9` (or set
+   `MINA_GOOGLE_HOME_SDK_PATH` to the directory containing `manifest.json`).

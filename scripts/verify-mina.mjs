@@ -9,6 +9,7 @@ import { probeFirebaseBackupConfiguration } from '../src/diagnostics/firebase-he
 import { probeLmStudio } from '../src/diagnostics/lm-studio-health.mjs';
 import { loadConfig } from '../src/config.mjs';
 import { parseAuthorizedAdbTransports } from '../src/devices/adb-devices.mjs';
+import { probeGoogleHomeSdk, probeMailAccounts, probeHomeDomain, resolveMailUserDataDirs } from './verify-mina-probes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 dotenv.config({ path: path.join(ROOT, '.env'), quiet: true });
@@ -50,15 +51,13 @@ const probes = {
     return { ready: wifiConnected, reason: wifiConnected ? undefined : 'wifi_transport_not_connected' };
   },
   googleHomeSdk: async () => {
-    const sdkPath = path.join(process.env.USERPROFILE ?? '', '.mina', 'sdk', 'google-home', '1.9');
-    try {
-      await readFile(path.join(sdkPath, 'manifest.json'), 'utf8');
-      return { ready: true };
-    } catch {
-      return { ready: false, reason: 'google_home_sdk_unavailable' };
-    }
+    return probeGoogleHomeSdk({ env: process.env });
   },
-  mailAccounts: async () => ({ ready: false, reason: 'mail_accounts_not_yet_configurable_from_cli' }),
+  mailAccounts: async () => {
+    const userDataDirs = resolveMailUserDataDirs();
+    return probeMailAccounts({ userDataDirs });
+  },
+  home: async () => probeHomeDomain({ env: process.env }),
   firebase: async () => ({
     ...await probeFirebaseBackupConfiguration({
       projectId: process.env.FIREBASE_PROJECT_ID?.trim(),
@@ -76,6 +75,7 @@ function capabilitiesFromHealth(report) {
   return Object.freeze({
     'models.lm_studio': capabilityFromReadiness({ id: 'models.lm_studio', implemented: true, probe: report.lmStudio }),
     'computer_use.android': capabilityFromReadiness({ id: 'computer_use.android', implemented: true, probe: report.androidTransport }),
+    'home': capabilityFromReadiness({ id: 'home', implemented: true, probe: report.home }),
     mail: capabilityFromReadiness({ id: 'mail', implemented: true, probe: report.mailAccounts }),
     'backup.firebase': capabilityFromReadiness({ id: 'backup.firebase', implemented: true, probe: report.firebase }),
   });
