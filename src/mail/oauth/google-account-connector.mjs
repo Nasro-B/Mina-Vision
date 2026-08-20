@@ -35,13 +35,14 @@ export function createGoogleAccountConnector({
       const clientConfigRaw = await keyring.getSecret(CLIENT_CONFIG_SECRET);
       let clientId;
       let clientSecret;
+      let shouldPersistClientConfig = false;
       if (clientConfigRaw) {
         ({ clientId, clientSecret } = JSON.parse(clientConfigRaw));
       } else {
         clientId = await prompt('Client ID Google : ');
         clientSecret = await prompt('Client Secret Google : ');
         if (!clientId || !clientSecret) return Object.freeze({ status: 'client_config_required' });
-        await keyring.setSecret(CLIENT_CONFIG_SECRET, JSON.stringify({ clientId, clientSecret }));
+        shouldPersistClientConfig = true;
       }
 
       const state = generateState();
@@ -63,6 +64,9 @@ export function createGoogleAccountConnector({
       await loopback.stop();
 
       const tokens = await oauth.exchangeCode(result.code);
+      if (shouldPersistClientConfig) {
+        await keyring.setSecret(CLIENT_CONFIG_SECRET, JSON.stringify({ clientId, clientSecret }));
+      }
       await mailAccountStore.save(accountId, {
         provider: 'gmail', address, mode: 1, credentials: tokens,
       });

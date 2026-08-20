@@ -100,6 +100,17 @@ describe('createGoogleAccountConnector.connect: client config is prompted once, 
     expect(result).toEqual({ status: 'client_config_required' });
     expect(keyring.setSecret).not.toHaveBeenCalled();
   });
+
+  it('does not persist a newly typed client config when Google denies consent', async () => {
+    const prompt = vi.fn()
+      .mockResolvedValueOnce('wrong-client-id')
+      .mockResolvedValueOnce('wrong-client-secret');
+    const loopbackServer = fakeLoopbackServer({ rejection: new Error('oauth_loopback_denied:access_denied') });
+    const { connector, keyring } = buildConnector({ prompt, loopbackServer });
+    const result = await connector.connect();
+    expect(result).toEqual({ status: 'denied', reason: 'oauth_loopback_denied:access_denied' });
+    expect(keyring.setSecret).not.toHaveBeenCalled();
+  });
 });
 
 describe('createGoogleAccountConnector.connect: exact plan scenario (consent, callback, exchange, save)', () => {
