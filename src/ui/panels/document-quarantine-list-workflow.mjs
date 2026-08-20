@@ -11,6 +11,7 @@ function byteLabel(size) {
 
 function safeRecord(record) {
   return Object.freeze({
+    documentId: typeof record?.documentId === 'string' && record.documentId.length > 0 ? record.documentId.slice(0, 160) : null,
     declaredName: typeof record?.declaredName === 'string' && record.declaredName.length > 0
       ? record.declaredName.slice(0, 500)
       : 'Document sans nom',
@@ -22,17 +23,41 @@ function safeRecord(record) {
   });
 }
 
-function addCard(list, label, value) {
+function addCard(list, label, value, actions = []) {
   const card = list.ownerDocument.createElement('article');
   const title = list.ownerDocument.createElement('strong');
   const detail = list.ownerDocument.createElement('small');
   title.textContent = label;
   detail.textContent = value;
   card.append(title, detail);
+  if (actions.length > 0) {
+    const actionRow = list.ownerDocument.createElement('div');
+    actionRow.className = 'quarantine-actions';
+    actionRow.append(...actions);
+    card.append(actionRow);
+  }
   list.append(card);
+  return card;
 }
 
-function renderRecords(list, records) {
+function createForgetButton(list, record, forgetRecord) {
+  if (!record.documentId || typeof forgetRecord !== 'function') return null;
+  const button = list.ownerDocument.createElement('button');
+  button.type = 'button';
+  button.className = 'action-button danger compact';
+  button.dataset.action = 'document-forget-source';
+  button.textContent = 'Oublier + supprimer source';
+  button.setAttribute('aria-label', `Oublier ${record.declaredName} et supprimer sa source locale en quarantaine`);
+  button.addEventListener('click', () => {
+    button.disabled = true;
+    void forgetRecord(record).catch(() => {
+      button.disabled = false;
+    });
+  });
+  return button;
+}
+
+function renderRecords(list, records, forgetRecord = null) {
   list.replaceChildren();
   if (records.length === 0) {
     addCard(list, 'Quarantaine locale', 'Aucun document enregistré.');
@@ -46,7 +71,8 @@ function renderRecords(list, records) {
       record.reasons.join(', '),
       record.observedAt,
     ].filter(Boolean).join(' · ');
-    addCard(list, record.declaredName, details);
+    const forgetButton = createForgetButton(list, record, forgetRecord);
+    addCard(list, record.declaredName, details, forgetButton ? [forgetButton] : []);
   }
 }
 
@@ -55,8 +81,23 @@ function renderFailure(list) {
   addCard(list, 'Quarantaine locale indisponible', 'La liste n’a pas été chargée.');
 }
 
-export function bindDocumentQuarantineList({ api, refreshButton, list } = {}) {
+function defaultConfirmForget(declaredName) {
+  if (typeof globalThis.confirm !== 'function') return false;
+  return globalThis.confirm(`Oublier "${declaredName}" et supprimer sa source locale en quarantaine ?`);
+}
+
+export function bindDocumentQuarantineList({
+  api, refreshButton, list, confirmForget = defaultConfirmForget,
+} = {}) {
   if (!refreshButton || !list?.replaceChildren) throw new TypeError('document_quarantine_list_elements_required');
+
+  const forgetRecord = async (record) => {
+    if (typeof api?.documents?.forget !== 'function') throw new TypeError('document_forget_api_required');
+    if (confirmForget(record.declaredName) !== true) return Object.freeze({ cancelled: true });
+    const result = await api.documents.forget({ documentId: record.documentId, deleteSource: true });
+    addCard(list, 'Source supprimée', `${record.declaredName} a été oublié localement.`);
+    return result;
+  };
 
   const refresh = async () => {
     if (typeof api?.documents?.list !== 'function') throw new TypeError('document_quarantine_list_api_required');
@@ -65,7 +106,7 @@ export function bindDocumentQuarantineList({ api, refreshButton, list } = {}) {
       const records = await api.documents.list();
       if (!Array.isArray(records)) throw new Error('document_quarantine_list_invalid');
       const projection = Object.freeze(records.map(safeRecord));
-      renderRecords(list, projection);
+      renderRecords(list, projection, api?.documents?.forget ? forgetRecord : null);
       return projection;
     } catch (error) {
       renderFailure(list);

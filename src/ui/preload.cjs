@@ -170,6 +170,7 @@ function createPreloadApi(ipcRenderer) {
       evidence: (documentId) => ipcRenderer.invoke('mina:documents:evidence', documentId),
       proposeClassification: (documentId, hints) => ipcRenderer.invoke('mina:documents:propose-classification', { documentId, hints }),
       confirmClassification: (proposalId, overrides) => ipcRenderer.invoke('mina:documents:confirm-classification', { proposalId, overrides }),
+      forget: (request) => ipcRenderer.invoke('mina:documents:forget', request),
     }),
     personalityGet: () => ipcRenderer.invoke('mina:personality:get'),
     smsPolicyStatus: () => ipcRenderer.invoke('mina:sms-policy-status'),

@@ -47,6 +47,13 @@ describe('UI polish contract', () => {
     expect(secondaryButtonBlock).toContain('border-radius: var(--button-radius)');
   });
 
+  it('sépare les actions destructives de quarantaine des métadonnées affichées', async () => {
+    const css = await loadUi('styles.css');
+
+    expect(css).toMatch(/\.quarantine-actions[^{]*\{[^}]*margin-top:\s*8px/su);
+    expect(css).toMatch(/\.quarantine-actions[^{]*\{[^}]*display:\s*flex/su);
+  });
+
   it('désactive les transitions et translations bouton en reduced-motion', async () => {
     const css = await loadUi('styles.css');
     const reducedMotionBlock = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
