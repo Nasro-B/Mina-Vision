@@ -28,6 +28,9 @@ async function writeManifest(overrides = {}) {
       sourceUrl: `https://official.example/${language}/${version}`,
     });
   }
+  await writeFile(join(root, 'mina-runner.mjs'), 'export {};\n');
+  await mkdir(join(root, 'javascript'), { recursive: true });
+  await writeFile(join(root, 'javascript', 'node.exe'), 'BOOTSTRAP-NODE');
   await writeFile(manifestPath, JSON.stringify({ schemaVersion: 1, runtimes, ...overrides }));
   return runtimes;
 }
@@ -67,5 +70,21 @@ describe('pinned portable runtime manifest', () => {
     await writeFile(manifestPath, JSON.stringify({ schemaVersion: 1, runtimes: runtimes.slice(0, 2) }));
     await expect(createRuntimeManifest({ manifestPath, runtimeRoot: root }).verify())
       .resolves.toMatchObject({ available: false, reason: 'runtime_manifest_incomplete' });
+  });
+
+  it('fails closed when the guest bootstrap runner is missing', async () => {
+    await writeManifest();
+    await rm(join(root, 'mina-runner.mjs'));
+
+    await expect(createRuntimeManifest({ manifestPath, runtimeRoot: root }).verify())
+      .resolves.toMatchObject({ available: false, reason: 'runtime_guest_runner_missing' });
+  });
+
+  it('fails closed when the fixed JavaScript bootstrap executable is missing', async () => {
+    await writeManifest();
+    await rm(join(root, 'javascript', 'node.exe'));
+
+    await expect(createRuntimeManifest({ manifestPath, runtimeRoot: root }).verify())
+      .resolves.toMatchObject({ available: false, reason: 'runtime_bootstrap_node_missing' });
   });
 });

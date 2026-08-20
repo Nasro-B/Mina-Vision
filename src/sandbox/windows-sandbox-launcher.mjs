@@ -9,11 +9,16 @@ const SAFE_JOB_ID = /^[a-z0-9][a-z0-9-]{0,100}$/u;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu;
 
 const startDefault = async ({ sessionId, configXml }) => {
-  await execFile('wsb.exe', ['start', '--id', sessionId, '--config', configXml, '--raw'], {
-    windowsHide: true,
-    timeout: 60_000,
-    maxBuffer: 64 * 1024,
-  });
+  try {
+    await execFile('wsb.exe', ['start', '--id', sessionId, '--config', configXml, '--raw'], {
+      windowsHide: true,
+      timeout: 60_000,
+      maxBuffer: 64 * 1024,
+    });
+  } catch (error) {
+    const detail = [error?.stderr, error?.stdout, error?.message].filter(Boolean).join(' ').slice(0, 1_000);
+    throw new Error(`sandbox_start_failed:${detail}`);
+  }
   return { started: true };
 };
 

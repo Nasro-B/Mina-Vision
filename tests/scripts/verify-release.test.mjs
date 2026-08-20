@@ -63,6 +63,20 @@ describe('verifyRelease', () => {
     expect(output.length).toBeLessThanOrEqual(2_000);
   });
 
+  it('marks Windows Sandbox acceptance as passed when the sandbox smoke check passes', async () => {
+    const report = await verifyRelease({
+      commands: [{ name: 'sandbox_smoke', run: async () => ({ exitCode: 0 }) }],
+      requiredCapabilities: [],
+      clock: () => 3,
+    });
+
+    expect(report.manual).toContainEqual(expect.objectContaining({
+      name: 'sandbox_isolation_acceptance',
+      status: 'pass',
+      reason: 'windows_sandbox_smoke_passed',
+    }));
+  });
+
   it('wires the reproducible runner as the release script', async () => {
     const packageJson = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
 

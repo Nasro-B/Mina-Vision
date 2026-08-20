@@ -102,6 +102,7 @@ function defaultCommands() {
     { name: 'integration', ...buildNpmRunCommand('test:integration') },
     { name: 'smoke', ...buildNpmRunCommand('test:smoke') },
     { name: 'sqlite_electron_smoke', ...buildNpmRunCommand('smoke:sqlite:electron') },
+    { name: 'sandbox_smoke', ...buildNpmRunCommand('smoke:sandbox') },
     { name: 'verify', ...buildNpmRunCommand('verify') },
   ];
 }
@@ -121,9 +122,19 @@ function normalizeCommandResult(result) {
   };
 }
 
+function manualChecksFor(checks) {
+  const sandboxSmoke = checks.find((check) => check.name === 'sandbox_smoke');
+  return MANUAL_CHECKS.map((entry) => {
+    if (entry.name === 'sandbox_isolation_acceptance' && sandboxSmoke?.status === 'pass') {
+      return Object.freeze({ name: entry.name, status: 'pass', reason: 'windows_sandbox_smoke_passed' });
+    }
+    return entry;
+  });
+}
+
 /**
- * Runs reproducible automated release checks. Manual acceptance is deliberately
- * reported as unrun: this runner cannot turn a physical or account-based gate green.
+ * Runs reproducible automated release checks. Physical/account-based gates stay unrun.
+ * Windows Sandbox can be promoted only when the real sandbox smoke check is present and green.
  */
 export async function verifyRelease({ commands = defaultCommands(), requiredCapabilities = [], clock = Date.now } = {}) {
   if (!Array.isArray(commands)) throw new TypeError('release_commands_invalid');
@@ -168,7 +179,7 @@ export async function verifyRelease({ commands = defaultCommands(), requiredCapa
   return Object.freeze({
     status: checks.every((check) => check.status === 'pass') ? 'pass' : 'fail',
     checks: Object.freeze(checks),
-    manual: MANUAL_CHECKS,
+    manual: Object.freeze(manualChecksFor(checks)),
     generatedAt: clock(),
   });
 }

@@ -3,6 +3,8 @@ import { lstat, readFile } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 
 const REQUIRED = Object.freeze(['python', 'javascript', 'powershell']);
+const GUEST_RUNNER = 'mina-runner.mjs';
+const BOOTSTRAP_NODE = 'javascript/node.exe';
 const SHA = /^[a-f0-9]{64}$/u;
 const VERSION = /^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$/u;
 
@@ -57,8 +59,22 @@ export function createRuntimeManifest({ manifestPath, runtimeRoot } = {}) {
       }
       results.push(Object.freeze({ language, version: runtime.version, path, sourceUrl: runtime.sourceUrl, verified: true }));
     }
+    const guestRunnerPath = resolve(join(runtimeRoot, GUEST_RUNNER));
+    try {
+      const runnerStat = await lstat(guestRunnerPath);
+      if (runnerStat.isSymbolicLink() || !runnerStat.isFile()) throw new Error('invalid');
+    } catch {
+      return Object.freeze({ available: false, reason: 'runtime_guest_runner_missing', runtimes: Object.freeze(results) });
+    }
+    const bootstrapNodePath = resolve(join(runtimeRoot, ...BOOTSTRAP_NODE.split('/')));
+    try {
+      const nodeStat = await lstat(bootstrapNodePath);
+      if (nodeStat.isSymbolicLink() || !nodeStat.isFile()) throw new Error('invalid');
+    } catch {
+      return Object.freeze({ available: false, reason: 'runtime_bootstrap_node_missing', runtimes: Object.freeze(results) });
+    }
     verified = new Map(results.map((runtime) => [runtime.language, runtime]));
-    return Object.freeze({ available: true, reason: null, runtimes: Object.freeze(results) });
+    return Object.freeze({ available: true, reason: null, runtimes: Object.freeze(results), guestRunnerPath, bootstrapNodePath });
   }
 
   function resolveRuntime(language) {

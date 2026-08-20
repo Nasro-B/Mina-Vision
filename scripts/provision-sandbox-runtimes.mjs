@@ -18,7 +18,7 @@
 // Le manifeste produit est RE-VÉRIFIÉ par le vrai createRuntimeManifest avant de déclarer succès.
 
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile, readFile, cp, stat } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, rm, writeFile, readFile, cp, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,6 +34,8 @@ import {
 } from '../src/sandbox/runtime-provisioning.mjs';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+const GUEST_RUNNER_FILE = 'mina-runner.mjs';
+const BOOTSTRAP_NODE_PATH = 'javascript/node.exe';
 
 // ── Versions pinnées (patch résolu dynamiquement quand une source d'index existe) ────────────
 const NODE_MAJOR = 22;                 // ligne LTS (règle Nasro : Node 22)
@@ -57,6 +59,14 @@ async function fetchBuffer(url) {
 }
 async function fetchText(url) { return (await fetchBuffer(url)).toString('utf8'); }
 const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
+
+async function installGuestBootstrap(runtimeRoot, manifest) {
+  await copyFile(join(ROOT, 'src', 'sandbox', 'guest-runner.mjs'), join(runtimeRoot, GUEST_RUNNER_FILE));
+  const javascript = manifest?.runtimes?.find?.((runtime) => runtime.language === 'javascript');
+  if (!javascript?.path) throw new Error('runtime_javascript_missing');
+  await mkdir(join(runtimeRoot, 'javascript'), { recursive: true });
+  await copyFile(join(runtimeRoot, ...javascript.path.split('/')), join(runtimeRoot, ...BOOTSTRAP_NODE_PATH.split('/')));
+}
 
 // Extrait un zip et retourne le dossier de destination. Localise l'exécutable attendu (récursif,
 // insensible à la casse) et renvoie son chemin relatif POSIX sous destRoot.
@@ -145,6 +155,16 @@ async function main() {
   log('Cible du runtime sandbox :', sandboxRuntimeRoot);
   log('Plan : Python', PYTHON_VERSION, '· Node LTS', `${NODE_MAJOR}.x`, '· PowerShell', `${PWSH_MAJOR_MINOR}.x`);
   if (dryRun) { log('--dry-run : rien téléchargé. Retire le flag pour provisionner.'); return; }
+  if (arg('runner-only')) {
+    await mkdir(sandboxRuntimeRoot, { recursive: true });
+    const manifest = JSON.parse(await readFile(join(sandboxRuntimeRoot, 'runtime-manifest.json'), 'utf8'));
+    await installGuestBootstrap(sandboxRuntimeRoot, manifest);
+    const verifier = createRuntimeManifest({ manifestPath: join(sandboxRuntimeRoot, 'runtime-manifest.json'), runtimeRoot: sandboxRuntimeRoot });
+    const result = await verifier.verify();
+    if (!result.available) die(`runner copié mais runtime rejeté par le vérificateur : ${result.reason}`);
+    log('✔ Runner invité sandbox installé et runtime vérifié.');
+    return;
+  }
 
   const stageDir = await mkdtemp(join(tmpdir(), 'mina-sandbox-rt-'));
   try {
@@ -163,6 +183,7 @@ async function main() {
       await rm(to, { recursive: true, force: true });
       await cp(from, to, { recursive: true });
     }
+    await installGuestBootstrap(sandboxRuntimeRoot, manifest);
     await writeFile(join(sandboxRuntimeRoot, 'runtime-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 
     // Preuve : le VRAI vérificateur du sandbox doit dire available:true.

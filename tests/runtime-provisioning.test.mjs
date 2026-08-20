@@ -101,6 +101,9 @@ describe('runtime provisioning — pure logic', () => {
         });
       }
       const manifest = buildRuntimeManifest(entries);
+      await writeFile(join(root, 'mina-runner.mjs'), 'export {};\n');
+      await mkdir(join(root, 'javascript'), { recursive: true });
+      await writeFile(join(root, 'javascript', 'node.exe'), 'BOOTSTRAP-NODE');
       await writeFile(join(root, 'runtime-manifest.json'), JSON.stringify(manifest, null, 2));
 
       const verifier = createRuntimeManifest({ manifestPath: join(root, 'runtime-manifest.json'), runtimeRoot: root });

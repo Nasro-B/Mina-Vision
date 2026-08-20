@@ -9,6 +9,7 @@
     "benchmark:vector-scan": "node scripts/benchmark-vector-scan.mjs",
     "models:install": "node scripts/install-models.mjs",
     "smoke:sqlite:electron": "node scripts/run-sqlite-electron-smoke.mjs",
+    "smoke:sandbox": "node scripts/run-windows-sandbox-smoke.mjs",
     "start": "powershell -NoProfile -File scripts/launch-mina.ps1 -Wait",
     "test": "npm run test:unit && npm run test:integration",
     "test:watch": "vitest",
