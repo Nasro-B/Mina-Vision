@@ -136,6 +136,62 @@ class ChatRepositoryTest {
     }
 
     @Test
+    fun `retry d une note vocale remet la meta et tous les chunks echoues en file`() = runTest {
+        val root = Files.createTempDirectory("mina-voice-group-retry-test-").toFile()
+        try {
+            val store = EncryptedAttachmentStore(
+                root = root,
+                epochKeyProvider = { epoch -> if (epoch == 1) epochKey.copyOf() else null },
+                currentEpoch = { 1 },
+            )
+            val repo = ChatRepository(
+                dao = db.chatDao(),
+                deviceId = "device-samsung",
+                now = { clock },
+                epochKeyProvider = { epoch -> if (locked || epoch != 1) null else epochKey },
+                attachmentStore = store,
+            )
+            val capture = repo.beginVoiceCapture("thread-main")
+            capture.append(ByteArray(VoicePcmFormat.CHUNK_BYTES) { 1 }, VoicePcmFormat.CHUNK_BYTES)
+            capture.append(ByteArray(64) { 2 }, 64)
+            val completed = capture.complete(durationMs = 1_000)
+            repo.enqueueVoice(completed)
+            val eventIds = completed.deliveryEventIds
+            for (eventId in eventIds) {
+                db.chatDao().updateDeliveryState(eventId, DeliveryState.FAILED_FINAL)
+                db.chatDao().dequeue(eventId)
+            }
+
+            repo.retryFailedMessage(eventIds.first())
+
+            assertEquals(eventIds, db.chatDao().dueOutbox(clock, 10).map { it.eventId })
+            assertEquals(
+                List(eventIds.size) { DeliveryState.LOCAL_PENDING },
+                eventIds.map { db.chatDao().findEvent(it)?.deliveryState },
+            )
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `retry refuse une meta media deja recue meme si un chunk du meme media a echoue`() = runTest {
+        repository.sendMedia("thread-main", ByteArray(200_000) { 1 }, "image/jpeg")
+        val rows = db.chatDao().readThread("thread-main")
+        val meta = rows.single { it.routingClass == "message" }
+        val chunk = rows.first { it.routingClass == "stream" }
+        for (row in rows) db.chatDao().dequeue(row.eventId)
+        db.chatDao().updateDeliveryState(meta.eventId, DeliveryState.PC_RECEIVED)
+        db.chatDao().updateDeliveryState(chunk.eventId, DeliveryState.FAILED_FINAL)
+
+        val error = runCatching { repository.retryFailedMessage(meta.eventId) }.exceptionOrNull()
+
+        assertEquals("chat_retry_non_reessayable", error?.message)
+        assertEquals(0, repository.pendingCount())
+        assertEquals(DeliveryState.FAILED_FINAL, db.chatDao().findEvent(chunk.eventId)?.deliveryState)
+    }
+
+    @Test
     fun `le meme evenement livre deux fois n apparait qu une seule fois`() = runTest {
         val eventId = repository.sendText("thread-main", "bonjour")
         val row = db.chatDao().findEvent(eventId)!!

@@ -99,6 +99,7 @@ class ChatRepository(
         private const val MAX_TEXT_UTF8_BYTES = 32 * 1_024
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val TAG_BITS = 128
+        private val MEDIA_PAYLOAD_TYPES = setOf("message.attachment.created", "message.voice.created", "media.chunk")
     }
 
     /** Sérialise la réservation et la reprise des ULID d'une même note vocale. */
@@ -286,7 +287,10 @@ class ChatRepository(
 
     /** Réémet le même eventId uniquement après un échec final : le ledger PC reste idempotent. */
     suspend fun retryFailedMessage(eventId: String) {
-        require(dao.retryFailedOutgoing(eventId, now())) { "chat_retry_non_reessayable" }
+        val event = dao.findEvent(eventId) ?: throw IllegalArgumentException("chat_retry_non_reessayable")
+        require(!event.fromAssistant && event.deliveryState == DeliveryState.FAILED_FINAL) { "chat_retry_non_reessayable" }
+        val eventIds = failedOutgoingMediaGroup(event).ifEmpty { listOf(eventId) }
+        require(dao.retryFailedOutgoingBatch(eventIds, now())) { "chat_retry_non_reessayable" }
     }
 
     /**
@@ -415,6 +419,30 @@ class ChatRepository(
             cipher.doFinal(decoder.decode(row.payloadCiphertext) + decoder.decode(row.authTag))
         } catch (error: Exception) {
             null
+        }
+    }
+
+    private suspend fun failedOutgoingMediaGroup(event: ChatEventRow): List<String> {
+        val mediaId = event.mediaIdOrNull() ?: return emptyList()
+        return dao.readThread(event.threadId)
+            .filter { row ->
+                !row.fromAssistant &&
+                    row.deliveryState == DeliveryState.FAILED_FINAL &&
+                    row.mediaIdOrNull() == mediaId
+            }
+            .map { it.eventId }
+    }
+
+    private fun ChatEventRow.mediaIdOrNull(): String? {
+        val bytes = decryptBytesOrNull(this) ?: return null
+        return try {
+            val decoded = runCatching { ChatPayloadCodec.decode(bytes) }.getOrNull() as? ChatPayloadCodec.PayloadV2
+                ?: return null
+            if (decoded.type !in MEDIA_PAYLOAD_TYPES) return null
+            val meta = runCatching { JSONObject(decoded.metaJson) }.getOrNull() ?: return null
+            meta.optString("mediaId").takeIf { it.isNotBlank() }
+        } finally {
+            bytes.fill(0)
         }
     }
 

@@ -160,20 +160,29 @@ interface ChatDao {
     /** Remet un échec final dans la même outbox, sans jamais créer un second événement. */
     @Transaction
     suspend fun retryFailedOutgoing(eventId: String, nowMs: Long): Boolean {
-        val event = findEvent(eventId) ?: return false
-        if (event.fromAssistant || event.deliveryState != DeliveryState.FAILED_FINAL) return false
-        enqueue(
-            OutboxRow(
-                eventId = event.eventId,
-                threadId = event.threadId,
-                queuedAtMs = nowMs,
-                attemptCount = 0,
-                nextAttemptAtMs = nowMs,
-                lastError = null,
-            ),
-        )
-        rescheduleOutbox(eventId, attempts = 0, nextAtMs = nowMs, error = null)
-        updateDeliveryState(eventId, DeliveryState.LOCAL_PENDING)
+        return retryFailedOutgoingBatch(listOf(eventId), nowMs)
+    }
+
+    /** Remet un groupe média échoué en file dans une seule transaction. */
+    @Transaction
+    suspend fun retryFailedOutgoingBatch(eventIds: List<String>, nowMs: Long): Boolean {
+        if (eventIds.isEmpty()) return false
+        val events = eventIds.map { findEvent(it) ?: return false }
+        if (events.any { it.fromAssistant || it.deliveryState != DeliveryState.FAILED_FINAL }) return false
+        for (event in events) {
+            enqueue(
+                OutboxRow(
+                    eventId = event.eventId,
+                    threadId = event.threadId,
+                    queuedAtMs = nowMs,
+                    attemptCount = 0,
+                    nextAttemptAtMs = nowMs,
+                    lastError = null,
+                ),
+            )
+            rescheduleOutbox(event.eventId, attempts = 0, nextAtMs = nowMs, error = null)
+            updateDeliveryState(event.eventId, DeliveryState.LOCAL_PENDING)
+        }
         return true
     }
 }
