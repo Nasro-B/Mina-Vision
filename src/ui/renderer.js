@@ -2123,6 +2123,11 @@ elements.memoryInitialize.addEventListener('click', async () => {
     log('Mémoire Mina Vision initialisée et déverrouillée. Sauvegardez la phrase de récupération hors du PC.');
   } catch (error) {
     if (await repairUnrecoverableMemoryIfNeeded()) return;
+    if (String(error?.message ?? '') === 'keyring_already_initialized') {
+      await refreshMemoryStatus();
+      log('Mémoire déjà initialisée : colle la phrase de récupération puis clique Déverrouiller.');
+      return;
+    }
     log(`Mémoire : ${error.message}`);
   }
 });
