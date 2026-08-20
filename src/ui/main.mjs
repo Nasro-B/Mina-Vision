@@ -98,6 +98,7 @@ import { createEchoGuard } from '../voice/echo-guard.mjs';
 import { createGroqWebAnswer, createWebAnswerChain, createWebAnswerService } from '../research/web-answer.mjs';
 import { createPdfTextExtractor } from '../research/pdf-text-extractor.mjs';
 import { createLocalVoiceClient } from '../voice/local-voice-client.mjs';
+import { localVoicePackagingCapability } from '../voice/local-voice-packaging-policy.mjs';
 import { createDeepgramStt } from '../voice/deepgram-stt.mjs';
 import { composeSelfBrief, createSelfModel } from '../core/self-model.mjs';
 import { composeLessonsBrief, createLessonsRegistry } from '../core/lessons-registry.mjs';
@@ -3537,7 +3538,10 @@ app.whenReady().then(async () => {
   reportCapability('voice.local_only', lmStudioProbe.ready ? 'degraded' : 'unavailable', lmStudioProbe.ready ? 'local_voice_end_to_end_unverified' : lmStudioProbe.reason);
   reportCapability('sandbox', 'degraded', 'sandbox_physical_isolation_unverified');
   reportCapability('avatar.visage', 'unavailable', 'vrm_avatar_out_of_scope');
-  reportCapability('packaging.local_voice', 'unavailable', 'espeak_distribution_decision_required');
+  {
+    const capability = localVoicePackagingCapability();
+    reportCapability(capability.id, capability.status, capability.reason);
+  }
   reportCapability('memory', memoryController?.status?.()?.locked === false ? 'available' : 'degraded', memoryController?.status?.()?.locked === false ? null : 'coffre_verrouille');
 
   minaCore = createMinaRuntime({

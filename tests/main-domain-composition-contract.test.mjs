@@ -43,10 +43,12 @@ describe('contrat de composition des domaines (main.mjs)', () => {
       "reportCapability('voice.local_only', lmStudioProbe.ready ? 'degraded' : 'unavailable', lmStudioProbe.ready ? 'local_voice_end_to_end_unverified' : lmStudioProbe.reason)",
       "reportCapability('sandbox', 'degraded', 'sandbox_physical_isolation_unverified')",
       "reportCapability('avatar.visage', 'unavailable', 'vrm_avatar_out_of_scope')",
-      "reportCapability('packaging.local_voice', 'unavailable', 'espeak_distribution_decision_required')",
+      'const capability = localVoicePackagingCapability();',
+      'reportCapability(capability.id, capability.status, capability.reason)',
     ]) {
       expect(main).toContain(needle);
     }
+    expect(main).not.toContain('espeak_distribution_decision_required');
   });
 
   it('personal, documents et personality sont composés avec des persistances réelles', async () => {
