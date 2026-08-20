@@ -147,6 +147,8 @@ import { createDocumentClassifier } from '../documents/document-classifier.mjs';
 import { createDocumentMemoryService } from '../documents/document-memory-service.mjs';
 import { createDocumentRagRepository } from '../documents/document-rag-repository.mjs';
 import { createFormService } from '../documents/form-service.mjs';
+import { createDownloadService } from '../documents/download-service.mjs';
+import { createHttpDocumentDownloadPort } from '../documents/http-download-port.mjs';
 import { createPdfTextDocumentParser, createImageOcrDocumentParser } from '../documents/local-document-parsers.mjs';
 import { createPdfPageRasterizer, createPdfScannedOcrFallback } from '../documents/pdf-scanned-ocr.mjs';
 import { createDocumentController } from './pages/document-controller.mjs';
@@ -3351,6 +3353,28 @@ app.whenReady().then(async () => {
       confirmationService: { confirm: async ({ reason }) => confirmSensitiveAction({ reason, action: { name: 'documents.form_fill' } }) },
       clock: Date.now,
     });
+    const documentDownloadService = createDownloadService({
+      browserDownloadPort: createHttpDocumentDownloadPort(),
+      filesystem: {
+        exists: async (filename) => {
+          const authorizedFilename = await hostWritePolicy.authorize(filename);
+          try {
+            await access(authorizedFilename);
+            return true;
+          } catch (error) {
+            if (error?.code === 'ENOENT') return false;
+            throw error;
+          }
+        },
+        readFile: async (filename) => readFile(await hostWritePolicy.authorize(filename)),
+        writeFile: async (filename, bytes, options) => {
+          const authorizedFilename = await hostWritePolicy.authorize(filename);
+          return writeFile(authorizedFilename, bytes, { ...options, mode: 0o600 });
+        },
+      },
+      confirmationService: { confirm: confirmDigestAction },
+      clock: Date.now,
+    });
     void documentMemoryService.purgeExpiredDocuments()
       .then((summary) => {
         if (summary.purged > 0 || summary.failed > 0) {
@@ -3369,6 +3393,7 @@ app.whenReady().then(async () => {
         classifier,
         memoryService: documentMemoryService,
         formService: documentFormService,
+        downloadService: documentDownloadService,
         printService,
         printerRegistry,
       }),
@@ -3376,7 +3401,7 @@ app.whenReady().then(async () => {
       // qui portent la confirmation locale (voir document-ipc.mjs).
       registerPrinting: false,
     };
-    reportCapability('documents', 'degraded', 'document_form_commit_conversion_download_not_configured');
+    reportCapability('documents', 'degraded', 'document_form_commit_conversion_not_configured');
     reportCapability('printing', 'degraded', 'printing_physical_receipt_unverified');
   });
 

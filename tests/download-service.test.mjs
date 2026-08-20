@@ -50,6 +50,20 @@ describe('createDownloadService.download: fixes final URL/digest/destination', (
   });
 });
 
+describe('createDownloadService.download: optional local confirmation', () => {
+  it('refuses the download when the digest confirmation is denied or mismatched', async () => {
+    const denied = buildWorld({ confirmationService: { confirm: vi.fn(async () => ({ approved: false, digest: DIGEST })) } });
+    await expect(denied.service.download({ finalUrl: 'https://example.test/facture.pdf', digest: DIGEST, destination: 'downloads/facture.pdf' }))
+      .rejects.toThrow('document_download_confirmation_refused');
+    expect(denied.browserDownloadPort.download).not.toHaveBeenCalled();
+
+    const mismatch = buildWorld({ confirmationService: { confirm: vi.fn(async () => ({ approved: true, digest: `sha256:${'b'.repeat(64)}` })) } });
+    await expect(mismatch.service.download({ finalUrl: 'https://example.test/facture.pdf', digest: DIGEST, destination: 'downloads/facture.pdf' }))
+      .rejects.toThrow('document_download_confirmation_refused');
+    expect(mismatch.browserDownloadPort.download).not.toHaveBeenCalled();
+  });
+});
+
 describe('createDownloadService.download: idempotent, never overwrites', () => {
   it('a second download for the same already-completed destination/digest is idempotent and never re-downloads', async () => {
     const { service, browserDownloadPort } = buildWorld();

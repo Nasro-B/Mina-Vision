@@ -172,6 +172,7 @@ function createPreloadApi(ipcRenderer) {
       confirmClassification: (proposalId, overrides) => ipcRenderer.invoke('mina:documents:confirm-classification', { proposalId, overrides }),
       proposeFill: (request) => ipcRenderer.invoke('mina:documents:propose-fill', request),
       renderFormPreview: (proposalId) => ipcRenderer.invoke('mina:documents:render-form-preview', proposalId),
+      download: (request) => ipcRenderer.invoke('mina:documents:download', request),
       forget: (request) => ipcRenderer.invoke('mina:documents:forget', request),
     }),
     personalityGet: () => ipcRenderer.invoke('mina:personality:get'),
