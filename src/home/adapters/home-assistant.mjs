@@ -97,6 +97,7 @@ export function createHomeAssistantConnector({
     },
 
     supports(binding, action) {
+      if (action === 'read_state') return Object.hasOwn(SERVICE_MAP, binding?.domain);
       return Boolean(mapServiceCall(binding?.domain, action, {}));
     },
 

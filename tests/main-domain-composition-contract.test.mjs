@@ -63,6 +63,14 @@ describe('contrat de composition des domaines (main.mjs)', () => {
     expect(main).toContain('mina-personality.sqlite');
   });
 
+  it('hydrate le registre Home depuis les entités découvertes, pas depuis une liste vide', async () => {
+    const main = await source();
+    expect(main).toContain("import { discoverSmartHomeDevices } from '../home/home-device-discovery.mjs';");
+    expect(main).toContain('const homeDiscovery = await discoverSmartHomeDevices({ connectors: homeDomain.connectors });');
+    expect(main).toContain('const homeRegistry = createSmartHomeRegistry({ devices: homeDiscovery.devices });');
+    expect(main).not.toContain('const homeRegistry = createSmartHomeRegistry({ devices: [] });');
+  });
+
   it('relie la quarantaine document aux parseurs locaux, aux preuves et à la classification', async () => {
     const main = await source();
 

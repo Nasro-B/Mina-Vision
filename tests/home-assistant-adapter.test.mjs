@@ -91,6 +91,12 @@ describe('Home Assistant connector: mapped service calls and state reread', () =
     expect(connector.supports({ entityId: 'lock.porte', domain: 'lock' }, 'turn_on')).toBe(false);
     expect(connector.supports(BINDING, 'turn_on')).toBe(true);
   });
+
+  it('supports read_state for every discoverable mapped domain', () => {
+    const { connector } = harness();
+    expect(connector.supports(BINDING, 'read_state')).toBe(true);
+    expect(connector.supports({ entityId: 'sensor.temp', domain: 'sensor' }, 'read_state')).toBe(false);
+  });
 });
 
 describe('Home Assistant connector: request timeout', () => {

@@ -184,6 +184,7 @@ import { createSmartHomeRouter } from '../home/router.mjs';
 import { createSmartHomeService } from '../home/service.mjs';
 import { toAutomationHomeResult } from '../home/automation-result.mjs';
 import { composeHomeDomain } from '../home/compose-home-domain.mjs';
+import { discoverSmartHomeDevices } from '../home/home-device-discovery.mjs';
 import { createHomeController } from './pages/home-controller.mjs';
 import { registerHomeIpc } from './ipc/home-ipc.mjs';
 import { createFaceProfileStore } from '../biometrics/face-profile-store.mjs';
@@ -3020,7 +3021,8 @@ app.whenReady().then(async () => {
   });
   // Mail domain: infrastructure wired and reachable via IPC, but no adapter is constructed until
   // an account is actually configured (none exist in this environment yet). Mode 3 by default per spec.
-  // Smart-home domain: empty registry/router until Home Assistant/MQTT/Google Home bindings exist.
+  // Smart-home domain: registry hydrated from configured connector discovery; empty only when no
+  // connector exists or discovery fails honestly.
   // Camera domain: streaming is fully functional; biometric enrollment requires local ONNX face
   // models that are not downloaded in this environment (`models.install`, explicit action only),
   // so the embedder fails closed with a clear error rather than ever faking a recognition result.
@@ -3134,11 +3136,13 @@ app.whenReady().then(async () => {
 
   try {
     // Connecteurs RÉELS depuis la configuration (Home Assistant si URL locale + jeton ; MQTT
-    // honnêtement indisponible car la dépendance a été retirée). Sans config, listes vides =
-    // « aucun connecteur configuré » affiché honnêtement, ce qui reste la vérité.
+    // honnêtement indisponible car la dépendance a été retirée). Les appareils sont ensuite
+    // découverts depuis les connecteurs configurés ; sans config ou sans appareil, l'état reste
+    // dégradé avec une raison nommée.
     const homeDomain = composeHomeDomain({ env: process.env });
     const homeConnectorList = Object.values(homeDomain.connectors);
-    const homeRegistry = createSmartHomeRegistry({ devices: [] });
+    const homeDiscovery = await discoverSmartHomeDevices({ connectors: homeDomain.connectors });
+    const homeRegistry = createSmartHomeRegistry({ devices: homeDiscovery.devices });
     const homePolicy = createSmartHomePolicy({ firebaseLowRiskEnabled: false });
     const homeRouter = createSmartHomeRouter({ connectors: homeConnectorList });
     const homeService = createSmartHomeService({ registry: homeRegistry, policy: homePolicy, router: homeRouter });
@@ -3148,8 +3152,12 @@ app.whenReady().then(async () => {
     });
     homeRegistryRef = homeRegistry;
     homeServiceRef = homeService;
-    homeCapabilityLevel = homeDomain.state === 'configured' ? 'available' : 'degraded';
-    homeCapabilityReason = homeDomain.reason;
+    homeCapabilityLevel = homeDomain.state === 'configured' && homeDiscovery.devices.length > 0 ? 'available' : 'degraded';
+    homeCapabilityReason = [
+      homeDomain.reason,
+      ...homeDiscovery.notes,
+      homeDomain.state === 'configured' && homeDiscovery.devices.length === 0 ? 'home_no_device_discovered' : null,
+    ].filter(Boolean).join(' ; ') || null;
   } catch (error) {
     send('mina:event', { type: 'domain_degraded', domain: 'home', reason: String(error?.message ?? error).slice(0, 200) });
   }
