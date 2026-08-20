@@ -102,7 +102,9 @@ class FirebaseResponseStream(
                 ownerId = ownerId,
                 responseId = responseId,
                 onFrame = { frame ->
-                    if (frame.sequence > afterSequence) decodeFrame(frame)?.let(onEvent)
+                    if (isActive(responseId, pending) && frame.sequence > afterSequence) {
+                        decodeFrame(frame)?.let(onEvent)
+                    }
                 },
                 onError = { cancel(responseId, pending) },
             )
@@ -142,6 +144,10 @@ class FirebaseResponseStream(
             pending?.subscription
         }
         subscription?.close()
+    }
+
+    private fun isActive(responseId: String, pending: PendingSubscription): Boolean = synchronized(lock) {
+        subscriptions[responseId] === pending && !pending.cancelled
     }
 
     private fun decodeFrame(frame: FirebaseResponseStreamFrame): ChatEvent? {

@@ -48,6 +48,20 @@ class FirebaseResponseStreamTest {
     }
 
     @Test
+    fun `ignore une frame deja en vol apres stop du flux`() {
+        val source = LeakySource()
+        val delivered = mutableListOf<ChatEvent>()
+        val stream = FirebaseResponseStream(source = source, now = { 1_000L })
+
+        stream.watchFrames(OWNER_ID, RESPONSE_ID, onEvent = delivered::add)
+        stream.stop(RESPONSE_ID)
+        source.emit(frame(sequence = 1, ciphertext = eventCiphertext()))
+
+        assertTrue(source.closed)
+        assertTrue(delivered.isEmpty())
+    }
+
+    @Test
     fun `ferme le listener si RTDB annule immediatement la requete`() {
         val source = CancelOnWatchSource()
         val stream = FirebaseResponseStream(source = source, now = { 1_000L })
@@ -100,6 +114,24 @@ class FirebaseResponseStreamTest {
                 this.onFrame = null
                 active = false
             }
+        }
+
+        fun emit(frame: FirebaseResponseStreamFrame) = onFrame?.invoke(frame)
+    }
+
+    private class LeakySource : FirebaseResponseStreamSource {
+        private var onFrame: ((FirebaseResponseStreamFrame) -> Unit)? = null
+        var closed = false
+            private set
+
+        override fun watch(
+            ownerId: String,
+            responseId: String,
+            onFrame: (FirebaseResponseStreamFrame) -> Unit,
+            onError: () -> Unit,
+        ): FirebaseResponseStreamSubscription {
+            this.onFrame = onFrame
+            return FirebaseResponseStreamSubscription { closed = true }
         }
 
         fun emit(frame: FirebaseResponseStreamFrame) = onFrame?.invoke(frame)
