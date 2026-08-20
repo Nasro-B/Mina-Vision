@@ -146,6 +146,7 @@ import { createDocumentEvidenceStore } from '../documents/document-evidence-stor
 import { createDocumentClassifier } from '../documents/document-classifier.mjs';
 import { createDocumentMemoryService } from '../documents/document-memory-service.mjs';
 import { createDocumentRagRepository } from '../documents/document-rag-repository.mjs';
+import { createFormService } from '../documents/form-service.mjs';
 import { createPdfTextDocumentParser, createImageOcrDocumentParser } from '../documents/local-document-parsers.mjs';
 import { createPdfPageRasterizer, createPdfScannedOcrFallback } from '../documents/pdf-scanned-ocr.mjs';
 import { createDocumentController } from './pages/document-controller.mjs';
@@ -3260,8 +3261,9 @@ app.whenReady().then(async () => {
     reportCapability('personal', googleCalendarService ? 'available' : 'degraded', googleCalendarService ? null : 'google_personnel_non_connecte');
   });
 
-  // Task 12 — documents : réception en quarantaine + impression réelle ; les services sans
-  // implémentation runtime (conversion sandbox, formulaires, téléchargement) restent absents.
+  // Task 12 — documents : réception en quarantaine + impression réelle ; les propositions/aperçus
+  // de formulaires sont composés, mais copie remplie, conversion sandbox et téléchargement restent
+  // explicitement dégradés tant que leurs ports réels ne sont pas disponibles.
   await superviseDomain('documents', async () => {
     // Point de faute par domaine (T1.2) : `MINA_BOOT_FAULT=domain:documents` fait échouer CE domaine
     // pour prouver que les suivants s'initialisent quand même et que l'app reste prête.
@@ -3326,6 +3328,29 @@ app.whenReady().then(async () => {
       sourceStore: documentQuarantineStore,
       clock: Date.now,
     });
+    const documentFormService = createFormService({
+      evidenceStore,
+      fileWriter: {
+        writeAtomic: async ({ path: filename, content, encoding }) => {
+          const authorizedFilename = await hostWritePolicy.authorize(filename);
+          return writeExclusiveFile({ path: authorizedFilename, content, encoding });
+        },
+      },
+      formRenderer: null,
+      capabilityBroker: {
+        authorize: async ({ capability, resource }) => {
+          const approved = await confirmSensitiveAction({
+            reason: `Autoriser ${capability} sur ${resource} ?`,
+            action: { name: 'documents.form_fill' },
+          });
+          return approved
+            ? { decision: 'allow', reason: 'confirmed_local_document_form' }
+            : { decision: 'deny', reason: 'confirmation_refused' };
+        },
+      },
+      confirmationService: { confirm: async ({ reason }) => confirmSensitiveAction({ reason, action: { name: 'documents.form_fill' } }) },
+      clock: Date.now,
+    });
     void documentMemoryService.purgeExpiredDocuments()
       .then((summary) => {
         if (summary.purged > 0 || summary.failed > 0) {
@@ -3343,6 +3368,7 @@ app.whenReady().then(async () => {
         evidenceStore,
         classifier,
         memoryService: documentMemoryService,
+        formService: documentFormService,
         printService,
         printerRegistry,
       }),
@@ -3350,7 +3376,7 @@ app.whenReady().then(async () => {
       // qui portent la confirmation locale (voir document-ipc.mjs).
       registerPrinting: false,
     };
-    reportCapability('documents', 'degraded', 'document_form_conversion_download_not_configured');
+    reportCapability('documents', 'degraded', 'document_form_commit_conversion_download_not_configured');
     reportCapability('printing', 'degraded', 'printing_physical_receipt_unverified');
   });
 
