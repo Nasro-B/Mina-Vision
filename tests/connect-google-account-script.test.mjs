@@ -22,4 +22,11 @@ describe('connect-google-account script', () => {
     expect(source).toContain('access_denied');
     expect(source).toContain('utilisateur de test OAuth');
   });
+
+  it('explains Google disallowed_useragent / insecure browser instead of retrying the controlled browser', async () => {
+    const source = await readFile('scripts/connect-google-account.mjs', 'utf8');
+    expect(source).toContain('disallowed_useragent');
+    expect(source).toContain('navigateur Chrome normal non piloté');
+    expect(source).toContain('pas via l’extension Chrome');
+  });
 });

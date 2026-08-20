@@ -20,6 +20,9 @@ For this installation, the target project must be **`mina-vision`** with the ope
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com), sign in with
    `mina.vision.ai@gmail.com`.
+   - Do not do this step in Chrome controlled by an extension/DevTools/Playwright or in a WebView:
+     Google can show "This browser or app may not be secure." Use a normal, uncontrolled Chrome
+     profile already signed in as the Berkoun account.
 2. Select the Google Cloud/Firebase project **`mina-vision`**.
 3. **APIs & Services → Library**: enable *Gmail API*, *Google Calendar API*, *People API*,
    *Google Tasks API*.
@@ -57,6 +60,9 @@ npm run connect:google
 - The default browser opens on the Google consent screen — sign in with
   `mina.vision.ai@gmail.com`, accept the requested permissions (Gmail, Calendar, Contacts,
   Tasks).
+- If Google shows "This browser or app may not be secure" or `disallowed_useragent`, copy the OAuth
+  URL printed by the terminal and paste it into a normal, uncontrolled Chrome profile. Do not use
+  Codex's Chrome extension for this sign-in.
 - Once validated, a "Account connected" tab appears — the terminal confirms the connection and
   the encrypted token is stored in the local vault.
 

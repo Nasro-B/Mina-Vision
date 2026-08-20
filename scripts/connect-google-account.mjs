@@ -88,6 +88,12 @@ function oauthTimeoutMs() {
 
 function printDeniedHelp(reason) {
   const value = String(reason ?? '');
+  if (value.includes('disallowed_useragent') || value.includes('insecure_browser')) {
+    console.error('Google refuse ce navigateur ou cette application comme non sécurisé.');
+    console.error('Ouvre le lien OAuth dans un navigateur Chrome normal non piloté, pas via l’extension Chrome, DevTools, Playwright, ni une WebView.');
+    console.error('Si le lien a été copié dans le presse-papiers, colle-le dans ton Chrome habituel déjà connecté à mina.vision.ai@gmail.com.\n');
+    return;
+  }
   if (!value.includes('access_denied') && !value.includes('oauth_loopback_timeout')) return;
   console.error('Si Chrome affiche « Accès bloqué : Mina Vision n’a pas terminé la procédure de validation de Google »,');
   console.error('ajoute l’adresse Gmail utilisée comme utilisateur de test OAuth dans Google Cloud Console :');

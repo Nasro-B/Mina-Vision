@@ -15,6 +15,7 @@ Pour cette installation, le projet cible doit être **`mina-vision`** avec le co
 `mina-vission` : le connecteur le refuse quand le fichier téléchargé expose son `project_id`.
 
 1. Aller sur [console.cloud.google.com](https://console.cloud.google.com), se connecter avec `mina.vision.ai@gmail.com`.
+   - Ne pas faire cette étape dans un Chrome piloté par extension/DevTools/Playwright ni dans une WebView : Google peut afficher « Ce navigateur ou cette application ne sont peut-être pas sécurisés ». Utiliser un Chrome normal non piloté déjà connecté au compte Berkoun.
 2. Sélectionner le projet Google Cloud/Firebase **`mina-vision`**.
 3. **APIs et services → Bibliothèque** : activer *Gmail API*, *Google Calendar API*, *People API*, *Google Tasks API*.
 4. **APIs et services → Écran de consentement OAuth** :
@@ -38,6 +39,7 @@ npm run connect:google
 - Première exécution : le JSON `client_secret_*.json` doit être présent dans `env\`. L'outil l'utilise sans afficher le secret, puis l'enregistre chiffré pour les prochaines fois. Si `FIREBASE_PROJECT_ID=mina-vision` et que le JSON est absent, l'outil s'arrête avant Chrome avec `client_config_file_required`.
 - L'adresse Gmail peut être fournie via `MINA_GOOGLE_ACCOUNT` ou saisie à l'invite si la variable n'est pas définie.
 - Le navigateur par défaut s'ouvre sur l'écran de consentement Google — se connecter avec `mina.vision.ai@gmail.com`, accepter les permissions demandées (Gmail, Calendrier, Contacts, Tâches).
+- Si Google affiche « Ce navigateur ou cette application ne sont peut-être pas sécurisés » ou `disallowed_useragent`, copier l'URL OAuth affichée par le terminal et la coller dans un Chrome normal non piloté. Ne pas utiliser l'extension Chrome de Codex pour cette connexion.
 - Une fois validé, un onglet « Compte connecté » s'affiche — le terminal confirme la connexion et le jeton chiffré est enregistré dans le coffre local.
 
 ## Après la connexion
