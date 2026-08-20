@@ -96,19 +96,33 @@ describe('verify-mina probes: home', () => {
     expect(probeHomeDomain({ env: {} })).toEqual({
       ready: false,
       reason: 'aucun_connecteur_configure',
+      homeAssistantBaseUrlConfigured: false,
+      homeAssistantAuthConfigured: false,
+      mqttBrokerConfigured: false,
     });
   });
 
   it('marks home unavailable when HA config is incomplete', () => {
     expect(probeHomeDomain({ env: { HOME_ASSISTANT_BASE_URL: 'https://homeassistant.local:8123' } }))
-      .toEqual({ ready: false, reason: 'home_assistant_config_incomplete' });
+      .toEqual({
+        ready: false,
+        reason: 'home_assistant_config_incomplete',
+        homeAssistantBaseUrlConfigured: true,
+        homeAssistantAuthConfigured: false,
+        mqttBrokerConfigured: false,
+      });
   });
 
   it('marks home configured when HA base URL + token are present', () => {
     expect(probeHomeDomain({ env: {
       HOME_ASSISTANT_BASE_URL: 'https://homeassistant.local:8123',
       HOME_ASSISTANT_TOKEN: 'tok',
-    } }).ready).toBe(true);
+    } })).toMatchObject({
+      ready: true,
+      connectors: ['home-assistant'],
+      homeAssistantBaseUrlConfigured: true,
+      homeAssistantAuthConfigured: true,
+    });
   });
 });
 
@@ -118,6 +132,16 @@ describe('verify-mina probes: google home sdk', () => {
       .toEqual({ ready: false, reason: 'google_home_sdk_unavailable' });
   });
 
+  it('reports the expected Google Home SDK manifest path without marking it ready', async () => {
+    await expect(probeGoogleHomeSdk({ env: { USERPROFILE: 'C:\\Users\\Nasro' } })).resolves
+      .toEqual({
+        ready: false,
+        reason: 'google_home_sdk_unavailable',
+        expectedPath: 'C:\\Users\\Nasro\\.mina\\sdk\\google-home\\1.9',
+        manifestPath: 'C:\\Users\\Nasro\\.mina\\sdk\\google-home\\1.9\\manifest.json',
+      });
+  });
+
   it('marks the Google Home SDK ready only when its manifest is present', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'mina-google-home-sdk-'));
     try {
@@ -125,7 +149,11 @@ describe('verify-mina probes: google home sdk', () => {
       await writeFile(path.join(root, 'manifest.json'), '{"name":"google-home"}', 'utf8');
       expect(resolveGoogleHomeSdkPath({ env: { MINA_GOOGLE_HOME_SDK_PATH: root } })).toBe(path.resolve(root));
       await expect(probeGoogleHomeSdk({ env: { MINA_GOOGLE_HOME_SDK_PATH: root } })).resolves
-        .toEqual({ ready: true });
+        .toEqual({
+          ready: true,
+          expectedPath: path.resolve(root),
+          manifestPath: path.join(path.resolve(root), 'manifest.json'),
+        });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

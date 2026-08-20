@@ -96,16 +96,24 @@ export async function probeGoogleHomeSdk({
 } = {}) {
   const sdkPath = resolveGoogleHomeSdkPath({ env });
   if (!sdkPath) return { ready: false, reason: 'google_home_sdk_unavailable' };
+  const manifestPath = path.join(sdkPath, 'manifest.json');
   try {
-    await readFileImpl(path.join(sdkPath, 'manifest.json'), 'utf8');
-    return { ready: true };
+    await readFileImpl(manifestPath, 'utf8');
+    return { ready: true, expectedPath: sdkPath, manifestPath };
   } catch {
-    return { ready: false, reason: 'google_home_sdk_unavailable' };
+    return { ready: false, reason: 'google_home_sdk_unavailable', expectedPath: sdkPath, manifestPath };
   }
 }
 
 export function probeHomeDomain({ env = process.env } = {}) {
   const domain = composeHomeDomain({ env });
-  if (domain.state === 'configured') return { ready: true };
-  return { ready: false, reason: safeHomeReason(domain.reason ?? 'home_not_configured') };
+  const details = {
+    homeAssistantBaseUrlConfigured: Boolean(env.HOME_ASSISTANT_BASE_URL?.trim()),
+    homeAssistantAuthConfigured: Boolean(env.HOME_ASSISTANT_TOKEN?.trim()),
+    mqttBrokerConfigured: Boolean(env.MQTT_BROKER_URL?.trim()),
+  };
+  if (domain.state === 'configured') {
+    return { ready: true, connectors: Object.keys(domain.connectors), ...details };
+  }
+  return { ready: false, reason: safeHomeReason(domain.reason ?? 'home_not_configured'), ...details };
 }
