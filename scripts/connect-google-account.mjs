@@ -11,13 +11,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline/promises';
+import dotenv from 'dotenv';
 import { createKeyring } from '../src/crypto/keyring.mjs';
 import { createKeyringFileStorage } from '../src/crypto/keyring-file-storage.mjs';
 import { createMailAccountStore } from '../src/mail/mail-account-store.mjs';
 import { GMAIL_SCOPES } from '../src/mail/oauth/google-oauth.mjs';
 import { createGoogleAccountConnector } from '../src/mail/oauth/google-account-connector.mjs';
 import { createOAuthLoopbackServer } from '../src/mail/oauth/oauth-loopback-server.mjs';
-import { loadGoogleClientConfigFromEnvDir } from '../src/mail/oauth/google-client-config-file.mjs';
+import {
+  checkGoogleClientProjectMatch,
+  loadGoogleClientConfigFromEnvDir,
+} from '../src/mail/oauth/google-client-config-file.mjs';
 import { resolveUserDataStrategy } from '../src/ui/user-data-path.mjs';
 
 // Scopes couvrant Gmail (déjà câblé) + Calendrier/Contacts/Tâches (adaptateurs prêts, jamais encore
@@ -28,6 +32,9 @@ const SCOPES = Object.freeze([
   'https://www.googleapis.com/auth/contacts',
   'https://www.googleapis.com/auth/tasks',
 ]);
+
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+dotenv.config({ path: path.join(ROOT, '.env'), quiet: true });
 
 app.setName('Mina Vision');
 {
@@ -87,13 +94,29 @@ function printDeniedHelp(reason) {
   console.error('APIs & Services → OAuth consent screen → Audience/Test users → Add users, puis relance cette commande.\n');
 }
 
+function printProjectMismatchHelp({ oauthProjectId, firebaseProjectId }) {
+  console.error(`Client OAuth Google invalide pour cette installation : projet OAuth "${oauthProjectId}", projet Firebase attendu "${firebaseProjectId}".`);
+  console.error('Remplace le fichier client_secret_*.json dans env/ par un client OAuth Desktop créé dans le projet Google Cloud/Firebase attendu,');
+  console.error('ou ajoute le compte Gmail comme testeur OAuth dans le projet qui possède réellement ce Client ID si ce projet est volontaire.\n');
+}
+
 async function main() {
   await app.whenReady();
 
   const storage = createKeyringFileStorage({ filename: path.join(app.getPath('userData'), 'mina-keyring.json') });
   const keyring = createKeyring({ storage, safeStorage });
   const mailAccountStore = createMailAccountStore({ keyring });
-  const envDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'env');
+  const envDir = path.join(ROOT, 'env');
+  const fileConfig = loadGoogleClientConfigFromEnvDir(envDir, { readdirSync: fs.readdirSync, readFileSync: fs.readFileSync });
+  const projectCheck = checkGoogleClientProjectMatch({
+    googleClientConfig: fileConfig,
+    expectedProjectId: process.env.FIREBASE_PROJECT_ID,
+  });
+  if (!projectCheck.ok) {
+    printProjectMismatchHelp(projectCheck);
+    app.exit(1);
+    return;
+  }
   const prompt = buildPrompt(envDir);
   const address = await resolveGoogleAddress();
 

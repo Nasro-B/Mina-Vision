@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadGoogleClientConfigFromEnvDir } from '../src/mail/oauth/google-client-config-file.mjs';
+import {
+  checkGoogleClientProjectMatch,
+  loadGoogleClientConfigFromEnvDir,
+} from '../src/mail/oauth/google-client-config-file.mjs';
 
 const REAL_SHAPE_JSON = JSON.stringify({
   installed: {
@@ -11,6 +14,38 @@ const REAL_SHAPE_JSON = JSON.stringify({
     client_secret: 'GOCSPX-fake-secret-value',
     redirect_uris: ['http://localhost'],
   },
+});
+
+describe('checkGoogleClientProjectMatch', () => {
+  it('accepts a Google OAuth client from the expected Firebase project', () => {
+    expect(checkGoogleClientProjectMatch({
+      googleClientConfig: { projectId: 'mina-vision' },
+      expectedProjectId: 'mina-vision',
+    })).toEqual({
+      ok: true,
+      oauthProjectId: 'mina-vision',
+      firebaseProjectId: 'mina-vision',
+    });
+  });
+
+  it('fails closed when the OAuth client belongs to a different project', () => {
+    expect(checkGoogleClientProjectMatch({
+      googleClientConfig: { projectId: 'mina-vission' },
+      expectedProjectId: 'mina-vision',
+    })).toEqual({
+      ok: false,
+      reason: 'google_oauth_project_mismatch',
+      oauthProjectId: 'mina-vission',
+      firebaseProjectId: 'mina-vision',
+    });
+  });
+
+  it('does not block legacy client files without a project id', () => {
+    expect(checkGoogleClientProjectMatch({
+      googleClientConfig: { clientId: 'legacy-id' },
+      expectedProjectId: 'mina-vision',
+    })).toEqual({ ok: true });
+  });
 });
 
 describe('loadGoogleClientConfigFromEnvDir', () => {

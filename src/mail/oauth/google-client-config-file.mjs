@@ -22,3 +22,18 @@ export function loadGoogleClientConfigFromEnvDir(envDir, { readdirSync, readFile
     ...(section.project_id ? { projectId: section.project_id } : {}),
   };
 }
+
+export function checkGoogleClientProjectMatch({ googleClientConfig, expectedProjectId } = {}) {
+  const oauthProjectId = googleClientConfig?.projectId?.trim();
+  const firebaseProjectId = expectedProjectId?.trim();
+  if (!oauthProjectId || !firebaseProjectId) return Object.freeze({ ok: true });
+  if (oauthProjectId === firebaseProjectId) {
+    return Object.freeze({ ok: true, oauthProjectId, firebaseProjectId });
+  }
+  return Object.freeze({
+    ok: false,
+    reason: 'google_oauth_project_mismatch',
+    oauthProjectId,
+    firebaseProjectId,
+  });
+}
