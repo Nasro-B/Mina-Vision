@@ -32,6 +32,14 @@ describe('Electron Windows runtime identity', () => {
     expect(startScript).not.toContain('npm start');
   });
 
+  it('connect-google uses the Mina runtime wrapper instead of raw Electron', async () => {
+    const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
+
+    expect(packageJson.scripts['connect:google']).toContain('scripts/run-mina-electron-script.mjs');
+    expect(packageJson.scripts['connect:google']).toContain('scripts/connect-google-account.mjs');
+    expect(packageJson.scripts['connect:google']).not.toMatch(/^electron\s/u);
+  });
+
   it('desktop shortcut carries the same Windows AppUserModelID as the app', async () => {
     const source = await readFile('scripts/install-shortcut.ps1', 'utf8');
 
