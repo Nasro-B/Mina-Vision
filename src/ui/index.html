@@ -703,6 +703,16 @@
                 <option value="contract">Contrat</option>
                 <option value="identity">Identité</option>
               </select></label>
+              <label><span>Projet / dossier</span><input id="document-project" type="text" maxlength="200" autocomplete="off" placeholder="ex. Impôts 2026"></label>
+              <label><span>Personne concernée</span><input id="document-person" type="text" maxlength="200" autocomplete="off" placeholder="ex. Nasro"></label>
+              <label><span>Date du document</span><input id="document-date" type="date"></label>
+              <label><span>Sensibilité</span><select id="document-classification">
+                <option value="">Garder la proposition</option>
+                <option value="personal">Personnel</option>
+                <option value="professional">Professionnel</option>
+                <option value="sensitive">Sensible</option>
+              </select></label>
+              <label><span>Conservation</span><input id="document-retention" type="text" maxlength="40" autocomplete="off" placeholder="ex. P1Y, P10Y, P99Y"></label>
               <button class="ghost-button" id="document-confirm" type="button" disabled>Confirmer le classement</button>
             </div>
             <p class="sandbox-remediation">La confirmation est explicite&nbsp;; elle ne déplace ni ne partage le fichier.</p>

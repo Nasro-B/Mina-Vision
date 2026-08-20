@@ -41,6 +41,11 @@ function addCard(summary, label, value) {
   summary.append(card);
 }
 
+function optionalInputValue(input) {
+  const value = String(input?.value ?? '').trim();
+  return value || null;
+}
+
 function evidenceLocatorLabel(locator) {
   const kind = locator?.kind === 'pdf_text' || locator?.kind === 'ocr' ? locator.kind : 'inconnu';
   const page = Number.isInteger(locator?.page) && locator.page > 0 ? `page ${locator.page}` : 'page non disponible';
@@ -79,6 +84,7 @@ function renderAnalysis(summary, result) {
   addCard(summary, 'Extraction locale', `${result.observation.parserId} · ${result.observation.pageCount} pages · ${blockCountLabel(result.observation.blockCount)} · ${confidenceLabel(result.observation.confidence)}`);
   renderEvidence(summary, result.evidence);
   addCard(summary, 'Classement proposé', `${result.classification.category ?? 'non défini'} · conservation ${result.classification.retention ?? 'non définie'}`);
+  addCard(summary, 'Métadonnées proposées', `projet ${result.classification.project ?? 'non défini'} · personne ${result.classification.person ?? 'non définie'} · date ${result.classification.date ?? 'non définie'} · sensibilité ${result.classification.classification ?? 'non définie'}`);
 }
 
 function renderFailure(summary, error) {
@@ -98,6 +104,27 @@ function renderFailure(summary, error) {
 function setProposedCategory(categorySelect, category) {
   if (![...categorySelect.options].some((option) => option.value === category)) return;
   categorySelect.value = category;
+}
+
+function setProposedPlaceholder(input, label, value) {
+  if (!input || value == null || value === '') return;
+  input.placeholder = `${label} proposée : ${value}`;
+}
+
+function setProposedMetadataHints(overrideInputs, classification) {
+  setProposedPlaceholder(overrideInputs?.project, 'Projet', classification?.project);
+  setProposedPlaceholder(overrideInputs?.person, 'Personne', classification?.person);
+  setProposedPlaceholder(overrideInputs?.date, 'Date', classification?.date);
+  setProposedPlaceholder(overrideInputs?.retention, 'Conservation', classification?.retention);
+}
+
+function classificationOverrides(categorySelect, overrideInputs) {
+  const overrides = { category: categorySelect.value };
+  for (const key of ['project', 'person', 'date', 'classification', 'retention']) {
+    const value = optionalInputValue(overrideInputs?.[key]);
+    if (value) overrides[key] = value;
+  }
+  return overrides;
 }
 
 export async function analyzeDocument({ api, path, onParseStarted = null, onParseFinished = null } = {}) {
@@ -124,6 +151,7 @@ export async function analyzeDocument({ api, path, onParseStarted = null, onPars
 
 export function bindDocumentAnalysis({
   api, pathInput, submitButton, summary, categorySelect = null, confirmButton = null, cancelButton = null,
+  overrideInputs = {},
 } = {}) {
   if (!pathInput || !submitButton || !summary?.replaceChildren) throw new TypeError('document_analysis_elements_required');
   const confirmationEnabled = Boolean(categorySelect && confirmButton);
@@ -160,6 +188,7 @@ export function bindDocumentAnalysis({
       if (confirmationEnabled && result.state === 'analyzed' && typeof result.classification?.id === 'string') {
         pendingProposalId = result.classification.id;
         setProposedCategory(categorySelect, result.classification.category);
+        setProposedMetadataHints(overrideInputs, result.classification);
         confirmButton.disabled = false;
       }
       return result;
@@ -191,7 +220,7 @@ export function bindDocumentAnalysis({
     if (typeof api?.documents?.confirmClassification !== 'function') throw new TypeError('document_classification_confirmation_api_required');
     confirmButton.disabled = true;
     try {
-      const confirmed = await api.documents.confirmClassification(pendingProposalId, { category: categorySelect.value });
+      const confirmed = await api.documents.confirmClassification(pendingProposalId, classificationOverrides(categorySelect, overrideInputs));
       pendingProposalId = null;
       addCard(summary, 'Classement confirmé', `${confirmed?.category ?? 'non défini'} · conservation ${confirmed?.retention ?? 'non définie'}`);
       return confirmed;

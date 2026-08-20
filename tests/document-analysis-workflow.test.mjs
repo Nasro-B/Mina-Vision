@@ -8,6 +8,11 @@ function workflowDom() {
     <button id="document-analyze" type="button">Analyser</button>
     <button id="document-cancel" type="button" hidden disabled>Annuler</button>
     <select id="document-category"><option value="other">Autre</option><option value="invoice">Facture</option></select>
+    <input id="document-project">
+    <input id="document-person">
+    <input id="document-date">
+    <select id="document-classification"><option value="personal">Personnel</option><option value="sensitive">Sensible</option></select>
+    <input id="document-retention">
     <button id="document-confirm" type="button" disabled>Confirmer</button>
     <div id="documents-summary"></div>
   `);
@@ -16,6 +21,11 @@ function workflowDom() {
     button: dom.window.document.querySelector('#document-analyze'),
     cancel: dom.window.document.querySelector('#document-cancel'),
     category: dom.window.document.querySelector('#document-category'),
+    project: dom.window.document.querySelector('#document-project'),
+    person: dom.window.document.querySelector('#document-person'),
+    date: dom.window.document.querySelector('#document-date'),
+    classification: dom.window.document.querySelector('#document-classification'),
+    retention: dom.window.document.querySelector('#document-retention'),
     confirm: dom.window.document.querySelector('#document-confirm'),
     summary: dom.window.document.querySelector('#documents-summary'),
   };
@@ -120,6 +130,58 @@ describe('parcours d’analyse documentaire', () => {
     expect(summary.textContent).toContain('Classement confirmé');
     expect(summary.textContent).toContain('invoice');
     expect(confirm.disabled).toBe(true);
+  });
+
+  it('transmet les corrections explicites de métadonnées lors de la confirmation', async () => {
+    const { input, button, category, project, person, date, classification, retention, confirm, summary } = workflowDom();
+    const expectedOverrides = {
+      category: 'invoice',
+      project: 'Impôts 2026',
+      person: 'Nasro',
+      date: '2026-08-20',
+      classification: 'sensitive',
+      retention: 'P2Y',
+    };
+    const api = {
+      documentIntake: async () => ({
+        documentId: 'document-1', status: 'inspectable', detectedType: 'application/pdf', reasons: [],
+      }),
+      documents: {
+        parse: async () => ({ parserId: 'pdf-text-parser', pageCount: 1, blockCount: 1, confidence: 1 }),
+        evidence: async () => ({ parserId: 'pdf-text-parser', totalBlocks: 1, truncated: false, evidence: [] }),
+        proposeClassification: async () => ({
+          id: 'proposal-1', category: 'other', classification: 'personal', retention: 'P1Y',
+        }),
+        confirmClassification: async (proposalId, overrides) => {
+          expect(proposalId).toBe('proposal-1');
+          expect(overrides).toEqual(expectedOverrides);
+          return { ...expectedOverrides, status: 'confirmed' };
+        },
+      },
+    };
+    input.value = 'C:\\Documents\\facture.pdf';
+
+    const binding = bindDocumentAnalysis({
+      api,
+      pathInput: input,
+      submitButton: button,
+      summary,
+      categorySelect: category,
+      overrideInputs: { project, person, date, classification, retention },
+      confirmButton: confirm,
+    });
+    await binding.run();
+
+    category.value = 'invoice';
+    project.value = '  Impôts 2026  ';
+    person.value = 'Nasro';
+    date.value = '2026-08-20';
+    classification.value = 'sensitive';
+    retention.value = 'P2Y';
+
+    await expect(binding.confirm()).resolves.toMatchObject({ status: 'confirmed', retention: 'P2Y' });
+    expect(summary.textContent).toContain('Classement confirmé');
+    expect(summary.textContent).toContain('P2Y');
   });
 
   it('refuse un chemin vide sans appeler la couche IPC', async () => {
