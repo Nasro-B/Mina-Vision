@@ -4,7 +4,7 @@ const ACCOUNT_ID = /^[A-Za-z0-9._:-]{1,160}$/u;
 
 export function createMailSyncService({ repository, adapters, quarantine = quarantineAttachment } = {}) {
   if (!repository?.saveMessage || !repository?.getCursor || !repository?.saveCursor || !repository?.setPaused
-    || !adapters || typeof adapters !== 'object') {
+    || !repository?.saveAttachmentBlob || !adapters || typeof adapters !== 'object') {
     throw new TypeError('mail_sync_service_dependencies_required');
   }
 
@@ -24,6 +24,7 @@ export function createMailSyncService({ repository, adapters, quarantine = quara
         digest: inspected.digest, detectedType: inspected.detectedType, status: inspected.status,
         sizeBytes: attachment.bytes.length,
       });
+      await repository.saveAttachmentBlob({ digest: inspected.digest, bytes: attachment.bytes });
       await repository.linkAttachment({ messageId, digest: inspected.digest, declaredFilename: inspected.declaredFilename });
     }
   }

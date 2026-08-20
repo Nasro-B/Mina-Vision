@@ -43,6 +43,15 @@ const MESSAGE_A = Object.freeze({
 });
 
 describe('mail sync service: cursor restart and duplicate events', () => {
+  it('applies mail migrations through attachment blob v2 and replays idempotently', () => {
+    expect(db.prepare('SELECT version, name FROM mail_schema_migrations ORDER BY version').all()).toEqual([
+      { version: 1, name: 'mail' },
+      { version: 2, name: 'mail_attachment_blobs' },
+    ]);
+    expect(() => applyMailMigrations(db)).not.toThrow();
+    expect(db.prepare('SELECT COUNT(*) AS n FROM mail_schema_migrations').get().n).toBe(2);
+  });
+
   it('persists a first page then resumes from the saved cursor on the next sync, without reprocessing', async () => {
     const adapter = fakeAdapter({
       pages: [
@@ -142,5 +151,22 @@ describe('mail sync service: attachment quarantine wiring', () => {
     expect(digestOne).toBe(digestTwo);
     expect(db.prepare('SELECT COUNT(*) AS n FROM mail_attachments WHERE digest = ?').get(digestOne).n).toBe(1);
     expect(db.prepare('SELECT COUNT(*) AS n FROM mail_message_attachments WHERE digest = ?').get(digestOne).n).toBe(2);
+  });
+
+  it('persists attachment bytes once in an encrypted blob retrievable by digest', async () => {
+    const attachmentBytes = Buffer.from('%PDF-1.7 encrypted local blob only');
+    const messageOne = Object.freeze({ ...MESSAGE_A, dedupKey: 'imap-smtp:personal-imap:INBOX:77:blob-1', attachments: [{ filename: 'devis.pdf', bytes: attachmentBytes }] });
+    const messageTwo = Object.freeze({ ...MESSAGE_A, dedupKey: 'imap-smtp:personal-imap:INBOX:77:blob-2', attachments: [{ filename: 'devis-copie.pdf', bytes: attachmentBytes }] });
+    const adapter = fakeAdapter({ pages: [{ messages: [messageOne, messageTwo], result: { uidValidity: '77', lastUid: 6, imported: 2 } }] });
+    const service = createMailSyncService({ repository, adapters: { 'personal-imap': adapter } });
+
+    await service.syncAccount('personal-imap');
+
+    const digest = repository.getMessageByDedupKey(messageOne.dedupKey).attachments[0].digest;
+    const rows = db.prepare('SELECT bytes_ciphertext FROM mail_attachment_blobs WHERE digest = ?').all(digest);
+    expect(rows).toHaveLength(1);
+    expect(Buffer.from(rows[0].bytes_ciphertext).includes(attachmentBytes)).toBe(false);
+    expect(Buffer.from(rows[0].bytes_ciphertext).toString('utf8')).not.toContain(attachmentBytes.toString('base64'));
+    await expect(repository.getAttachmentBytes(digest)).resolves.toEqual(attachmentBytes);
   });
 });

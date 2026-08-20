@@ -2,8 +2,12 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { canonicalJson, openRecord, sealRecord } from '../memory/record-codec.mjs';
 
-const MAIL_SQL = readFileSync(new URL('./migrations/001-mail.sql', import.meta.url), 'utf8');
-const MIGRATION = Object.freeze({ version: 1, name: 'mail', sql: MAIL_SQL });
+const MAIL_001_SQL = readFileSync(new URL('./migrations/001-mail.sql', import.meta.url), 'utf8');
+const MAIL_002_SQL = readFileSync(new URL('./migrations/002-mail-attachment-blobs.sql', import.meta.url), 'utf8');
+const MIGRATIONS = Object.freeze([
+  Object.freeze({ version: 1, name: 'mail', sql: MAIL_001_SQL }),
+  Object.freeze({ version: 2, name: 'mail_attachment_blobs', sql: MAIL_002_SQL }),
+]);
 const ID = /^[A-Za-z0-9._:-]{1,300}$/u;
 const ATTACHMENT_STATUS = new Set(['inspectable', 'quarantined', 'blocked']);
 
@@ -21,17 +25,20 @@ export function applyMailMigrations(db) {
       applied_at INTEGER NOT NULL
     ) STRICT
   `);
-  const checksum = migrationChecksum(MIGRATION);
-  const existing = db.prepare('SELECT name, checksum FROM mail_schema_migrations WHERE version = ?').get(MIGRATION.version);
-  if (existing) {
-    if (existing.name !== MIGRATION.name || existing.checksum !== checksum) throw new Error('mail_migration_checksum_mismatch:1');
-    return;
+  const findMigration = db.prepare('SELECT name, checksum FROM mail_schema_migrations WHERE version = ?');
+  const insertMigration = db.prepare('INSERT INTO mail_schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)');
+  for (const migration of MIGRATIONS) {
+    const checksum = migrationChecksum(migration);
+    const existing = findMigration.get(migration.version);
+    if (existing) {
+      if (existing.name !== migration.name || existing.checksum !== checksum) throw new Error(`mail_migration_checksum_mismatch:${migration.version}`);
+      continue;
+    }
+    db.transaction(() => {
+      db.exec(migration.sql);
+      insertMigration.run(migration.version, migration.name, checksum, Date.now());
+    })();
   }
-  db.transaction(() => {
-    db.exec(MIGRATION.sql);
-    db.prepare('INSERT INTO mail_schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)')
-      .run(MIGRATION.version, MIGRATION.name, checksum, Date.now());
-  })();
 }
 
 export function createMailRepository({ db, encryptionKey } = {}) {
@@ -50,6 +57,12 @@ export function createMailRepository({ db, encryptionKey } = {}) {
     ON CONFLICT(digest) DO NOTHING
   `);
   const findAttachment = db.prepare('SELECT * FROM mail_attachments WHERE digest = ?');
+  const upsertAttachmentBlob = db.prepare(`
+    INSERT INTO mail_attachment_blobs (digest, bytes_ciphertext, created_at)
+    VALUES (@digest, @bytesCiphertext, @createdAt)
+    ON CONFLICT(digest) DO NOTHING
+  `);
+  const findAttachmentBlob = db.prepare('SELECT bytes_ciphertext FROM mail_attachment_blobs WHERE digest = ?');
   const linkAttachmentStmt = db.prepare(`
     INSERT INTO mail_message_attachments (message_id, digest, declared_filename)
     VALUES (@messageId, @digest, @declaredFilename)
@@ -118,6 +131,24 @@ export function createMailRepository({ db, encryptionKey } = {}) {
         sizeBytes: descriptor.sizeBytes, firstSeenAt: Date.now(),
       });
       return Object.freeze({ digest: descriptor.digest, deduplicated: Boolean(existing) });
+    },
+
+    async saveAttachmentBlob({ digest, bytes } = {}) {
+      if (typeof digest !== 'string' || !Buffer.isBuffer(bytes) || bytes.length < 1) throw new TypeError('mail_attachment_blob_invalid');
+      const bytesCiphertext = sealRecord({
+        key, type: 'mail_attachment_blob', id: digest, value: { bytesBase64: bytes.toString('base64') },
+      });
+      const result = upsertAttachmentBlob.run({ digest, bytesCiphertext, createdAt: Date.now() });
+      return Object.freeze({ digest, saved: result.changes === 1 });
+    },
+
+    async getAttachmentBytes(digest) {
+      if (typeof digest !== 'string') throw new TypeError('mail_attachment_digest_invalid');
+      const row = findAttachmentBlob.get(digest);
+      if (!row) return null;
+      const opened = openRecord({ key, type: 'mail_attachment_blob', id: digest, ciphertext: row.bytes_ciphertext });
+      if (typeof opened?.bytesBase64 !== 'string') throw new Error('mail_attachment_blob_invalid');
+      return Buffer.from(opened.bytesBase64, 'base64');
     },
 
     async linkAttachment({ messageId, digest, declaredFilename } = {}) {
