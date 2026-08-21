@@ -11,17 +11,16 @@ sont des constats **au clavier**, pas des tests automatisés.
 
 ---
 
-## A. Dépendance audio native (préalable à la porte HFP)
+## A. Audio HFP — RÉSOLU sans dépendance native ✅
 
-Le pont média `windows-hfp-audio-port` a besoin d'un binding `openScoLink` (I/O audio SCO/HFP réel).
-**Décision Nasro requise avant install** (règle deps/caches). Options à comparer :
+Décision prise (2026-08-21) : **zéro dépendance native**. L'I/O audio HFP réutilise la stack Web Audio du
+renderer (Chromium `getUserMedia` + `AudioContext`), exactement comme la voix. Code fait + testé :
+`src/telephony/hfp-web-audio.mjs` (`enumerateHfpAudioEndpoints` par groupId, `openHfpScoLink` capture RX +
+TX, santé). Aucun risque `npm install` / rebuild Electron.
 
-- [ ] `naudiodon` (PortAudio) — capture/lecture PCM par périphérique ; vérifier qu'il expose le device SCO du casque HFP.
-- [ ] Binding WASAPI natif dédié (plus de contrôle, plus de code natif à maintenir).
-- [ ] Piste Web Audio côté renderer Electron (getUserMedia sur le device HFP) — pas de dep native, mais routage SCO à valider.
-
-**Action** : dis « propose » → je compare précisément (faisabilité SCO, licence, maintenance) sans rien installer.
-Puis, une fois choisi : `npm i <dep>` (ou impl. renderer), et j'écris `openScoLink` + `enumerateEndpoints` réels.
+Reste (câblage, exercé par la porte B) : brancher `openHfpScoLink` côté renderer à `windows-hfp-audio-port`
+(main) via IPC — le port devient async ; le stream RX alimente le STT, la TTS alimente le TX. Ce câblage se
+fait EN MÊME TEMPS que la porte HFP live (il n'a de sens qu'avec le matériel présent).
 
 ---
 
@@ -50,8 +49,8 @@ restent en observation ; présenter le brut à Nasro pour redécider l'architect
 
 ## C. Rôle dialer on-device + dépendance app
 
-- [ ] Ajouter `implementation(project(":feature:telephony"))` au `android/app/build.gradle.kts` (active la fusion du manifest InCallService).
-- [ ] Rebuild + réinstaller l'APK sur les 2 tél (`.\gradlew.bat :app:assembleDebug` puis `adb install -r`).
+- [x] Ajouter `implementation(project(":feature:telephony"))` au `android/app/build.gradle.kts` — FAIT (InCallService fusionné, `:app:assembleDebug` vert, vérifié dans le merged manifest).
+- [ ] Réinstaller l'APK sur les 2 tél (`.\gradlew.bat packageMinaApk` puis `adb install -r`).
 - [ ] Sur chaque tél : accorder le rôle dialer via l'intent `DialerRole.requestIntent(context)` (écran système « application Téléphone par défaut »).
 - [ ] Vérifier `DialerRole.isHeld(context) == true`.
 
@@ -67,9 +66,10 @@ Repris de l'ordre de reprise du tracker Codex ([../superpowers/execution/2026-08
 - [ ] Ajouter `mina.vision.ai@gmail.com` comme testeur.
 - [ ] Créer/télécharger un client OAuth **Desktop** `mina-vision` → `env/client_secret_*.json`.
 - [ ] `npm run connect:google` (dans un **Chrome normal non piloté** — Google refuse les navigateurs contrôlés).
-- [ ] Brancher `createGoogleTasksListAdapter` (déjà écrit) comme `taskApi` du domaine communications.
+- [x] Brancher `createGoogleTasksListAdapter` comme `taskApi` du domaine communications — FAIT (exposé par
+  `google-runtime-adapters`, résolu paresseusement par le domaine ; devient réel dès la connexion, sans redémarrage).
 
-Tant que non fait : le domaine est `degraded`, les tâches s'accumulent dans l'outbox durable (jamais perdues).
+Tant que le compte n'est pas connecté : le domaine est `degraded`, les tâches s'accumulent dans l'outbox durable (jamais perdues).
 
 ---
 
