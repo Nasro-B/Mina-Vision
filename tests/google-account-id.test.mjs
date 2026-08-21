@@ -5,16 +5,16 @@ const ACCOUNT_ID = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 
 describe('resolveGoogleAccountId (multi-comptes)', () => {
   it('premier compte → google-primary (back-compat)', () => {
-    expect(resolveGoogleAccountId({ address: 'mina.vision.ai@gmail.com', existingAccounts: [] })).toBe('google-primary');
+    expect(resolveGoogleAccountId({ address: 'owner@gmail.com', existingAccounts: [] })).toBe('google-primary');
   });
 
   it('reconnexion d’un compte existant → réutilise son id (jamais d’orphelin)', () => {
-    const existing = [{ accountId: 'google-primary', provider: 'gmail', address: 'mina.vision.ai@gmail.com' }];
-    expect(resolveGoogleAccountId({ address: 'Berkoun.Nasserallah@GMAIL.com', existingAccounts: existing })).toBe('google-primary');
+    const existing = [{ accountId: 'google-primary', provider: 'gmail', address: 'owner@gmail.com' }];
+    expect(resolveGoogleAccountId({ address: 'Owner@GMAIL.com', existingAccounts: existing })).toBe('google-primary');
   });
 
   it('nouveau 2ᵉ compte → id dérivé unique, jamais google-primary', () => {
-    const existing = [{ accountId: 'google-primary', provider: 'gmail', address: 'mina.vision.ai@gmail.com' }];
+    const existing = [{ accountId: 'google-primary', provider: 'gmail', address: 'owner@gmail.com' }];
     const id = resolveGoogleAccountId({ address: 'sourire.concept@gmail.com', existingAccounts: existing });
     expect(id).not.toBe('google-primary');
     expect(id).toMatch(ACCOUNT_ID);
