@@ -27,6 +27,30 @@ export async function enumerateHfpAudioEndpoints(mediaDevices) {
     .filter((endpoint) => endpoint.hasOutput);
 }
 
+// Chemin « Mobile connecté / Phone Link » (SPEC-MINA-COMMS-001 §6.3, archi corrigée 2026-08-21) : quand
+// l'appel est diffusé sur le PC par l'app Windows « Lien avec Windows », son audio joue sur la sortie
+// système. On le capture en LOOPBACK via getDisplayMedia (audio système), pas via le micro HFP brut (que
+// l'adaptateur BT générique n'exposait pas). getDisplayMedia exige une vidéo : on la demande puis on la
+// coupe aussitôt, on ne garde que le RX. Pas d'audio partagé = échec parlant, jamais un flux muet.
+export async function captureSystemCallAudio({ mediaDevices } = {}) {
+  if (typeof mediaDevices?.getDisplayMedia !== 'function') throw new TypeError('phone_link_display_media_required');
+  const stream = await mediaDevices.getDisplayMedia({ video: true, audio: true });
+  const audioTracks = typeof stream?.getAudioTracks === 'function' ? stream.getAudioTracks() : [];
+  if (audioTracks.length === 0) {
+    (typeof stream?.getTracks === 'function' ? stream.getTracks() : []).forEach((track) => track.stop?.());
+    throw new Error('phone_link_audio_not_shared');
+  }
+  // On ne veut que le son : couper la vidéo immédiatement.
+  (typeof stream.getVideoTracks === 'function' ? stream.getVideoTracks() : []).forEach((track) => track.stop?.());
+  let alive = true;
+  return Object.freeze({
+    rxStream: stream,
+    audioTracks,
+    healthy: () => alive && audioTracks.length > 0 && audioTracks.every((track) => track.readyState !== 'ended'),
+    close: () => { alive = false; (typeof stream.getTracks === 'function' ? stream.getTracks() : []).forEach((track) => track.stop?.()); },
+  });
+}
+
 // Ouvre un lien SCO : capture RX via getUserMedia sur le micro HFP (avec annulation d'écho), prépare le
 // contexte TX vers la sortie HFP. Retourne un handle { healthy, close } — la même forme que le port
 // audio attend. Perte de piste (readyState 'ended') → non sain (jamais un appel muet, §7).

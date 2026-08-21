@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { enumerateHfpAudioEndpoints, openHfpScoLink } from '../src/telephony/hfp-web-audio.mjs';
+import { captureSystemCallAudio, enumerateHfpAudioEndpoints, openHfpScoLink } from '../src/telephony/hfp-web-audio.mjs';
 
 // Web Audio SIMULÉ (mêmes APIs que la stack voix : mediaDevices + AudioContext). Aucune dép native.
 function fakeMediaDevices(devices, { stream } = {}) {
@@ -44,5 +44,39 @@ describe('hfp-web-audio (I/O audio HFP via Web Audio renderer, sans dép native)
     const md = fakeMediaDevices([HFP_IN, HFP_OUT], { stream: { getAudioTracks: () => [track] } });
     const link = await openHfpScoLink({ mediaDevices: md, createAudioContext: () => ({ close() {} }) }, { inputDeviceId: 'in-1' });
     expect(link.healthy()).toBe(false);
+  });
+});
+
+describe('captureSystemCallAudio (chemin Phone Link / Mobile connecté)', () => {
+  function fakeDisplayMedia(stream) {
+    return { getDisplayMedia: vi.fn(async () => stream) };
+  }
+  const track = (kind, state = 'live') => ({ kind, readyState: state, stop: vi.fn() });
+
+  it('capture l’audio système, coupe la vidéo, garde le RX sain', async () => {
+    const audio = track('audio'); const video = track('video');
+    const stream = {
+      getAudioTracks: () => [audio], getVideoTracks: () => [video], getTracks: () => [audio, video],
+    };
+    const md = fakeDisplayMedia(stream);
+    const cap = await captureSystemCallAudio({ mediaDevices: md });
+    expect(md.getDisplayMedia).toHaveBeenCalledWith({ video: true, audio: true });
+    expect(video.stop).toHaveBeenCalled(); // vidéo coupée
+    expect(audio.stop).not.toHaveBeenCalled(); // audio gardé
+    expect(cap.healthy()).toBe(true);
+    cap.close();
+    expect(audio.stop).toHaveBeenCalled();
+    expect(cap.healthy()).toBe(false);
+  });
+
+  it('échoue parlant si l’utilisateur n’a pas partagé l’audio (jamais un flux muet)', async () => {
+    const video = track('video');
+    const stream = { getAudioTracks: () => [], getVideoTracks: () => [video], getTracks: () => [video] };
+    await expect(captureSystemCallAudio({ mediaDevices: fakeDisplayMedia(stream) })).rejects.toThrow('phone_link_audio_not_shared');
+    expect(video.stop).toHaveBeenCalled(); // rien laissé ouvert
+  });
+
+  it('exige getDisplayMedia', async () => {
+    await expect(captureSystemCallAudio({ mediaDevices: {} })).rejects.toThrow('phone_link_display_media_required');
   });
 });
