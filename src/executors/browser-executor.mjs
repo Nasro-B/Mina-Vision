@@ -24,6 +24,10 @@ export async function createBrowserExecutor({
   profileDir = path.resolve('profiles/mina-chrome'),
   webObserverFactory,
   headless = false,
+  // Observabilité en LECTURE SEULE (SPEC-MINA-BROWSER-001 §8.4) : traceur OPTIONNEL. Absent (défaut) =
+  // aucun changement de comportement, aucune mesure. Présent = une latence par action, sans donnée privée.
+  tracer = null,
+  now = () => Date.now(),
 } = {}) {
   const context = await launchContext(profileDir, { headless });
   let page = context.pages().at(-1) || await context.newPage();
@@ -254,14 +258,26 @@ export async function createBrowserExecutor({
     execute: async (action) => {
       const handler = handlers[action?.name];
       if (!handler) throw new Error(`Action navigateur interdite: ${action?.name}`);
-      const result = await handler(action);
-      if (result === undefined && (
-        action.name.startsWith('inspect_') || action.name === 'get_page_source' || action.name === 'read_visible_text'
-      )) {
-        throw new Error('Observation web structurée indisponible.');
+      const startedAt = tracer ? now() : 0;
+      let status = 'ok';
+      try {
+        const result = await handler(action);
+        if (result === undefined && (
+          action.name.startsWith('inspect_') || action.name === 'get_page_source' || action.name === 'read_visible_text'
+        )) {
+          throw new Error('Observation web structurée indisponible.');
+        }
+        await settleAfterNavigation(action);
+        return { executed: true, url: page.url(), ...(result === undefined ? {} : { inspection: result }) };
+      } catch (error) {
+        status = 'error';
+        throw error;
+      } finally {
+        // §8.4 : on mesure le sous-système Playwright (phase) sur la voie directe (route 'fast'). Le
+        // span ne garde que des nombres, une phase et un statut — jamais le texte saisi, l'URL complète
+        // ni le DOM (createBrowserPerformanceSpan les écarte). Le nom d'action n'y entre pas.
+        if (tracer) tracer.record({ phase: 'playwright', route: 'fast', durationMs: now() - startedAt, status });
       }
-      await settleAfterNavigation(action);
-      return { executed: true, url: page.url(), ...(result === undefined ? {} : { inspection: result }) };
     },
     currentContext: async () => ({ app: 'Google Chrome', title: await page.title(), url: page.url() }),
     previewAction,
