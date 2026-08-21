@@ -125,6 +125,11 @@ export function createPhoneBridge({
   scrcpyPath = 'scrcpy',
   physicalDeviceRegistry = createPhysicalDeviceRegistry(),
   resolveDeviceIdentity = null,
+  // Packages Mina Gateway à tenter pour `run-as` : la variante debug installée est `fr.mina.gateway.debug`
+  // (suffixe applicationIdSuffix). `run-as fr.mina.gateway` échoue alors « unknown package » et l'app ne
+  // détecte AUCUN téléphone. On tente donc les deux (prouvé 2026-08-21 : seule .debug répond sur les tél).
+  identityPackages = String(process.env.MINA_GATEWAY_PACKAGES ?? 'fr.mina.gateway,fr.mina.gateway.debug')
+    .split(/[;,]/u).map((value) => value.trim()).filter(Boolean),
   createCommandId = () => `cmd-${randomBytes(16).toString('hex')}`,
   createTransferId = () => `pull-${randomBytes(16).toString('hex')}`,
   createTelegramCommandId = () => `msg-${randomBytes(16).toString('hex')}`,
@@ -145,16 +150,28 @@ export function createPhoneBridge({
   let device = null;
   let preview = null;
   const activeIdentityResolver = resolveDeviceIdentity ?? (async ({ serial }) => {
-    const { stdout } = await run(adbPath, [
-      '-s', serial, 'shell', 'run-as', 'fr.mina.gateway', 'cat', 'files/device-identity.json',
-    ], { binary: false });
-    if (Buffer.byteLength(String(stdout), 'utf8') > 16 * 1024) throw new Error('Identité Mina Gateway invalide.');
-    let proof;
-    try { proof = JSON.parse(String(stdout)); } catch { throw new Error('Identité Mina Gateway illisible.'); }
-    if (proof.challenge !== 'local-pairing-v1' || !verifyDeviceProof(proof)) {
-      throw new Error('Signature identité Mina Gateway invalide.');
+    let lastError = null;
+    for (const gatewayPackage of identityPackages) {
+      let stdout;
+      try {
+        ({ stdout } = await run(adbPath, [
+          '-s', serial, 'shell', 'run-as', gatewayPackage, 'cat', 'files/device-identity.json',
+        ], { binary: false }));
+      } catch (error) { lastError = error; continue; } // package absent/non debuggable → tenter le suivant
+      const text = String(stdout);
+      // `run-as: unknown package` / `not debuggable` reviennent parfois sur stdout selon le shell.
+      if (!text.trim() || /unknown package|not debuggable|is not debuggable|Package .* is unknown/iu.test(text)) {
+        lastError = new Error(`run_as_unavailable:${gatewayPackage}`); continue;
+      }
+      if (Buffer.byteLength(text, 'utf8') > 16 * 1024) throw new Error('Identité Mina Gateway invalide.');
+      let proof;
+      try { proof = JSON.parse(text); } catch { lastError = new Error('Identité Mina Gateway illisible.'); continue; }
+      if (proof.challenge !== 'local-pairing-v1' || !verifyDeviceProof(proof)) {
+        throw new Error('Signature identité Mina Gateway invalide.');
+      }
+      return { deviceId: proof.deviceId, verified: true, publicKeySpkiBase64: proof.publicKeySpkiBase64 };
     }
-    return { deviceId: proof.deviceId, verified: true, publicKeySpkiBase64: proof.publicKeySpkiBase64 };
+    throw lastError ?? new Error('Identité Mina Gateway introuvable.');
   });
 
   const scanDevices = async () => {
