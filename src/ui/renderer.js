@@ -888,12 +888,36 @@ const refreshToday = async () => {
   }
 };
 
+const renderPanelUnavailable = (container, message, extra) => {
+  container.textContent = '';
+  const card = document.createElement('article');
+  const strong = document.createElement('strong');
+  const small = document.createElement('small');
+  strong.textContent = '—';
+  small.textContent = message;
+  card.append(strong, small);
+  container.append(card);
+  if (extra) extra();
+};
+
 const refreshAutomationStatus = async () => {
-  const [definitions, cases, health] = await Promise.all([
-    api.listAutomationDefinitions(),
-    api.listRecoveryCases(),
-    api.healthSnapshot(),
-  ]);
+  let definitions;
+  let cases;
+  let health;
+  try {
+    [definitions, cases, health] = await Promise.all([
+      api.listAutomationDefinitions(),
+      api.listRecoveryCases(),
+      api.healthSnapshot(),
+    ]);
+  } catch {
+    // Domaine gouvernance non exposé à l'IPC (controllers non passés à registerMinaIpc) : on le DIT
+    // honnêtement au lieu d'un panneau muet ou d'un rejet silencieux.
+    renderPanelUnavailable(elements.automationSummary, 'Automatisations indisponibles (non câblées à l’IPC)', () => {
+      elements.emergencyNetworkState.textContent = 'Réseau : —';
+    });
+    return;
+  }
   const openCases = cases.filter((entry) => !entry.closedManually).length;
   const failedProbes = health.filter((entry) => entry.status === 'failed').length;
   const cards = [
@@ -919,7 +943,14 @@ const refreshAutomationStatus = async () => {
 // (publisher approval, connector activation, personality patch confirmation) stay main-process/local
 // and are deliberately never exposed here — this panel only ever displays counts and current style.
 const refreshExtensionsStatus = async () => {
-  const [connectors, personality] = await Promise.all([api.listConnectors(), api.getPersonalityProfile()]);
+  let connectors;
+  let personality;
+  try {
+    [connectors, personality] = await Promise.all([api.listConnectors(), api.getPersonalityProfile()]);
+  } catch {
+    renderPanelUnavailable(elements.extensionsSummary, 'Extensions indisponibles (non câblées à l’IPC)');
+    return;
+  }
   const cards = [
     ['Connecteurs installés', connectors.length],
     ['Personnalité — nom', personality.displayName],
