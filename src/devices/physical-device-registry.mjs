@@ -74,5 +74,14 @@ export function createPhysicalDeviceRegistry() {
     }
   }
 
-  return Object.freeze({ observeEndpoint, resolveOwnerDevice, preferredTransport, markUnhealthy, pruneAbsentEndpoints });
+  // Énumère toutes les identités signées connues (triées par deviceId). resolveOwnerDevice(null)
+  // refuse volontairement l'ambiguïté ; listDevices sert la flotte multi-appareils qui, elle, DOIT
+  // voir les deux téléphones à la fois (§2.1).
+  function listDevices() {
+    return [...devices.values()]
+      .sort((left, right) => left.deviceId.localeCompare(right.deviceId))
+      .map(publicDevice);
+  }
+
+  return Object.freeze({ observeEndpoint, resolveOwnerDevice, preferredTransport, markUnhealthy, pruneAbsentEndpoints, listDevices });
 }
