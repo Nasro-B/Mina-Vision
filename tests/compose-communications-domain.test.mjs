@@ -48,6 +48,14 @@ describe('compose-communications-domain (assemblage)', () => {
     domain.close();
   });
 
+  it('appel manqué→tâche via ingestCallLog (journal d’appels)', () => {
+    const domain = composeCommunicationsDomain({ masterKey: MASTER, filename: ':memory:', taskApi: fakeTaskApi(), taskStore: memStore() });
+    const report = domain.ingestCallLog('dev-A', 'Row: 0 number=+33612345678, type=3, date=1690000000000, duration=0');
+    expect(report.tasksQueued).toBe(1);
+    expect(domain.status().pendingTasks).toBe(1);
+    domain.close();
+  });
+
   it('expose le routeur sortant et les politiques (assemblage complet)', () => {
     const domain = composeCommunicationsDomain({ masterKey: MASTER, filename: ':memory:', taskApi: fakeTaskApi(), taskStore: memStore() });
     domain.fleet.track({ deviceId: 'dev-A', model: 'MAR', transport: 'usb', healthy: true });

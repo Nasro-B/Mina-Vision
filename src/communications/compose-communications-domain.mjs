@@ -3,6 +3,7 @@ import { createAad, decryptAead, encryptAead } from '../crypto/aead.mjs';
 import { createCommunicationLedger } from './communication-ledger.mjs';
 import { createCommunicationOutbox } from './communication-outbox.mjs';
 import { createSmsTaskIngest } from './sms-task-ingest.mjs';
+import { createCallLogIngest, parseCallLog } from './call-log-ingest.mjs';
 import { createSmsOutboundRouter } from './sms-outbound-router.mjs';
 import { createCommunicationTaskDrain } from './communication-task-drain.mjs';
 import { createCommunicationTaskSync } from '../personal/communication-task-sync.mjs';
@@ -89,6 +90,10 @@ export function composeCommunicationsDomain({
       evaluateIncomingCall: incomingCallPolicy.evaluateIncomingCall,
     },
     ingestSms: (rawSms) => ingest.ingest(rawSms),
+    // Appel manqué→tâche (SPEC §8.5) : parse le journal d'appels ADB d'un téléphone donné et crée les
+    // tâches de rappel manquantes (dédupliquées). Sans audio, indépendant de la porte HFP/Phone Link.
+    ingestCallLog: (callLogDeviceId, entriesOrText) => createCallLogIngest({ ledger, outbox, deviceId: callLogDeviceId, now })
+      .ingest(Array.isArray(entriesOrText) ? entriesOrText : parseCallLog(entriesOrText)),
     routeOutbound: (command) => outboundRouter.route(command),
     reconcile: (registry) => reconcileFleet({ fleet, registry }),
     async drainTasks() {
