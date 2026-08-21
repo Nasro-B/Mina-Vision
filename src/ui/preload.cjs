@@ -31,6 +31,7 @@ function createPreloadApi(ipcRenderer) {
     stopPhoneCamera: () => ipcRenderer.invoke('mina:phone-camera-stop'),
     sendSmsConfirmed: (request) => ipcRenderer.invoke('mina:sms-send-confirmed', request),
     syncPhoneMessages: () => ipcRenderer.invoke('mina:phone-sync-messages'),
+    communicationsStatus: () => ipcRenderer.invoke('communications.status'),
     settingsSchema: () => ipcRenderer.invoke('mina:settings:get-schema'),
     settingsState: () => ipcRenderer.invoke('mina:settings:get'),
     updateSettings: (request) => ipcRenderer.invoke('mina:settings:update', request),

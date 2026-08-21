@@ -25,6 +25,7 @@ import { createVaultRepair } from '../memory/vault-repair.mjs';
 import { createUserProfileStore } from '../personal/user-profile-store.mjs';
 import { createMemoryServices } from '../memory/composition.mjs';
 import { composeBackupDomain } from '../backup/compose-backup-domain.mjs';
+import { composeCommunicationsDomain } from '../communications/compose-communications-domain.mjs';
 import { createCustomTokenMinter } from '../backup/custom-token-minter.mjs';
 import { createFirebaseSdkClient } from '../backup/firebase-backup.mjs';
 import { createMemoryRuntimeController } from '../memory/runtime-controller.mjs';
@@ -465,6 +466,7 @@ const lessonsRegistry = createLessonsRegistry();
 let lessonsStore = null;
 // Domaine de sauvegarde chiffrée de la mémoire (Firebase) — composé au déverrouillage du coffre.
 let backupDomain = null;
+let communicationsDomain = null;
 // État RÉEL du domaine maison connectée, résolu à la composition, rapporté honnêtement au catalogue.
 let homeCapabilityLevel = 'degraded';
 let homeCapabilityReason = 'aucun_connecteur_configure';
@@ -2206,6 +2208,9 @@ const registerIpc = () => {
   ipcMain.handle('memory.status', () => memoryController?.status() ?? {
     locked: true, semanticMode: 'unavailable', backupState: 'disabled', researchEvidence: 0,
   });
+  // État RÉEL du domaine communications pour l'UI (lecture seule) : locked / degraded / operational
+  // + compteurs. Honnête : tant que rien n'est activé, il annonce l'observation, jamais une capacité.
+  ipcMain.handle('communications.status', () => communicationsDomain?.status() ?? { state: 'locked', events: 0, pendingTasks: 0 });
   ipcMain.handle('memory.initialize', () => memoryController.initialize());
   ipcMain.handle('memory.unlock', (_event, request) => memoryController.unlock(request));
   // G1 — état RÉEL du coffre pour l'UI : sain / non-initialisé / DPAPI définitivement bloqué.
@@ -2775,6 +2780,21 @@ app.whenReady().then(async () => {
       }).catch((error) => {
         void activityJournal?.append('memory_backup_domain', { state: 'error', reason: String(error?.message ?? error).slice(0, 200) });
       });
+      // Domaine COMMUNICATIONS (SPEC-MINA-COMMS-001) : composé au déverrouillage, fail-honest, jamais
+      // bloquant. DORMANT — aucune ingestion SMS/appel n'est encore branchée sur la boucle de pull, et
+      // aucun niveau d'appel ne s'active automatiquement (§19). Google Tasks non connecté (OAuth) →
+      // état 'degraded' : les tâches SMS s'accumulent dans l'outbox durable, jamais perdues.
+      try {
+        communicationsDomain = composeCommunicationsDomain({
+          masterKey,
+          filename: path.join(app.getPath('userData'), 'mina-communications.sqlite'),
+          nativeBinding,
+          taskApi: null,
+        });
+        void activityJournal?.append('communications_domain', { state: communicationsDomain.state, reason: communicationsDomain.reason });
+      } catch (error) {
+        void activityJournal?.append('communications_domain', { state: 'error', reason: String(error?.message ?? error).slice(0, 200) });
+      }
       return createMemoryServices({
         masterKey,
         databasePath: path.join(app.getPath('userData'), 'mina-memory.sqlite'),
