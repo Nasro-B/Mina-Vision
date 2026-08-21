@@ -58,6 +58,11 @@ export function createWebReader({
     }
   }
 
+  // Profil 'light' : plafonne l'attente networkidle à 2,5 s au lieu de 30 s (SPEC-MINA-BROWSER-001 §5.6).
+  // Beaucoup de pages ne s'apaisent JAMAIS (trackers, polling) et le lecteur bloquait 30 s pour rien alors
+  // que le texte est prêt dès domcontentloaded. 'light' pour une lecture rapide, 'full' (défaut) inchangé.
+  const NETWORKIDLE_MS = Object.freeze({ full: 30_000, light: 2_500 });
+
   async function read({
     url,
     operation = 'read',
@@ -65,6 +70,7 @@ export function createWebReader({
     authenticated = false,
     selectors = [],
     styleRequests = [],
+    profile = 'full',
   } = {}) {
     const requested = new URL(url);
     if (!['http:', 'https:'].includes(requested.protocol)) throw new Error('unsupported_web_protocol');
@@ -79,7 +85,7 @@ export function createWebReader({
     page.on('response', onResponse);
     try {
       await page.goto(requested.toString(), { waitUntil: 'domcontentloaded', timeout: 60_000 });
-      await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {});
+      await page.waitForLoadState('networkidle', { timeout: NETWORKIDLE_MS[profile] ?? NETWORKIDLE_MS.full }).catch(() => {});
       await page.waitForTimeout(50);
       // Une redirection publique → privée est refusée ICI : la destination effective compte,
       // pas seulement l'URL demandée.

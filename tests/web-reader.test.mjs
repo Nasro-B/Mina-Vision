@@ -27,6 +27,16 @@ describe('web reader url policy (R-07)', () => {
     expect(page.goto).not.toHaveBeenCalled();
   });
 
+  it('profil light plafonne networkidle à 2,5 s ; défaut « full » reste à 30 s (SPEC-BROWSER-001 §5.6)', async () => {
+    const light = fakePage('https://public.test/');
+    await createWebReader({ page: light }).read({ url: 'https://public.test/', profile: 'light' }).catch(() => {});
+    expect(light.waitForLoadState).toHaveBeenCalledWith('networkidle', { timeout: 2_500 });
+
+    const full = fakePage('https://public.test/');
+    await createWebReader({ page: full }).read({ url: 'https://public.test/' }).catch(() => {});
+    expect(full.waitForLoadState).toHaveBeenCalledWith('networkidle', { timeout: 30_000 });
+  });
+
   it('refuse une navigation publique qui aboutit sur une destination privée (redirection)', async () => {
     const page = fakePage('http://192.168.1.10/interne');
     const urlPolicy = {
