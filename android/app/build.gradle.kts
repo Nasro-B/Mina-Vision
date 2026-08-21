@@ -87,6 +87,9 @@ dependencies {
     implementation(project(":feature:camera"))
     implementation(project(":feature:chat"))
     implementation(project(":feature:voice"))
+    // Telecom/InCallService de Mina (Phase 5). La fusion du manifest déclare le service, mais Android
+    // ne le lie QUE si le rôle dialer par défaut est accordé on-device (DialerRole) : inerte sinon.
+    implementation(project(":feature:telephony"))
     implementation(platform(libs.firebase.bom))
     implementation("com.google.firebase:firebase-messaging")
     implementation("com.google.firebase:firebase-installations")
