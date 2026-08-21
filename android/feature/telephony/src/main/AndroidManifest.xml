@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- InCallService de Mina (SPEC-MINA-COMMS-001 §8, Phase 5). Ce manifest de module n'est fusionné
-     dans l'app QUE si l'app dépend de :feature:telephony — ce qui n'est pas encore le cas : le module
-     est isolé, rien ne s'active. L'obtention du rôle téléphone/dialer par défaut est une étape
-     on-device séparée (activation), pas déclenchée par cette déclaration. -->
+<!-- Telecom/InCallService de Mina (SPEC-MINA-COMMS-001 §8, Phase 5). Ce manifest de module est fusionné
+     dans l'app car :app dépend de :feature:telephony. Android ne LIE le service et n'accorde le rôle
+     dialer que si l'utilisateur choisit Mina comme « application Téléphone par défaut » (dialogue système
+     via DialerRoleRequest) : tant qu'il ne le fait pas, tout ceci est inerte et le téléphone est normal.
+     L'activation réelle (média) reste gatée par la porte HFP §6. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     <application>
@@ -10,12 +11,38 @@
             android:name="fr.mina.gateway.telephony.MinaInCallService"
             android:exported="true"
             android:permission="android.permission.BIND_INCALL_SERVICE">
+            <!-- true : une app tenant le rôle dialer DOIT fournir l'UI d'appel (MinaInCallActivity),
+                 sinon l'écran d'appel du téléphone serait cassé. -->
             <meta-data
                 android:name="android.telecom.IN_CALL_SERVICE_UI"
-                android:value="false" />
+                android:value="true" />
             <intent-filter>
                 <action android:name="android.telecom.InCallService" />
             </intent-filter>
         </service>
+
+        <!-- Écran d'appel présenté par le service pendant un appel. -->
+        <activity
+            android:name="fr.mina.gateway.telephony.MinaInCallActivity"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+
+        <!-- Gestionnaire DIAL minimal : exigé par Android pour qualifier au rôle dialer. -->
+        <activity
+            android:name="fr.mina.gateway.telephony.MinaDialerActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="tel" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>
