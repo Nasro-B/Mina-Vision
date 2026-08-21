@@ -149,6 +149,11 @@ export function createPhoneBridge({
   const staticWifiHosts = wifiHosts.filter((host) => /^\d{1,3}(?:\.\d{1,3}){3}:\d{1,5}$/u.test(host));
   let device = null;
   let preview = null;
+  // Package Mina Gateway EFFECTIF, découvert par le résolveur (fr.mina.gateway ou .debug) : TOUTES les
+  // opérations (run-as, am start/broadcast, dumpsys, vérif service) doivent viser ce package, sinon
+  // « unknown package » sur la variante debug. Les chaînes d'ACTION restent littérales (non suffixées).
+  let activeGatewayPackage = identityPackages[0] ?? 'fr.mina.gateway';
+  const gatewayComponent = (relativeClass) => `${activeGatewayPackage}/${relativeClass}`;
   const activeIdentityResolver = resolveDeviceIdentity ?? (async ({ serial }) => {
     let lastError = null;
     for (const gatewayPackage of identityPackages) {
@@ -169,6 +174,7 @@ export function createPhoneBridge({
       if (proof.challenge !== 'local-pairing-v1' || !verifyDeviceProof(proof)) {
         throw new Error('Signature identité Mina Gateway invalide.');
       }
+      activeGatewayPackage = gatewayPackage; // package qui a répondu → utilisé par toutes les opérations
       return { deviceId: proof.deviceId, verified: true, publicKeySpkiBase64: proof.publicKeySpkiBase64 };
     }
     throw lastError ?? new Error('Identité Mina Gateway introuvable.');
@@ -350,7 +356,7 @@ export function createPhoneBridge({
     const shellScript = `umask 077; mkdir -p files/message-commands files/message-receipts; cat > ${commandPath}.tmp && mv ${commandPath}.tmp ${commandPath}`;
     try {
       await runInput(adbPath, [
-        '-s', current.serial, 'shell', 'run-as', 'fr.mina.gateway', 'sh', '-c', `'${shellScript}'`,
+        '-s', current.serial, 'shell', 'run-as', activeGatewayPackage, 'sh', '-c', `'${shellScript}'`,
       ], payload);
     } finally {
       payload.fill(0);
@@ -359,7 +365,7 @@ export function createPhoneBridge({
     for (let attempt = 0; attempt < 40; attempt += 1) {
       try {
         const result = await run(adbPath, [
-          '-s', current.serial, 'shell', 'run-as', 'fr.mina.gateway', 'cat', receiptPath,
+          '-s', current.serial, 'shell', 'run-as', activeGatewayPackage, 'cat', receiptPath,
         ], { binary: false });
         receipt = JSON.parse(String(result.stdout));
         break;
@@ -368,7 +374,7 @@ export function createPhoneBridge({
       }
     }
     await run(adbPath, [
-      '-s', current.serial, 'shell', 'run-as', 'fr.mina.gateway', 'rm', '-f', commandPath, receiptPath,
+      '-s', current.serial, 'shell', 'run-as', activeGatewayPackage, 'rm', '-f', commandPath, receiptPath,
     ], { binary: false }).catch(() => {});
     if (receipt?.state === 'failed' && /^[a-z][a-z0-9_]{2,80}$/u.test(receipt.reason ?? '')) {
       throw new Error(`message_command_failed:${receipt.reason}`);
@@ -398,14 +404,14 @@ export function createPhoneBridge({
       await run(adbPath, [
         '-s', current.serial, 'shell', 'am', 'broadcast',
         '-a', 'fr.mina.gateway.action.KEEPALIVE',
-        '-n', 'fr.mina.gateway/.messaging.GatewayKeepaliveReceiver',
+        '-n', gatewayComponent('.messaging.GatewayKeepaliveReceiver'),
       ], { binary: false });
       const { stdout } = await run(adbPath, [
-        '-s', current.serial, 'shell', 'dumpsys', 'activity', 'services', 'fr.mina.gateway',
+        '-s', current.serial, 'shell', 'dumpsys', 'activity', 'services', activeGatewayPackage,
       ], { binary: false });
-      if (!String(stdout).includes('fr.mina.gateway/.messaging.MinaGatewayService')) {
+      if (!String(stdout).includes(gatewayComponent('.messaging.MinaGatewayService'))) {
         await run(adbPath, [
-          '-s', current.serial, 'shell', 'am', 'start', '-n', 'fr.mina.gateway/.MainActivity', '-f', '0x20000000',
+          '-s', current.serial, 'shell', 'am', 'start', '-n', gatewayComponent('.MainActivity'), '-f', '0x20000000',
         ], { binary: false });
         return Object.freeze({ running: true, recoveredWithActivity: true });
       }
@@ -419,13 +425,13 @@ export function createPhoneBridge({
       }
       const current = await getDevice();
       await run(adbPath, [
-        '-s', current.serial, 'shell', 'run-as', 'fr.mina.gateway', 'sh', '-c', `'${CAMERA_START_SCRIPT}'`,
+        '-s', current.serial, 'shell', 'run-as', activeGatewayPackage, 'sh', '-c', `'${CAMERA_START_SCRIPT}'`,
       ], { binary: false });
       // A sleeping screen blocks CameraX from opening the sensor at all (confirmed live: zero frames
       // written until woken) — this only wakes the display, it never unlocks or bypasses the keyguard.
       await run(adbPath, ['-s', current.serial, 'shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'], { binary: false });
       await run(adbPath, [
-        '-s', current.serial, 'shell', 'am', 'start', '-n', 'fr.mina.gateway/.MainActivity',
+        '-s', current.serial, 'shell', 'am', 'start', '-n', gatewayComponent('.MainActivity'),
         '-f', '0x20000000', '-a', 'fr.mina.gateway.camera.START', '--es', 'lens', lens,
       ], { binary: false });
       return Object.freeze({ sessionRequested: true, lens, maxFps });
@@ -433,7 +439,7 @@ export function createPhoneBridge({
     touchCameraKeepalive: async () => {
       const current = await getDevice();
       await run(adbPath, [
-        '-s', current.serial, 'shell', 'run-as', 'fr.mina.gateway', 'sh', '-c', `'${CAMERA_KEEPALIVE_SCRIPT}'`,
+        '-s', current.serial, 'shell', 'run-as', activeGatewayPackage, 'sh', '-c', `'${CAMERA_KEEPALIVE_SCRIPT}'`,
       ], { binary: false });
     },
     readLatestCameraFrame: async () => {
@@ -441,7 +447,7 @@ export function createPhoneBridge({
       let envelope;
       try {
         const { stdout } = await run(adbPath, [
-          '-s', current.serial, 'shell', 'run-as', 'fr.mina.gateway', 'cat', 'files/camera-stream/latest.json',
+          '-s', current.serial, 'shell', 'run-as', activeGatewayPackage, 'cat', 'files/camera-stream/latest.json',
         ], { binary: false });
         if (Buffer.byteLength(String(stdout), 'utf8') > 16 * 1024) throw new Error('camera_envelope_too_large');
         envelope = JSON.parse(String(stdout));
@@ -451,7 +457,7 @@ export function createPhoneBridge({
       }
       if (!CAMERA_FRAME_FILE.test(envelope?.file ?? '')) throw new Error('camera_frame_file_invalid');
       const { stdout } = await run(adbPath, [
-        '-s', current.serial, 'exec-out', 'run-as', 'fr.mina.gateway', 'cat', `files/camera-stream/${envelope.file}`,
+        '-s', current.serial, 'exec-out', 'run-as', activeGatewayPackage, 'cat', `files/camera-stream/${envelope.file}`,
       ], { binary: true });
       const jpeg = Buffer.from(stdout);
       if (jpeg.length > 350 * 1024) throw new Error('camera_frame_too_large');
@@ -460,7 +466,7 @@ export function createPhoneBridge({
     stopSensorCameraStream: async () => {
       const current = await getDevice();
       await run(adbPath, [
-        '-s', current.serial, 'shell', 'am', 'start', '-n', 'fr.mina.gateway/.MainActivity',
+        '-s', current.serial, 'shell', 'am', 'start', '-n', gatewayComponent('.MainActivity'),
         '-f', '0x20000000', '-a', 'fr.mina.gateway.camera.STOP',
       ], { binary: false });
       return Object.freeze({ stopped: true });
@@ -562,7 +568,7 @@ export function createPhoneBridge({
       const shellScript = `umask 077; mkdir -p files/commands files/receipts; cat > ${commandPath}.tmp && mv ${commandPath}.tmp ${commandPath}`;
       try {
         await runInput(adbPath, [
-          '-s', current.serial, 'shell', 'run-as', 'fr.mina.gateway', 'sh', '-c', `'${shellScript}'`,
+          '-s', current.serial, 'shell', 'run-as', activeGatewayPackage, 'sh', '-c', `'${shellScript}'`,
         ], payload);
       } finally {
         payload.fill(0);
@@ -571,7 +577,7 @@ export function createPhoneBridge({
       for (let attempt = 0; attempt < 40; attempt += 1) {
         try {
           const result = await run(adbPath, [
-            '-s', current.serial, 'shell', 'run-as', 'fr.mina.gateway', 'cat', receiptPath,
+            '-s', current.serial, 'shell', 'run-as', activeGatewayPackage, 'cat', receiptPath,
           ], { binary: false });
           receipt = JSON.parse(String(result.stdout));
           break;
@@ -580,7 +586,7 @@ export function createPhoneBridge({
         }
       }
       await run(adbPath, [
-        '-s', current.serial, 'shell', 'run-as', 'fr.mina.gateway', 'rm', '-f', commandPath, receiptPath,
+        '-s', current.serial, 'shell', 'run-as', activeGatewayPackage, 'rm', '-f', commandPath, receiptPath,
       ], { binary: false }).catch(() => {});
       if (receipt?.version !== 1 || receipt.id !== id || !['queued', 'duplicate', 'failed'].includes(receipt.state)) {
         throw new Error('sms_command_receipt_invalid');
