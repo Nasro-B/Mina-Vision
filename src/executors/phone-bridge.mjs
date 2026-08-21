@@ -218,8 +218,13 @@ export function createPhoneBridge({
     try {
       owner = physicalDeviceRegistry.resolveOwnerDevice();
     } catch (error) {
-      if (error.message === 'physical_device_ambiguous') throw new Error('Mina exige exactement une identité physique autorisée.');
-      throw error;
+      if (error.message !== 'physical_device_ambiguous') throw error;
+      // PLUSIEURS téléphones Mina connectés (générique — n'importe qui peut en avoir deux). On ne casse
+      // PLUS : on choisit un PRIMAIRE DÉTERMINISTE = le premier par deviceId trié (stable, jamais « le
+      // premier du scan » arbitraire). Les autres restent connus dans la registry pour le multi-appareils.
+      const known = physicalDeviceRegistry.listDevices();
+      if (known.length === 0) throw error;
+      owner = known[0];
     }
     const preferred = physicalDeviceRegistry.preferredTransport(owner.deviceId);
     device = Object.freeze({

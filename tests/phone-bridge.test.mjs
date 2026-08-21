@@ -144,15 +144,21 @@ describe('phone bridge', () => {
     await expect(bridge.detect()).resolves.toMatchObject({ serial: 'SERIAL', model: 'MAR_LX1A', deviceId: 'huawei-primary' });
   });
 
-  it('rejects unauthorized or multiple devices', async () => {
+  it('rejette un appareil ADB non autorisé (aucune identité signée)', async () => {
     const unauthorized = createPhoneBridge({ run: fakeRun([{ stdout: 'List of devices attached\nA unauthorized\n' }]), resolveDeviceIdentity: resolveIdentity });
     await expect(unauthorized.detect()).rejects.toThrow('autorisé');
+  });
 
+  it('plusieurs téléphones signés → choisit un PRIMAIRE déterministe (le multi-appareils ne casse plus)', async () => {
+    // Mina est publique : n'importe qui peut brancher deux téléphones. detect() ne doit PLUS jeter
+    // « identité physique » sur ≥2 appareils. Il retient le primaire déterministe (plus petit deviceId
+    // trié) — ici 'first' < 'second'. L'ordre des lignes `adb devices` est inversé exprès pour prouver
+    // que le choix vient du tri par deviceId, jamais de « la première ligne du scan ».
     const multiple = createPhoneBridge({
-      run: fakeRun([{ stdout: 'List of devices attached\nA device\nB device\n' }]),
+      run: fakeRun([{ stdout: 'List of devices attached\nB device\nA device\n' }]),
       resolveDeviceIdentity: vi.fn(async ({ serial }) => ({ deviceId: serial === 'A' ? 'first' : 'second', verified: true })),
     });
-    await expect(multiple.detect()).rejects.toThrow('identité physique');
+    await expect(multiple.detect()).resolves.toMatchObject({ deviceId: 'first', serial: 'A' });
   });
 
   it('accepts USB and Wi-Fi endpoints for the same signed identity and prefers USB', async () => {
