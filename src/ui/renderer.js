@@ -2780,3 +2780,31 @@ if (publicationEls.generate && api?.publication?.publish) {
     }
   });
 }
+
+// Panneau Communications : état RÉEL (lecture seule) du domaine appels/SMS. Honnête — annonce
+// l'observation et le nombre d'événements/tâches en file, jamais une capacité active tant que rien
+// n'est activé (§19). Aucune action déclenchable ici.
+const communicationsEls = {
+  status: document.querySelector('#communications-status'),
+  refresh: document.querySelector('#communications-refresh'),
+};
+const COMMS_STATE_LABELS = {
+  operational: 'Opérationnel',
+  degraded: 'Dégradé — Google Tasks non connecté (les tâches SMS s’accumulent, jamais perdues)',
+  locked: 'Coffre verrouillé — en attente de déverrouillage',
+  error: 'Indisponible',
+};
+async function refreshCommunications() {
+  if (!communicationsEls.status || !api?.communicationsStatus) return;
+  try {
+    const state = await api.communicationsStatus();
+    const label = COMMS_STATE_LABELS[state?.state] ?? 'Indisponible';
+    communicationsEls.status.textContent = `État : ${label} · ${state?.events ?? 0} événement(s) · ${state?.pendingTasks ?? 0} tâche(s) en file.`;
+  } catch {
+    communicationsEls.status.textContent = 'État indisponible.';
+  }
+}
+if (communicationsEls.status) {
+  communicationsEls.refresh?.addEventListener('click', () => { void refreshCommunications(); });
+  void refreshCommunications();
+}
