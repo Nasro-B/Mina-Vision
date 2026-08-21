@@ -92,7 +92,7 @@ function printDeniedHelp(reason) {
   if (value.includes('disallowed_useragent') || value.includes('insecure_browser')) {
     console.error('Google refuse ce navigateur ou cette application comme non sécurisé.');
     console.error('Ouvre le lien OAuth dans un navigateur Chrome normal non piloté, pas via l’extension Chrome, DevTools, Playwright, ni une WebView.');
-    console.error('Si le lien a été copié dans le presse-papiers, colle-le dans ton Chrome habituel déjà connecté à mina.vision.ai@gmail.com.\n');
+    console.error('Si le lien a été copié dans le presse-papiers, colle-le dans ton Chrome habituel déjà connecté à ton compte Google.\n');
     return;
   }
   if (!value.includes('access_denied') && !value.includes('oauth_loopback_timeout')) return;

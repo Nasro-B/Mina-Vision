@@ -83,7 +83,7 @@ Si aucun micro Hands-Free n'apparaît → même limite → essayer un autre chip
 Repris de l'ordre de reprise du tracker Codex ([../superpowers/execution/2026-08-02-mina-remaining-work.md]) :
 
 - [ ] Configurer Google Auth Platform dans le projet `mina-vision`, audience de test.
-- [ ] Ajouter `mina.vision.ai@gmail.com` comme testeur.
+- [ ] Ajouter votre adresse Gmail comme testeur.
 - [ ] Créer/télécharger un client OAuth **Desktop** `mina-vision` → `env/client_secret_*.json`.
 - [ ] `npm run connect:google` (dans un **Chrome normal non piloté** — Google refuse les navigateurs contrôlés).
 - [x] Brancher `createGoogleTasksListAdapter` comme `taskApi` du domaine communications — FAIT (exposé par

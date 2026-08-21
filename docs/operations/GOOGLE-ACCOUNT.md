@@ -15,21 +15,21 @@ happens in your own browser, on the official Google consent screen.
 ## Step 1 — Create an OAuth client in Google Cloud Console (owner only)
 
 For this installation, the target project must be **`mina-vision`** with the operator account
-**`mina.vision.ai@gmail.com`**. Do not use an OAuth client from another project, including
+**`your-google-account@gmail.com`**. Do not use an OAuth client from another project, including
 `mina-vission`: the connector refuses it when the downloaded file exposes its `project_id`.
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com), sign in with
-   `mina.vision.ai@gmail.com`.
+   `your-google-account@gmail.com`.
    - Do not do this step in Chrome controlled by an extension/DevTools/Playwright or in a WebView:
      Google can show "This browser or app may not be secure." Use a normal, uncontrolled Chrome
-     profile already signed in as the Berkoun account.
+     profile already signed in as your operator account.
 2. Select the Google Cloud/Firebase project **`mina-vision`**.
 3. **APIs & Services → Library**: enable *Gmail API*, *Google Calendar API*, *People API*,
    *Google Tasks API*.
 4. **APIs & Services → OAuth consent screen**:
    - Type: *External* (standard Gmail account, not Google Workspace).
    - Fill in the app name ("Mina Vision") and a contact e-mail.
-   - Add `mina.vision.ai@gmail.com` as a **test user** (avoids Google's verification review
+   - Add `your-google-account@gmail.com` as a **test user** (avoids Google's verification review
      for personal use).
    - If Google shows `Error 403: access_denied` with "Mina Vision has not completed Google's
      verification process", the address currently used in Chrome is not yet in the OAuth test-user
@@ -49,7 +49,7 @@ For this installation, the target project must be **`mina-vision`** with the ope
 
 ```powershell
 Set-Location 'C:\Serveurs\Mina Vision'
-$env:MINA_GOOGLE_ACCOUNT='mina.vision.ai@gmail.com'
+$env:MINA_GOOGLE_ACCOUNT='your-google-account@gmail.com'
 npm run connect:google
 ```
 
@@ -58,7 +58,7 @@ npm run connect:google
   and the JSON file is absent, the tool stops before Chrome with `client_config_file_required`.
 - The Gmail address can be provided through `MINA_GOOGLE_ACCOUNT` or typed at prompt if the variable is missing.
 - The default browser opens on the Google consent screen — sign in with
-  `mina.vision.ai@gmail.com`, accept the requested permissions (Gmail, Calendar, Contacts,
+  `your-google-account@gmail.com`, accept the requested permissions (Gmail, Calendar, Contacts,
   Tasks).
 - If Google shows "This browser or app may not be secure" or `disallowed_useragent`, copy the OAuth
   URL printed by the terminal and paste it into a normal, uncontrolled Chrome profile. Do not use
@@ -79,7 +79,7 @@ operational only when the vault contains both the OAuth client and the connected
 The Google Home SDK 1.9 is a separate download from an authenticated Google page (not the same
 thing as the OAuth above):
 
-1. Sign in on the official Google Home Developer page with `mina.vision.ai@gmail.com`.
+1. Sign in on the official Google Home Developer page with `your-google-account@gmail.com`.
 2. Download SDK 1.9.
 3. Drop its contents under `%USERPROFILE%\.mina\sdk\google-home\1.9` (or set
    `MINA_GOOGLE_HOME_SDK_PATH` to the directory containing `manifest.json`). Mina's probe only

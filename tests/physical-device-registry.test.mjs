@@ -6,7 +6,7 @@ describe('physical Android device registry', () => {
     const registry = createPhysicalDeviceRegistry();
     registry.observeEndpoint({
       deviceId: 'huawei-primary', verified: true,
-      endpoint: { endpointId: 'usb-L2N4', type: 'usb', serial: 'HUAWEITESTSERIAL' },
+      endpoint: { endpointId: 'usb-huawei', type: 'usb', serial: 'HUAWEITESTSERIAL' },
     });
     registry.observeEndpoint({
       deviceId: 'huawei-primary', verified: true,
@@ -16,7 +16,7 @@ describe('physical Android device registry', () => {
     expect(registry.resolveOwnerDevice()).toMatchObject({ deviceId: 'huawei-primary' });
     expect(registry.resolveOwnerDevice().endpoints.map(({ type }) => type)).toEqual(['usb', 'lan']);
     expect(registry.preferredTransport('huawei-primary')).toMatchObject({ type: 'usb' });
-    registry.markUnhealthy('huawei-primary', 'usb-L2N4');
+    registry.markUnhealthy('huawei-primary', 'usb-huawei');
     expect(registry.preferredTransport('huawei-primary')).toMatchObject({ type: 'lan' });
   });
 
@@ -24,7 +24,7 @@ describe('physical Android device registry', () => {
     const registry = createPhysicalDeviceRegistry();
     registry.observeEndpoint({
       deviceId: 'huawei-primary', verified: true,
-      endpoint: { endpointId: 'usb-L2N4', type: 'usb', serial: 'HUAWEITESTSERIAL' },
+      endpoint: { endpointId: 'usb-huawei', type: 'usb', serial: 'HUAWEITESTSERIAL' },
     });
     registry.observeEndpoint({
       deviceId: 'huawei-primary', verified: true,
@@ -42,7 +42,7 @@ describe('physical Android device registry', () => {
     const registry = createPhysicalDeviceRegistry();
     registry.observeEndpoint({
       deviceId: 'huawei-primary', verified: true,
-      endpoint: { endpointId: 'usb-L2N4', type: 'usb', serial: 'HUAWEITESTSERIAL' },
+      endpoint: { endpointId: 'usb-huawei', type: 'usb', serial: 'HUAWEITESTSERIAL' },
     });
     registry.pruneAbsentEndpoints(['HUAWEITESTSERIAL']);
     expect(registry.preferredTransport('huawei-primary')).toMatchObject({ type: 'usb' });

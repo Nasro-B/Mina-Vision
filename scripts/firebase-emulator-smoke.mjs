@@ -29,7 +29,9 @@ const app = initializeApp({
   authDomain: `${PROJECT_ID}.firebaseapp.com`,
   projectId: PROJECT_ID,
   storageBucket: `${PROJECT_ID}.firebasestorage.app`,
-  appId: '1:000000000000:android:1f50486ff6bdffdf00f233',
+  // Émulateur uniquement (loopback, assertEmulatorEnvironment) : l'appId n'est jamais validé contre
+  // le vrai Firebase — valeur générique volontaire, aucun identifiant de projet réel committé.
+  appId: '1:000000000000:android:0000000000000000000000',
 }, 'mina-emulator-smoke');
 
 const auth = getAuth(app);
