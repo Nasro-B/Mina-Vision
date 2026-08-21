@@ -196,6 +196,8 @@ export async function createBrowserExecutor({
   };
 
   return Object.freeze({
+    // URL courante — accès LÉGER (pas de capture) pour la vérification par origine du Fast Path.
+    currentUrl: async () => page.url(),
     // Mission observations stay light on purpose: screenshot + url only. The structured web payload
     // (full outerHTML + text + 500 elements, ~100KB+) is never sent to the computer-use model, so
     // computing it twice per turn was pure per-turn latency — it stays available on demand through
