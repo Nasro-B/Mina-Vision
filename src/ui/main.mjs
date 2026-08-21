@@ -28,6 +28,7 @@ import { composeBackupDomain } from '../backup/compose-backup-domain.mjs';
 import { composeCommunicationsDomain } from '../communications/compose-communications-domain.mjs';
 import { mapPulledSmsToEvent, classifySmsForTask } from '../communications/communication-contract.mjs';
 import { createSmsReplyGenerator } from '../communications/sms-reply-generator.mjs';
+import { createDailyInstructions } from '../personal/daily-instructions.mjs';
 import { createCustomTokenMinter } from '../backup/custom-token-minter.mjs';
 import { createFirebaseSdkClient } from '../backup/firebase-backup.mjs';
 import { createMemoryRuntimeController } from '../memory/runtime-controller.mjs';
@@ -877,6 +878,12 @@ const isTelegramOwner = async (sender) => {
   return chatId === ownerChatId;
 };
 
+// Consignes du jour (SPEC-MINA-STANDARDISTE-001 §7 C4) : le propriétaire les pose (IPC
+// mina:daily-instructions:set) ; elles orientent le ton/fond des réponses du jour. Store EN MÉMOIRE pour
+// l'instant (persistance chiffrée via le coffre = amélioration suivante). Expiration jour local intégrée.
+const dailyInstructionsStore = (() => { let record = null; return { read: () => record, write: (value) => { record = value; } }; })();
+const dailyInstructions = createDailyInstructions({ store: dailyInstructionsStore });
+
 // Générateur de brouillon de réponse SMS (SPEC-MINA-STANDARDISTE-001 §7 C2). Composé paresseusement :
 // draftReply = le générateur de texte (le même que Telegram), policy = la sms-send-policy. Le corps du
 // SMS entrant est passé comme DONNÉE encadrée (anti-injection). N'existe que si la génération est demandée.
@@ -885,8 +892,9 @@ const getSmsReplyGenerator = () => {
   smsReplyGenerator ??= createSmsReplyGenerator({
     persona: 'assistante téléphonique polie et concise',
     policy: getSmsSendPolicy(),
-    draftReply: async ({ message }) => {
-      const prompt = `Un client a envoyé ce SMS : « ${String(message ?? '').slice(0, 500)} ». Rédige UNE réponse SMS courte, polie et utile, en français. Réponds UNIQUEMENT par le texte de la réponse, sans préambule ni guillemets.`;
+    draftReply: async ({ message, dailyInstructions: consignes }) => {
+      const consigneLine = consignes ? ` Consignes du jour à respecter : ${String(consignes).slice(0, 400)}.` : '';
+      const prompt = `Un client a envoyé ce SMS : « ${String(message ?? '').slice(0, 500)} ».${consigneLine} Rédige UNE réponse SMS courte, polie et utile, en français. Réponds UNIQUEMENT par le texte de la réponse, sans préambule ni guillemets.`;
       const generated = await (await telegramTextGenerator()).generate({ text: prompt });
       return typeof generated === 'string' ? generated : (generated?.text ?? generated?.reply ?? '');
     },
@@ -949,7 +957,10 @@ const getPhoneMessageSync = () => {
             void (async () => {
               try {
                 if (!classifySmsForTask(message.body ?? '').warrantsTask) return;
-                const out = await getSmsReplyGenerator().propose({ inbound: { senderE164: message.sender, body: message.body, deviceId } });
+                const out = await getSmsReplyGenerator().propose({
+                  inbound: { senderE164: message.sender, body: message.body, deviceId },
+                  dailyInstructions: dailyInstructions.current(),
+                });
                 if (out.decision !== 'skip' && out.reply) {
                   send('mina:event', { type: 'sms_reply_draft', to: out.recipient, reply: out.reply, decision: out.decision });
                 }
@@ -2090,6 +2101,9 @@ const registerIpc = () => {
     }
   });
   ipcMain.handle('mina:start', (_event, request) => startMission(request));
+  // Consignes du jour (§7 C4) : le propriétaire pose/lit ses consignes ; elles orientent les réponses.
+  ipcMain.handle('mina:daily-instructions:set', (_event, text) => { dailyInstructions.set(text); return { text: dailyInstructions.current() }; });
+  ipcMain.handle('mina:daily-instructions:get', () => ({ text: dailyInstructions.current() }));
   // Voice spoken DURING a mission steers the running one (same window, mouse/keyboard) instead of
   // spawning a second mission. queued:false tells the renderer to fall back to a fresh mission.
   ipcMain.handle('mina:mission-guide', (_event, text) => {

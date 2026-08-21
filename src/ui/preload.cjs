@@ -24,6 +24,8 @@ function createPreloadApi(ipcRenderer) {
   return Object.freeze({
     status: () => ipcRenderer.invoke('mina:status'),
     start: (request) => ipcRenderer.invoke('mina:start', request),
+    setDailyInstructions: (text) => ipcRenderer.invoke('mina:daily-instructions:set', text),
+    getDailyInstructions: () => ipcRenderer.invoke('mina:daily-instructions:get'),
     dental: (request) => ipcRenderer.invoke('mina:dental', request),
     stop: () => ipcRenderer.invoke('mina:stop'),
     detectPhone: () => ipcRenderer.invoke('mina:phone-detect'),
