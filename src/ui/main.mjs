@@ -26,6 +26,7 @@ import { createUserProfileStore } from '../personal/user-profile-store.mjs';
 import { createMemoryServices } from '../memory/composition.mjs';
 import { composeBackupDomain } from '../backup/compose-backup-domain.mjs';
 import { composeCommunicationsDomain } from '../communications/compose-communications-domain.mjs';
+import { mapPulledSmsToEvent } from '../communications/communication-contract.mjs';
 import { createCustomTokenMinter } from '../backup/custom-token-minter.mjs';
 import { createFirebaseSdkClient } from '../backup/firebase-backup.mjs';
 import { createMemoryRuntimeController } from '../memory/runtime-controller.mjs';
@@ -913,6 +914,12 @@ const getPhoneMessageSync = () => {
     // never sent as separate messages, so idempotent redelivery still sees exactly one reply.
     telegramResponder: { reply: async (message) => (await commandRouter.handle({ sender: message.sender, body: message.body })).reply.join('\n\n') },
     ledger: getMessageDeliveryLedger(),
+    // Ingestion SMS→tâche (SPEC-MINA-COMMS-001 §12.3). ACTIVATION §19 MANUELLE via MINA_SMS_TASK_INGEST=true :
+    // par défaut (non défini) = null = comportement STRICTEMENT inchangé. Le domaine communications est
+    // référencé au call-time (déjà composé au déverrouillage) ; best-effort, jamais bloquant.
+    onInboundSms: process.env.MINA_SMS_TASK_INGEST === 'true'
+      ? (message, deviceId) => { try { communicationsDomain?.ingestSms(mapPulledSmsToEvent(message, deviceId)); } catch { /* ingestion différée, jamais fatale */ } }
+      : null,
   });
   return phoneMessageSync;
 };
