@@ -402,6 +402,21 @@ export function createPhoneBridge({
 
   return Object.freeze({
     detect,
+    // Journal d'appels d'un téléphone (SPEC-MINA-COMMS-001 §8.5) : LECTURE SEULE via le provider
+    // système, requête 100% FIXE (aucune interpolation d'entrée → zéro injection shell). Renvoie le
+    // stdout brut ; le parsing/ingestion vit dans le domaine communications. `serial` est EXPLICITE
+    // (générique multi-appareils : l'appelant vise un téléphone précis, jamais « le premier »).
+    // Bloqué sur certains EMUI (Huawei « Error while accessing provider:call_log ») → l'appelant DOIT
+    // rester best-effort et ne jamais transformer un échec en martèlement.
+    queryCallLog: async (serial) => {
+      if (!/^[A-Za-z0-9._:-]{1,160}$/u.test(serial ?? '')) throw new TypeError('call_log_serial_invalid');
+      const { stdout } = await run(adbPath, [
+        '-s', serial, 'shell', 'content', 'query',
+        '--uri', 'content://call_log/calls',
+        '--projection', 'number:type:date:duration',
+      ], { binary: false });
+      return String(stdout ?? '');
+    },
     discoverWifiPhones,
     ensureWifiConnection,
     ensureGatewayService: async () => {

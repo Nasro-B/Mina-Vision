@@ -161,6 +161,23 @@ describe('phone bridge', () => {
     await expect(multiple.detect()).resolves.toMatchObject({ deviceId: 'first', serial: 'A' });
   });
 
+  it('queryCallLog interroge le provider call_log d’un serial EXPLICITE (requête fixe, lecture seule)', async () => {
+    const run = fakeRun([{ stdout: 'Row: 0 number=+33612345678, type=3, date=1, duration=0' }]);
+    const bridge = createPhoneBridge({ run, resolveDeviceIdentity: resolveIdentity });
+    const text = await bridge.queryCallLog('SAMSUNGTESTSERIAL');
+    expect(text).toContain('type=3');
+    // Requête 100% fixe pour le serial demandé — aucune interpolation, jamais « le premier ».
+    expect(run.mock.calls[0][1]).toEqual([
+      '-s', 'SAMSUNGTESTSERIAL', 'shell', 'content', 'query',
+      '--uri', 'content://call_log/calls', '--projection', 'number:type:date:duration',
+    ]);
+  });
+
+  it('queryCallLog refuse un serial invalide (jamais d’injection shell)', async () => {
+    const bridge = createPhoneBridge({ run: fakeRun([]), resolveDeviceIdentity: resolveIdentity });
+    await expect(bridge.queryCallLog('bad; rm -rf /')).rejects.toThrow('call_log_serial_invalid');
+  });
+
   it('accepts USB and Wi-Fi endpoints for the same signed identity and prefers USB', async () => {
     const run = fakeRun([{ stdout: 'List of devices attached\nHUAWEITESTSERIAL device model:MAR_LX1A\n192.168.1.16:5555 device model:MAR_LX1A\n' }]);
     const bridge = createPhoneBridge({ run, resolveDeviceIdentity: resolveIdentity });
