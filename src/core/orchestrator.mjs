@@ -9,6 +9,20 @@ import { normalizeAction } from '../executors/action-normalizer.mjs';
 import { classifyAction } from '../safety/policy.mjs';
 import { verifyAction } from '../grounding/action-verifier.mjs';
 import { withRetry } from './error-resilience.mjs';
+import { routeBrowserCommand } from '../browser/browser-intent-router.mjs';
+
+// Fast Path (SPEC-MINA-BROWSER-001) : mappe un objectif de mission navigateur DÉTERMINISTE vers l'action
+// UNIQUE de l'exécuteur, pour le sous-ensemble réellement supporté (handlers navigate/go_back/go_forward).
+// Tout le reste (nouvel onglet, sémantique, vision, ambiguïté) → null → boucle Computer Use normale.
+function mapFastBrowserAction(goal) {
+  const command = routeBrowserCommand(goal, { commandId: 'fast-mission', source: 'mission' });
+  if (!command || command.ambiguous || command.route !== 'fast') return null;
+  if (command.type === 'navigate' && command.targetUrl) return { name: 'navigate', url: command.targetUrl };
+  if (command.type === 'search' && command.searchUrl) return { name: 'navigate', url: command.searchUrl };
+  if (command.type === 'back') return { name: 'go_back' };
+  if (command.type === 'forward') return { name: 'go_forward' };
+  return null;
+}
 
 function verifiedMissionSummary(state) {
   if (state.actionCount < 1) return 'Mission clôturée sans action vérifiée.';
@@ -68,6 +82,7 @@ export function createMinaOrchestrator({
       maxActions = 40,
       timeoutMs = 900_000,
       workSessionId = null,
+      fastPath = false,
       ...codeParams
     }) => {
       // Pipeline développeur : délégation intégrale à l'orchestrateur code injecté.
@@ -89,6 +104,39 @@ export function createMinaOrchestrator({
       emit('mission_started', { state, environment });
 
       try {
+        // Fast Path : objectif navigateur DÉTERMINISTE → action UNIQUE via l'exécuteur + le broker R-01
+        // (jamais un bypass de sécurité), SANS la boucle vision. fastPath=false (défaut) → historique
+        // strictement intact. Un objectif non couvert (mapFastBrowserAction=null) tombe dans la boucle normale.
+        if (fastPath && environment === 'browser') {
+          const fastAction = mapFastBrowserAction(goal);
+          if (fastAction) {
+            if (actionAuthorizer) {
+              const authorization = await actionAuthorizer.assess({
+                sessionId: workSessionId ?? 'local-mission', action: fastAction, context: { environment },
+              });
+              if (authorization.decision === 'deny') {
+                emit('action_denied', { action: fastAction, reason: authorization.reason, state });
+                state = stopMission(state, 'authorization_denied');
+                emit('mission_finished', { state });
+                return state;
+              }
+              if (authorization.decision === 'confirm') {
+                const approved = await confirm({ action: fastAction, context: { environment }, reason: authorization.reason });
+                const consumed = approved ? await actionAuthorizer.confirm({ request: authorization.request }) : null;
+                if (consumed?.decision !== 'allow') {
+                  state = stopMission(state, 'confirmation_refused');
+                  emit('mission_finished', { state });
+                  return state;
+                }
+              }
+            }
+            await executor.execute(fastAction);
+            state = recordAction(state);
+            if (state.status === 'running') state = completeMission(state, verifiedMissionSummary(state));
+            emit('mission_finished', { state });
+            return state;
+          }
+        }
         let observation = await resilient('observe', () => executor.observe());
         let response = await resilient('model_start', () => computerUse.start({
           goal, evidence, environment, observation, mode, offline, preferredProvider,

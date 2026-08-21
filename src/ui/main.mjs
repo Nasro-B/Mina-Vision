@@ -1300,6 +1300,8 @@ const startMission = async (request) => {
           offline: activeRuntime.config.inference.offline,
           maxActions: activeRuntime.config.maxActions,
           timeoutMs: activeRuntime.config.missionTimeoutMs,
+          // Fast Path navigateur (SPEC-MINA-BROWSER-001) §19 : off par défaut = boucle vision inchangée.
+          fastPath: process.env.MINA_BROWSER_FAST_PATH === 'true',
         });
         try {
           return await minaFileWorkspace.verifyMission(result, preparedMission);

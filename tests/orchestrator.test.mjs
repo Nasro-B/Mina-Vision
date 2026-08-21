@@ -43,6 +43,39 @@ describe('createMinaOrchestrator', () => {
     expect(state).toMatchObject({ status: 'completed', result: 'Mission terminée : 1 action vérifiée.', actionCount: 1 });
   });
 
+  it('Fast Path : objectif navigateur déterministe → action unique, SANS appeler le modèle', async () => {
+    const executor = createExecutor();
+    const computerUse = { start: vi.fn(), continue: vi.fn() }; // ne doit JAMAIS être appelé
+    const mina = createMinaOrchestrator({ computerUse, executors: { browser: executor } });
+    const state = await mina.run({ goal: 'va sur youtube.com', environment: 'browser', fastPath: true, maxActions: 5, timeoutMs: 10_000 });
+    expect(executor.execute).toHaveBeenCalledWith({ name: 'navigate', url: 'https://youtube.com/' });
+    expect(computerUse.start).not.toHaveBeenCalled(); // boucle vision court-circuitée
+    expect(executor.observe).not.toHaveBeenCalled();
+    expect(state).toMatchObject({ status: 'completed', actionCount: 1 });
+  });
+
+  it('Fast Path : objectif NON couvert (sémantique) → retombe sur la boucle vision normale', async () => {
+    const executor = createExecutor();
+    const computerUse = {
+      start: vi.fn().mockResolvedValue({ interactionId: 'i1', completed: true, text: 'ok', calls: [] }),
+      continue: vi.fn(),
+    };
+    const mina = createMinaOrchestrator({ computerUse, executors: { browser: executor } });
+    await mina.run({ goal: 'clique sur le bouton bleu', environment: 'browser', fastPath: true, maxActions: 5, timeoutMs: 10_000 });
+    expect(computerUse.start).toHaveBeenCalled(); // pas couvert → boucle normale
+  });
+
+  it('Fast Path respecte le broker R-01 : deny → mission stoppée, action jamais exécutée', async () => {
+    const executor = createExecutor();
+    const computerUse = { start: vi.fn(), continue: vi.fn() };
+    const actionAuthorizer = { assess: vi.fn().mockResolvedValue({ decision: 'deny', reason: 'no_grant' }), confirm: vi.fn() };
+    const mina = createMinaOrchestrator({ computerUse, executors: { browser: executor }, actionAuthorizer });
+    const state = await mina.run({ goal: 'va sur youtube.com', environment: 'browser', fastPath: true, maxActions: 5, timeoutMs: 10_000 });
+    expect(actionAuthorizer.assess).toHaveBeenCalledWith(expect.objectContaining({ action: { name: 'navigate', url: 'https://youtube.com/' } }));
+    expect(executor.execute).not.toHaveBeenCalled(); // deny → jamais exécuté
+    expect(state.status).toBe('stopped');
+  });
+
   it('does not expose an ungrounded model completion text when no action was verified', async () => {
     const executor = createExecutor();
     const computerUse = {
