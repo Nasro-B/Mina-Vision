@@ -43,9 +43,12 @@
      16px/750-weight (measured: 5.9:1) — indigo-500 measured 4.47:1, just short of AA. */
   --accent-strong: #5750e8;
   --accent-contrast: #ffffff;
-  --success: #34d399;
-  --success-soft: rgba(52, 211, 153, 0.14);
-  --success-strong: #34d399;
+  /* Nuit = NOIR, pas vert : l'émeraude néon #34d399 servait TOUS les états sains → le sombre « lisait
+     vert » (audit UI 2026-08-21, demande Nasro). Désaturé/assombri → succès subtil sur fond noir, sans
+     inonder. Toujours sémantiquement « vert » (distinct de l'accent indigo et du danger). */
+  --success: #3f9e7c;
+  --success-soft: rgba(63, 158, 124, 0.11);
+  --success-strong: #4bb28c;
   --danger: #ef7266;
   --danger-soft: rgba(239, 114, 102, 0.16);
   --warning: #f0cd7e;
