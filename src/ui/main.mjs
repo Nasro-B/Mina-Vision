@@ -970,11 +970,49 @@ let lastSyncErrorCode = null;
 let lastSyncErrorLoggedAt = 0;
 let syncTickCount = 0;
 
+// Journal d'appels → tâche (SPEC-MINA-COMMS-001 §8.5). ACTIVATION §19 MANUELLE via
+// MINA_CALL_LOG_TASK_INGEST=true : par défaut (non défini) = rien du tout (aucun appel ADB, tick
+// strictement inchangé). Best-effort ABSOLU : totalement isolé du flux messages — n'incrémente
+// JAMAIS syncFailureStreak, anti-spam propre, severity « info » (le blocage EMUI Huawei est ATTENDU,
+// pas une panne). Générique : vise le téléphone primaire détecté (son serial), jamais un appareil en
+// dur. Le domaine communications déduplique et met en file durable ; rien n'est perdu ni rejoué.
+let lastCallLogErrorCode = null;
+let lastCallLogErrorLoggedAt = 0;
+let callLogIngestInFlight = false;
+const ingestCallLogBestEffort = async () => {
+  if (process.env.MINA_CALL_LOG_TASK_INGEST !== 'true') return;
+  if (callLogIngestInFlight) return; // un adb lent ne doit jamais empiler les polls (garde comme le sync)
+  if (!communicationsDomain || communicationsDomain.state === 'locked') return;
+  if (memoryController?.status().locked !== false) return;
+  callLogIngestInFlight = true;
+  try {
+    const device = await getPhoneBridge().detect();
+    if (!device?.deviceId || !device?.serial) return;
+    const text = await getPhoneBridge().queryCallLog(device.serial);
+    const report = communicationsDomain.ingestCallLog(device.deviceId, text);
+    if (report?.tasksQueued > 0) send('mina:event', { type: 'call_log_ingested', ...report });
+  } catch (error) {
+    const code = String(error?.message ?? 'call_log_ingest_failed').slice(0, 120);
+    const now = Date.now();
+    // Anti-spam 30 min : un EMUI qui bloque le provider call_log ne doit pas noyer le journal.
+    if (code !== lastCallLogErrorCode || now - lastCallLogErrorLoggedAt > 30 * 60_000) {
+      lastCallLogErrorCode = code;
+      lastCallLogErrorLoggedAt = now;
+      technicalLog.record({ severity: 'info', scope: 'call-log:ingest', code, message: String(error?.message ?? error).slice(0, 300) });
+    }
+  } finally {
+    callLogIngestInFlight = false;
+  }
+};
+
 const startPhoneMessageSyncLoop = () => {
   if (phoneMessageSyncTimer) return;
   const tick = () => {
     if (memoryController?.status().locked !== false) return;
     syncTickCount += 1;
+    // Journal d'appels : cadence LENTE et indépendante (~60 s = 1 tick sur 12), best-effort, jamais
+    // liée au backoff SMS. Dormant tant que MINA_CALL_LOG_TASK_INGEST≠true (retour immédiat interne).
+    if (syncTickCount % 12 === 0) void ingestCallLogBestEffort();
     // Anti-martèlement : après des échecs répétés, on espace les tentatives (backoff exponentiel)
     // au lieu de bombarder l'ADB toutes les 5 s — 2,4,8,16,32 ticks (jusqu'à ~2,5 min).
     if (syncFailureStreak > 0) {
