@@ -11,6 +11,36 @@
   --shadow: 0 20px 60px rgba(18, 53, 59, 0.11);
 }
 
+/* Thème sombre : l'aide s'ouvrait TOUJOURS en clair aqua même quand l'app était en nuit (rupture de
+   thème signalée par l'audit UI 2026-08-21). Comme tout le style passe par des tokens, redéfinir les
+   tokens suffit. Suit le système (prefers-color-scheme) ET un data-theme explicite si l'app le pose. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ink: #e7eef0;
+    --muted: #93a5ab;
+    --paper: #0e1417;
+    --panel: #171a1d;
+    --line: #293236;
+    --aqua: #2fc7b9;
+    --aqua-soft: #123b38;
+    --coral: #ff8a7d;
+    --shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #e7eef0;
+  --muted: #93a5ab;
+  --paper: #0e1417;
+  --panel: #171a1d;
+  --line: #293236;
+  --aqua: #2fc7b9;
+  --aqua-soft: #123b38;
+  --coral: #ff8a7d;
+  --shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
 * { box-sizing: border-box; }
 
 body {

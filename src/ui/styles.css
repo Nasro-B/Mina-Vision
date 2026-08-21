@@ -275,7 +275,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
   gap: 12px;
   border-left: 4px solid var(--danger);
   background: var(--danger-soft);
-  color: #6e241f;
+  color: var(--danger); /* jamais une couleur codée en dur : #6e241f devenait illisible sur --danger-soft en nuit */
   font-size: 0.86rem;
 }
 .lock-panel[hidden] { display: none; }
