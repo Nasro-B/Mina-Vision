@@ -26,7 +26,8 @@ import { createUserProfileStore } from '../personal/user-profile-store.mjs';
 import { createMemoryServices } from '../memory/composition.mjs';
 import { composeBackupDomain } from '../backup/compose-backup-domain.mjs';
 import { composeCommunicationsDomain } from '../communications/compose-communications-domain.mjs';
-import { mapPulledSmsToEvent } from '../communications/communication-contract.mjs';
+import { mapPulledSmsToEvent, classifySmsForTask } from '../communications/communication-contract.mjs';
+import { createSmsReplyGenerator } from '../communications/sms-reply-generator.mjs';
 import { createCustomTokenMinter } from '../backup/custom-token-minter.mjs';
 import { createFirebaseSdkClient } from '../backup/firebase-backup.mjs';
 import { createMemoryRuntimeController } from '../memory/runtime-controller.mjs';
@@ -876,6 +877,23 @@ const isTelegramOwner = async (sender) => {
   return chatId === ownerChatId;
 };
 
+// Générateur de brouillon de réponse SMS (SPEC-MINA-STANDARDISTE-001 §7 C2). Composé paresseusement :
+// draftReply = le générateur de texte (le même que Telegram), policy = la sms-send-policy. Le corps du
+// SMS entrant est passé comme DONNÉE encadrée (anti-injection). N'existe que si la génération est demandée.
+let smsReplyGenerator = null;
+const getSmsReplyGenerator = () => {
+  smsReplyGenerator ??= createSmsReplyGenerator({
+    persona: 'assistante téléphonique polie et concise',
+    policy: getSmsSendPolicy(),
+    draftReply: async ({ message }) => {
+      const prompt = `Un client a envoyé ce SMS : « ${String(message ?? '').slice(0, 500)} ». Rédige UNE réponse SMS courte, polie et utile, en français. Réponds UNIQUEMENT par le texte de la réponse, sans préambule ni guillemets.`;
+      const generated = await (await telegramTextGenerator()).generate({ text: prompt });
+      return typeof generated === 'string' ? generated : (generated?.text ?? generated?.reply ?? '');
+    },
+  });
+  return smsReplyGenerator;
+};
+
 const getPhoneMessageSync = () => {
   if (!memoryController) throw new Error('memory_runtime_unavailable');
   if (!minaCore) throw new Error('mina_runtime_unavailable');
@@ -918,8 +936,27 @@ const getPhoneMessageSync = () => {
     // Ingestion SMS→tâche (SPEC-MINA-COMMS-001 §12.3). ACTIVATION §19 MANUELLE via MINA_SMS_TASK_INGEST=true :
     // par défaut (non défini) = null = comportement STRICTEMENT inchangé. Le domaine communications est
     // référencé au call-time (déjà composé au déverrouillage) ; best-effort, jamais bloquant.
-    onInboundSms: process.env.MINA_SMS_TASK_INGEST === 'true'
-      ? (message, deviceId) => { try { communicationsDomain?.ingestSms(mapPulledSmsToEvent(message, deviceId)); } catch { /* ingestion différée, jamais fatale */ } }
+    onInboundSms: (process.env.MINA_SMS_TASK_INGEST === 'true' || process.env.MINA_SMS_AUTO_REPLY === 'true')
+      ? (message, deviceId) => {
+          // (a) SMS→tâche (flag MINA_SMS_TASK_INGEST) — best-effort, jamais bloquant.
+          if (process.env.MINA_SMS_TASK_INGEST === 'true') {
+            try { communicationsDomain?.ingestSms(mapPulledSmsToEvent(message, deviceId)); } catch { /* ingestion différée, jamais fatale */ }
+          }
+          // (b) BROUILLON de réponse SMS (flag MINA_SMS_AUTO_REPLY §19) : Mina PROPOSE une réponse au
+          // propriétaire (événement mina:event), JAMAIS d'envoi sans confirmation. SMS entrant = DONNÉE
+          // (anti-injection). Seuls les SMS actionnables déclenchent un brouillon. Off par défaut.
+          if (process.env.MINA_SMS_AUTO_REPLY === 'true' && message?.channel === 'sms') {
+            void (async () => {
+              try {
+                if (!classifySmsForTask(message.body ?? '').warrantsTask) return;
+                const out = await getSmsReplyGenerator().propose({ inbound: { senderE164: message.sender, body: message.body, deviceId } });
+                if (out.decision !== 'skip' && out.reply) {
+                  send('mina:event', { type: 'sms_reply_draft', to: out.recipient, reply: out.reply, decision: out.decision });
+                }
+              } catch { /* brouillon best-effort, jamais fatal */ }
+            })();
+          }
+        }
       : null,
   });
   return phoneMessageSync;
