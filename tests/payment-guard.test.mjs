@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createPaymentGuard } from '../src/agentic/payment-guard.mjs';
 
-describe('payment-guard (C6 — Mina prépare mais ne paie jamais)', () => {
+// `blocked:true` = « étape de paiement : ne pas continuer SANS confirmation » (déclenche la
+// passerelle de confirmation d'achat + le routage credentials sécurisé), PAS « abandonner à jamais ».
+describe('payment-guard (C6 — détecte l’étape de paiement → confirmation, jamais silencieux)', () => {
   const guard = createPaymentGuard();
 
   it('bloque un champ carte bancaire (par autocomplete standard cc-number)', () => {
