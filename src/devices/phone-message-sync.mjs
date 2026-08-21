@@ -22,6 +22,10 @@ export function createPhoneMessageSync({
   telegramResponder,
   ledger,
   retryPolicy = defaultRetryPolicy,
+  // Hook OPTIONNEL d'ingestion des SMS entrants (SPEC-MINA-COMMS-001). Par défaut null = comportement
+  // INCHANGÉ (le SMS est stocké puis acké comme avant). Fourni = chaque SMS passe aussi par ce hook
+  // (classement → tâche différée). Une erreur d'ingestion ne bloque jamais l'ack ni le pull.
+  onInboundSms = null,
   now = () => Date.now(),
 } = {}) {
   if (!phoneBridge?.detect || !phoneBridge?.ensureGatewayService || !phoneBridge?.pullPendingMessages
@@ -83,6 +87,10 @@ export function createPhoneMessageSync({
       // batch — it protects against ever losing a message, independent of the delivery ledger.
       await memoryController.rememberRemoteMessage({ ...message, deviceId: device.deviceId });
       if (message.channel !== 'telegram') {
+        if (onInboundSms && message.channel === 'sms') {
+          // Best-effort : l'ingestion SMS ne bloque jamais l'ack/le pull (le message est déjà stocké).
+          try { await onInboundSms(message, device.deviceId); } catch { /* ingestion différée, jamais fatale */ }
+        }
         toAck.push(message.id);
         continue;
       }

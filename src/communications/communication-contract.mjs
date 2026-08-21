@@ -84,6 +84,21 @@ function normalizeText(value) {
     .replace(/\s+/gu, ' ');
 }
 
+// Mappe un SMS entrant du pull ADB (forme vérifiée dans phone-bridge : { body, channel:'sms', id,
+// sender, sentAtMs }) vers l'entrée de normalizeSmsEvent. Le pull ne porte PAS de subscriptionId → la
+// SIM reste ambiguë ('sim_ambiguous', résolu par normalizeSmsEvent). eventId réutilise l'id du message.
+export function mapPulledSmsToEvent(message = {}, deviceId) {
+  return {
+    deviceId,
+    messageId: String(message.id ?? ''),
+    eventId: String(message.id ?? '') || null,
+    senderE164: message.sender,
+    body: typeof message.body === 'string' ? message.body : '',
+    sentAtMs: Number.isFinite(message.sentAtMs) ? message.sentAtMs : 0,
+    direction: 'inbound',
+  };
+}
+
 export function classifySmsForTask(body = '', { forced = false } = {}) {
   if (forced) return { warrantsTask: true, category: 'forced' };
   const text = normalizeText(body);
