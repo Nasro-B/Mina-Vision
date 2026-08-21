@@ -45,6 +45,26 @@ Prérequis : A fait, PC Bluetooth ON, Samsung ET Huawei appairés SÉPARÉMENT a
 **PASS** = les 13 verts sur les DEUX téléphones. **FAIL** = aucun contournement acoustique ; les appels
 restent en observation ; présenter le brut à Nasro pour redécider l'architecture (§6.3).
 
+### Résultat live 2026-08-21 : **FAIL sur l'adaptateur « Generic Bluetooth »**
+
+Testé 4×, les 2 téléphones. Les tél s'appairent + exposent `Hands-Free HF Audio` en classe **MEDIA** (A2DP,
+lecture), mais pendant un vrai appel routé sur Bluetooth **Windows ne crée AUCUN périphérique d'ENREGISTREMENT
+SCO** (le micro de l'appel). L'adaptateur générique ne remplit pas le rôle HFP **Hands-Free Unit**. Contrainte
+annexe : il ne tient qu'**un HFP à la fois** (heurte §6.1). C'est OS/matériel, pas le code (code prêt : §A + adapter).
+
+**Décision Nasro (b)** : obtenir un **dongle Bluetooth USB à support HFP-HF prouvé** (chipsets **CSR8510** /
+**Broadcom BCM20702** — à VÉRIFIER, ce rôle « PC reçoit l'appel du tél » est rare sur Windows). Alternative
+supportée à évaluer : **Phone Link (Lien avec Windows)**.
+
+**Procédure de retest (2 min) à la réception du dongle** — appel actif routé sur Bluetooth, puis :
+```powershell
+$ff = "<...>\ffmpeg.exe"
+& $ff -hide_banner -list_devices true -f dshow -i dummy 2>&1 | Select-String '\(audio\)'
+# PASS attendu : une entrée « Microphone (... Hands-Free HF ...) » apparaît (= le micro d'appel).
+# Puis capturer 8s + volumedetect : mean_volume nettement > -50 dB pendant que l'appelant parle = RX capturé.
+```
+Si aucun micro Hands-Free n'apparaît → même limite → essayer un autre chipset ou Phone Link.
+
 ---
 
 ## C. Rôle dialer on-device + dépendance app
