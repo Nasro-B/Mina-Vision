@@ -86,8 +86,20 @@ export function createCommunicationLedger({
       sync_state TEXT,
       updated_at INTEGER NOT NULL
     ) STRICT;
+    CREATE TABLE IF NOT EXISTS call_sessions (
+      call_id TEXT PRIMARY KEY,
+      device_id TEXT NOT NULL,
+      dedupe_key TEXT,
+      state TEXT NOT NULL,
+      consent TEXT,
+      media TEXT,
+      error TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    ) STRICT;
     CREATE INDEX IF NOT EXISTS idx_comm_events_occurred ON communication_events(occurred_at_ms);
     CREATE INDEX IF NOT EXISTS idx_comm_events_created ON communication_events(created_at);
+    CREATE INDEX IF NOT EXISTS idx_call_sessions_created ON call_sessions(created_at);
   `);
 
   const selectEvent = db.prepare('SELECT * FROM communication_events WHERE dedupe_key = ?');
@@ -121,6 +133,27 @@ export function createCommunicationLedger({
   const deleteOrphanTasks = db.prepare(
     'DELETE FROM communication_tasks WHERE dedupe_key NOT IN (SELECT dedupe_key FROM communication_events)',
   );
+  const selectCallSession = db.prepare('SELECT * FROM call_sessions WHERE call_id = ?');
+  const insertCallSession = db.prepare(`
+    INSERT INTO call_sessions (call_id, device_id, dedupe_key, state, consent, media, error, created_at, updated_at)
+    VALUES (@call_id, @device_id, @dedupe_key, @state, @consent, @media, @error, @created_at, @updated_at)
+  `);
+  const deleteExpiredCallSessions = db.prepare('DELETE FROM call_sessions WHERE created_at < ?');
+
+  function rowToCallSession(row) {
+    if (!row) return null;
+    return Object.freeze({
+      callId: row.call_id,
+      deviceId: row.device_id,
+      dedupeKey: row.dedupe_key,
+      state: row.state,
+      consent: row.consent,
+      media: row.media, // libellé d'endpoint HFP, JAMAIS de l'audio (§15.1)
+      error: row.error,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    });
+  }
 
   const insertTxn = db.transaction((eventRow, cipher) => {
     insertEvent.run(eventRow);
@@ -226,10 +259,44 @@ export function createCommunicationLedger({
         const removed = deleteExpiredEvents.run(cutoff).changes;
         deleteOrphanPayloads.run();
         deleteOrphanTasks.run();
+        deleteExpiredCallSessions.run(cutoff);
         return removed;
       });
       return { removed: purge() };
     },
+
+    // Session d'appel (§15) : état de conversation, consentement, erreurs, média utilisé — jamais
+    // d'audio. Ouverture idempotente par callId : une reprise ne réinitialise pas une session vivante.
+    openCallSession({ callId, deviceId, dedupeKey = null, state = 'detected' } = {}) {
+      if (typeof callId !== 'string' || !callId || typeof deviceId !== 'string' || !deviceId) {
+        throw new Error('call_session_ids_required');
+      }
+      const existing = selectCallSession.get(callId);
+      if (existing) return rowToCallSession(existing);
+      const at = now();
+      insertCallSession.run({
+        call_id: callId, device_id: deviceId, dedupe_key: dedupeKey, state,
+        consent: null, media: null, error: null, created_at: at, updated_at: at,
+      });
+      return rowToCallSession(selectCallSession.get(callId));
+    },
+
+    updateCallSession(callId, patch = {}) {
+      const current = selectCallSession.get(callId);
+      if (!current) throw new Error('call_session_unknown');
+      const next = {
+        state: patch.state ?? current.state,
+        consent: patch.consent ?? current.consent,
+        media: patch.media ?? current.media,
+        error: patch.error ?? current.error,
+        updated_at: now(),
+      };
+      db.prepare('UPDATE call_sessions SET state = ?, consent = ?, media = ?, error = ?, updated_at = ? WHERE call_id = ?')
+        .run(next.state, next.consent, next.media, next.error, next.updated_at, callId);
+      return rowToCallSession(selectCallSession.get(callId));
+    },
+
+    getCallSession(callId) { return rowToCallSession(selectCallSession.get(callId)); },
 
     count: () => countEvents.get().n,
     close: () => db.close(),
