@@ -54,6 +54,29 @@ describe('Google runtime adapter composition', () => {
     expect(getCredentials).toHaveBeenCalledWith('google-primary');
   });
 
+  it('multi-comptes : un adaptateur mail par compte, mais Tâches/Contacts restent sur google-primary', async () => {
+    const oauth = { request: vi.fn(async () => ({ response: { data: {} } })), generateConsentUrl: vi.fn() };
+    const getCredentials = vi.fn(async () => ({ refreshToken: 'r' }));
+    const result = await createGoogleRuntimeAdapters({
+      // 'google-primary' n'est PAS premier dans la liste : prouve que la préférence n'est pas juste [0].
+      accounts: [
+        { accountId: 'google-contact-gmail-com', provider: 'gmail', address: 'contact@gmail.com' },
+        { accountId: 'google-primary', provider: 'gmail', address: 'nasro@example.com' },
+      ],
+      getClientConfig: vi.fn(async () => JSON.stringify({ clientId: 'c', clientSecret: 's' })),
+      getCredentials,
+      createOAuthClient: vi.fn(async () => oauth),
+    });
+    // Mail = multi-compte : un adaptateur par compte.
+    expect(result.operationalAccountIds).toEqual(expect.arrayContaining(['google-primary', 'google-contact-gmail-com']));
+    expect(result.mailAdapters['google-primary']).toBeDefined();
+    expect(result.mailAdapters['google-contact-gmail-com']).toBeDefined();
+    // Tâches/Contacts (mono-compte) = compte PRINCIPAL, jamais le premier de la liste par hasard.
+    await result.googlePersonalAdapter.create({ title: 'x' }).catch(() => {});
+    expect(getCredentials).toHaveBeenCalledWith('google-primary');
+    expect(getCredentials).not.toHaveBeenCalledWith('google-contact-gmail-com');
+  });
+
   it('fails closed when OAuth client configuration is absent', async () => {
     const result = await createGoogleRuntimeAdapters({
       accounts: [{ accountId: 'google-primary', provider: 'gmail', address: 'nasro@example.com' }],

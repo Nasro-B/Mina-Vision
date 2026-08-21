@@ -39,7 +39,9 @@ export async function createGoogleRuntimeAdapters({
       markSpam: (request) => adapter.markSpam({ ...request, credentialsProvider: getCredentials }),
     });
   }
-  const primary = googleAccounts[0];
+  // Tâches/Calendrier/Contacts (mono-compte) restent sur le compte PRINCIPAL même quand un 2ᵉ compte
+  // Gmail est connecté : on préfère explicitement 'google-primary', sinon le premier par ordre d'index.
+  const primary = googleAccounts.find((account) => account.accountId === 'google-primary') ?? googleAccounts[0];
   const personalOauth = { request: async (credentials, options) => (await oauth.request(credentials, options)).response };
   const credentialsProvider = () => getCredentials(primary.accountId);
   const googlePersonalAdapter = createGooglePersonalAdapter({ oauth: personalOauth, credentialsProvider });

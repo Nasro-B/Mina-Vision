@@ -17,6 +17,7 @@ import { createKeyringFileStorage } from '../src/crypto/keyring-file-storage.mjs
 import { createMailAccountStore } from '../src/mail/mail-account-store.mjs';
 import { GMAIL_SCOPES } from '../src/mail/oauth/google-oauth.mjs';
 import { createGoogleAccountConnector } from '../src/mail/oauth/google-account-connector.mjs';
+import { resolveGoogleAccountId } from '../src/mail/oauth/google-account-id.mjs';
 import { createOAuthLoopbackServer } from '../src/mail/oauth/oauth-loopback-server.mjs';
 import {
   checkGoogleClientProjectMatch,
@@ -138,6 +139,13 @@ async function main() {
     return;
   }
 
+  // Multi-comptes : id UNIQUE par adresse. Reconnexion → réutilise l'id existant ; 1er compte →
+  // 'google-primary' (back-compat) ; compte supplémentaire → id dérivé. Coffre verrouillé → l'index
+  // est illisible, on retombe sur le comportement historique (le connecteur signalera vault_not_initialized).
+  let existingAccounts = [];
+  try { existingAccounts = await mailAccountStore.listStatus(); } catch { existingAccounts = []; }
+  const accountId = resolveGoogleAccountId({ address, existingAccounts });
+
   console.log('\nCréer un client OAuth desktop dans Google Cloud Console si pas déjà fait (une seule fois) :');
   console.log('console.cloud.google.com → APIs & Services → Identifiants → Créer des identifiants → ID client OAuth');
   console.log('→ type « Application de bureau ». Détail complet : docs/operations/GOOGLE-ACCOUNT.md\n');
@@ -157,7 +165,7 @@ async function main() {
       }
     },
     scopes: SCOPES,
-    accountId: 'google-primary',
+    accountId,
     // Le compte vient de l'environnement — jamais d'adresse en dur dans le dépôt public.
     address,
     manualClientConfigAllowed: Boolean(fileConfig || !process.env.FIREBASE_PROJECT_ID?.trim()),
