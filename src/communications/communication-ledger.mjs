@@ -86,6 +86,17 @@ export function createCommunicationLedger({
       sync_state TEXT,
       updated_at INTEGER NOT NULL
     ) STRICT;
+    CREATE TABLE IF NOT EXISTS communication_outbox (
+      op_id TEXT PRIMARY KEY,
+      operation TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      dedupe_key TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at INTEGER NOT NULL DEFAULT 0,
+      last_reason TEXT,
+      updated_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS idx_comm_outbox_dedupe ON communication_outbox(dedupe_key);
     CREATE TABLE IF NOT EXISTS call_sessions (
       call_id TEXT PRIMARY KEY,
       device_id TEXT NOT NULL,
@@ -139,6 +150,29 @@ export function createCommunicationLedger({
     VALUES (@call_id, @device_id, @dedupe_key, @state, @consent, @media, @error, @created_at, @updated_at)
   `);
   const deleteExpiredCallSessions = db.prepare('DELETE FROM call_sessions WHERE created_at < ?');
+
+  // Store SQLite pour l'outbox durable : implémente l'interface attendue par createCommunicationOutbox
+  // (get/put/remove/all/dedupe*). Le row PORTE la dedupe_key → dedupePut/dedupeRemove sont implicites.
+  const selectOutbox = db.prepare('SELECT * FROM communication_outbox WHERE op_id = ?');
+  const selectAllOutbox = db.prepare('SELECT * FROM communication_outbox');
+  const selectOutboxByDedupe = db.prepare('SELECT op_id FROM communication_outbox WHERE dedupe_key = ? LIMIT 1');
+  const deleteOutbox = db.prepare('DELETE FROM communication_outbox WHERE op_id = ?');
+  const countOutbox = db.prepare('SELECT COUNT(*) AS n FROM communication_outbox');
+  const upsertOutbox = db.prepare(`
+    INSERT INTO communication_outbox (op_id, operation, payload_json, dedupe_key, attempts, next_attempt_at, last_reason, updated_at)
+    VALUES (@op_id, @operation, @payload_json, @dedupe_key, @attempts, @next_attempt_at, @last_reason, @updated_at)
+    ON CONFLICT(op_id) DO UPDATE SET
+      operation = excluded.operation, payload_json = excluded.payload_json, dedupe_key = excluded.dedupe_key,
+      attempts = excluded.attempts, next_attempt_at = excluded.next_attempt_at, last_reason = excluded.last_reason,
+      updated_at = excluded.updated_at
+  `);
+  function rowToOutboxEntry(row) {
+    if (!row) return undefined;
+    return {
+      opId: row.op_id, operation: row.operation, payload: JSON.parse(row.payload_json),
+      dedupeKey: row.dedupe_key, attempts: row.attempts, nextAttemptAt: row.next_attempt_at, lastReason: row.last_reason,
+    };
+  }
 
   function rowToCallSession(row) {
     if (!row) return null;
@@ -297,6 +331,27 @@ export function createCommunicationLedger({
     },
 
     getCallSession(callId) { return rowToCallSession(selectCallSession.get(callId)); },
+
+    // Store durable à injecter dans createCommunicationOutbox({ store }) : la file d'ops survit à un
+    // redémarrage (une tâche SMS mise en file avant que le drain OAuth existe n'est jamais perdue).
+    outboxStore() {
+      return {
+        get: (opId) => rowToOutboxEntry(selectOutbox.get(opId)),
+        put: (opId, entry) => {
+          upsertOutbox.run({
+            op_id: entry.opId, operation: entry.operation, payload_json: JSON.stringify(entry.payload ?? {}),
+            dedupe_key: entry.dedupeKey ?? null, attempts: entry.attempts ?? 0,
+            next_attempt_at: entry.nextAttemptAt ?? 0, last_reason: entry.lastReason ?? null, updated_at: now(),
+          });
+        },
+        remove: (opId) => deleteOutbox.run(opId).changes > 0,
+        all: () => selectAllOutbox.all().map(rowToOutboxEntry),
+        dedupeGet: (key) => selectOutboxByDedupe.get(key)?.op_id,
+        dedupePut: () => {}, // le row porte déjà dedupe_key
+        dedupeRemove: () => {}, // géré par remove(opId)
+        size: () => countOutbox.get().n,
+      };
+    },
 
     count: () => countEvents.get().n,
     close: () => db.close(),
