@@ -14,7 +14,7 @@ import { assessFrameQuality, decideLensFlip, frameStatsFromGrayscale } from '../
 import {
   cloudzirPaletteColors, createBargeInDetector, createCloudzirPalettePreference,
   createVoiceAnimationPreference, createVoicePresence, isPlaybackSuppressed, isReadbackShieldHolding,
-  nextCloudzirPalette, normalizeVoiceLevel, readbackShieldDuration,
+  nextCloudzirPalette, normalizeVoiceLevel, readbackShieldDuration, STREAMED_AUDIO_SHIELD_MS,
 } from './voice-presence.mjs';
 
 const api = window.mina;
@@ -245,6 +245,15 @@ let readbackShieldUntil = 0;
 // déjà commencé (lastVoiceAudioAt > readbackArmedAt) : tant qu'il n'a pas commencé, on garde le micro
 // muet ; une fois commencé, on ne rouvre qu'à la vraie fin, jamais sur un creux passager de la file.
 let readbackArmedAt = 0;
+// Les réponses CONVERSATIONNELLES (voix live Gemini) arrivent en chunks audio bruts, SANS passer
+// par say() : elles n'armaient donc jamais le bouclier — le micro alimentait le serveur pendant que
+// Mina parlait, son propre écho (mal annulé sur une enceinte Bluetooth externe : la latence BT +
+// acoustique dépasse le filtre AEC du navigateur) revenait en STT (« Voix entendue : Merci, Nasro »)
+// et le VAD serveur la coupait (« Parole coupée ») sans que personne ne parle. Chaque chunk pousse
+// donc le même bouclier assez loin pour enjamber l'écart jusqu'au chunk suivant (gigue réseau/IPC) ET
+// la traîne post-parole. La réouverture FINE reste gouvernée par isReadbackShieldHolding (file vide ET
+// dernier chunk ≥ tailMs) : cette borne extérieure empêche seulement le bouclier d'être jugé inactif
+// au milieu de la salve. STREAMED_AUDIO_SHIELD_MS (> tailMs) vit dans voice-presence.mjs.
 const bargeInDetector = createBargeInDetector();
 
 const say = async (text) => {
@@ -542,6 +551,11 @@ const scheduledVoiceSources = new Set();
 const playPcm24 = async (payload) => {
   if (isPlaybackSuppressed({ suppressedAt: playbackSuppressedAt, now: Date.now() })) return;
   lastVoiceAudioAt = Date.now();
+  // Arme/étend le bouclier micro pour l'audio STREAMÉ aussi (pas seulement les lignes déterministes
+  // de say()). max() : ne rétrécit jamais un bouclier déterministe déjà plus long (long brief). Placé
+  // APRÈS la garde isPlaybackSuppressed → un chunk résiduel du tour tué par un vrai barge-in ne
+  // réarme pas le bouclier (il est ignoré plus haut).
+  readbackShieldUntil = Math.max(readbackShieldUntil, lastVoiceAudioAt + STREAMED_AUDIO_SHIELD_MS);
   const bytes = payload?.audio instanceof Uint8Array ? payload.audio : new Uint8Array(payload?.audio ?? []);
   if (bytes.byteLength < 2) return;
   if (!playbackContext) playbackContext = new AudioContext({ sampleRate: 24_000 });

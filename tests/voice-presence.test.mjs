@@ -248,3 +248,42 @@ describe('isReadbackShieldHolding — le brief long tient sur un creux de file, 
     expect(isReadbackShieldHolding({ shieldUntil, now: lastAudioAt + READBACK_SHIELD_TAIL_MS, armedAt, queuedSources: 0, lastAudioAt })).toBe(false);
   });
 });
+
+// Réponses CONVERSATIONNELLES streamées (voix live) : elles ne passent PAS par say(), donc le
+// bouclier n'était jamais armé (shieldUntil=0) et Mina s'entendait elle-même (« Voix entendue :
+// Merci, Nasro » / « Parole coupée » alors que personne ne parle). Le fix arme le MÊME bouclier
+// par chunk via shieldUntil = lastAudioAt + STREAMED_AUDIO_SHIELD_MS, avec armedAt=0 (jamais armé
+// par say). Ces tests modélisent EXACTEMENT cette formule côté renderer.
+describe('bouclier micro pour l’audio STREAMÉ (bug « Mina m’écoute alors que je parle pas »)', () => {
+  it('LE BUG (ancien) : sans armement (shieldUntil=0), le bouclier ne tient PAS → écho envoyé au serveur', async () => {
+    const { isReadbackShieldHolding } = await import('../src/ui/voice-presence.mjs');
+    // Un chunk streamé vient de jouer, mais rien n'a armé le bouclier : isShieldActive faux → false.
+    expect(isReadbackShieldHolding({ shieldUntil: 0, now: 5_050, armedAt: 0, queuedSources: 1, lastAudioAt: 5_000 })).toBe(false);
+  });
+
+  it('LE FIX : un chunk streamé (armedAt=0) arme le bouclier et il tient pendant la lecture', async () => {
+    const { isReadbackShieldHolding, STREAMED_AUDIO_SHIELD_MS } = await import('../src/ui/voice-presence.mjs');
+    const chunkAt = 5_000;
+    const shieldUntil = chunkAt + STREAMED_AUDIO_SHIELD_MS; // exactement la formule du renderer
+    // file non vide : tient ; creux passager entre chunks (file vide, chunk récent) : tient aussi.
+    expect(isReadbackShieldHolding({ shieldUntil, now: 5_050, armedAt: 0, queuedSources: 1, lastAudioAt: chunkAt })).toBe(true);
+    expect(isReadbackShieldHolding({ shieldUntil, now: 5_200, armedAt: 0, queuedSources: 0, lastAudioAt: chunkAt })).toBe(true);
+  });
+
+  it('rouvre le micro à la vraie fin de la salve streamée, et isShieldActive tient JUSQUE-LÀ', async () => {
+    const { isReadbackShieldHolding, STREAMED_AUDIO_SHIELD_MS, READBACK_SHIELD_TAIL_MS } = await import('../src/ui/voice-presence.mjs');
+    const lastChunkAt = 6_000;
+    const shieldUntil = lastChunkAt + STREAMED_AUDIO_SHIELD_MS;
+    const reopenAt = lastChunkAt + READBACK_SHIELD_TAIL_MS;
+    // Juste avant le tail : tient. À la frontière du tail : rouvre. La réouverture vient du tail,
+    // PAS d'un isShieldActive qui retombe — d'où l'invariant ci-dessous.
+    expect(isReadbackShieldHolding({ shieldUntil, now: reopenAt - 1, armedAt: 0, queuedSources: 0, lastAudioAt: lastChunkAt })).toBe(true);
+    expect(isReadbackShieldHolding({ shieldUntil, now: reopenAt, armedAt: 0, queuedSources: 0, lastAudioAt: lastChunkAt })).toBe(false);
+    expect(reopenAt).toBeLessThan(shieldUntil); // isShieldActive est encore vrai au moment du reopen
+  });
+
+  it('INVARIANT : STREAMED_AUDIO_SHIELD_MS > tail (sinon isShieldActive retombe avant la traîne, bug de retour)', async () => {
+    const { STREAMED_AUDIO_SHIELD_MS, READBACK_SHIELD_TAIL_MS } = await import('../src/ui/voice-presence.mjs');
+    expect(STREAMED_AUDIO_SHIELD_MS).toBeGreaterThan(READBACK_SHIELD_TAIL_MS);
+  });
+});

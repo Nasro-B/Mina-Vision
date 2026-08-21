@@ -127,6 +127,13 @@ export function isShieldActive({ shieldUntil, now } = {}) {
 // brief (jitter IPC/réseau) — bien plus court que ce délai, donc jamais pris pour une vraie fin.
 export const READBACK_SHIELD_TAIL_MS = 900;
 
+// Les réponses conversationnelles (voix live) arrivent en chunks audio SANS texte connu ni bouclier
+// pré-armé — contrairement aux lignes déterministes. Chaque chunk pousse donc le bouclier de cette
+// durée pour enjamber l'écart jusqu'au chunk suivant (gigue réseau/IPC) et la traîne. La réouverture
+// fine reste gouvernée par isReadbackShieldHolding ; cette borne évite seulement que le bouclier soit
+// jugé inactif au milieu de la salve. DOIT dépasser le tail, sinon isShieldActive retombe trop tôt.
+export const STREAMED_AUDIO_SHIELD_MS = READBACK_SHIELD_TAIL_MS + 1_500;
+
 // Le bouclier micro tient tant que la voix de Mina COULE réellement — pas seulement pendant la borne
 // estimée. Trois phases : (1) avant le premier chunk du tour (`lastAudioAt <= armedAt`), on mute en
 // attendant que la lecture démarre ; (2) pendant la salve (file non vide OU dernier chunk < tailMs),
