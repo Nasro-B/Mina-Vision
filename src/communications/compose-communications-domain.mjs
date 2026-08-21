@@ -39,7 +39,7 @@ const STUB_AUDIO_PORT = Object.freeze({
 });
 
 export function composeCommunicationsDomain({
-  masterKey = null, filename, nativeBinding, taskApi = null, taskStore = null, audioPort = null, now = () => Date.now(),
+  masterKey = null, filename, nativeBinding, taskApi = null, taskApiProvider = null, taskStore = null, audioPort = null, now = () => Date.now(),
 } = {}) {
   let key = null;
   let seal = null;
@@ -58,16 +58,27 @@ export function composeCommunicationsDomain({
   const hfpAdapter = createBluetoothHfpMediaAdapter({ audioPort: audioPort ?? STUB_AUDIO_PORT, now });
   const callPolicy = createCallConversationPolicy();
 
-  const googleConnected = typeof taskApi?.insertTask === 'function';
-  const taskSync = googleConnected ? createCommunicationTaskSync({ taskApi, store: taskStore, outbox: null }) : null;
-  const drain = taskSync ? createCommunicationTaskDrain({ ledger, outbox, taskSync, now }) : null;
+  // Le taskApi peut être fourni STATIQUEMENT (tests) ou via un PROVIDER lazy (runtime : le compte Google
+  // se connecte APRÈS la composition du domaine — le provider le résout au moment du drain, sans redémarrage).
+  const resolveTaskApi = () => (typeof taskApiProvider === 'function' ? taskApiProvider() : taskApi);
+  const isConnected = () => typeof resolveTaskApi()?.insertTask === 'function';
+  const computeState = () => (!masterKey ? 'locked' : (isConnected() ? 'operational' : 'degraded'));
 
-  const state = !masterKey ? 'locked' : (googleConnected ? 'operational' : 'degraded');
-  const reason = !masterKey ? 'coffre_verrouille' : (googleConnected ? null : 'google_tasks_non_connecte');
+  // Le drain est (re)construit paresseusement quand l'API cible change (Google enfin connecté).
+  let cachedApi = null;
+  let cachedDrain = null;
+  function drainFor(api) {
+    if (api !== cachedApi) {
+      cachedApi = api;
+      const taskSync = createCommunicationTaskSync({ taskApi: api, store: taskStore, outbox: null });
+      cachedDrain = createCommunicationTaskDrain({ ledger, outbox, taskSync, now });
+    }
+    return cachedDrain;
+  }
 
   return Object.freeze({
-    state,
-    reason,
+    state: computeState(),
+    reason: !masterKey ? 'coffre_verrouille' : (isConnected() ? null : 'google_tasks_non_connecte'),
     ledger,
     fleet,
     outbox,
@@ -81,10 +92,11 @@ export function composeCommunicationsDomain({
     routeOutbound: (command) => outboundRouter.route(command),
     reconcile: (registry) => reconcileFleet({ fleet, registry }),
     async drainTasks() {
-      if (!drain) return Object.freeze({ skipped: true, reason: 'google_tasks_non_connecte' });
-      return drain.drainOnce();
+      const api = resolveTaskApi();
+      if (typeof api?.insertTask !== 'function') return Object.freeze({ skipped: true, reason: 'google_tasks_non_connecte' });
+      return drainFor(api).drainOnce();
     },
-    status: () => Object.freeze({ state, events: ledger.count(), pendingTasks: outbox.size() }),
+    status: () => Object.freeze({ state: computeState(), events: ledger.count(), pendingTasks: outbox.size() }),
     close: () => { try { ledger.close(); } finally { if (key) key.fill(0); } },
   });
 }

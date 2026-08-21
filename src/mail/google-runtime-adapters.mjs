@@ -1,6 +1,7 @@
 import { createGmailAdapter } from './adapters/gmail.mjs';
 import { createGoogleOAuthClient } from './oauth/google-oauth.mjs';
 import { createGooglePersonalAdapter } from '../personal/adapters/google-personal.mjs';
+import { createGoogleTasksListAdapter } from '../personal/adapters/google-tasks-list-adapter.mjs';
 
 export async function createGoogleRuntimeAdapters({
   accounts = [], getClientConfig, getCredentials, createOAuthClient = createGoogleOAuthClient,
@@ -39,13 +40,16 @@ export async function createGoogleRuntimeAdapters({
     });
   }
   const primary = googleAccounts[0];
-  const googlePersonalAdapter = createGooglePersonalAdapter({
-    oauth: { request: async (credentials, options) => (await oauth.request(credentials, options)).response },
-    credentialsProvider: () => getCredentials(primary.accountId),
-  });
+  const personalOauth = { request: async (credentials, options) => (await oauth.request(credentials, options)).response };
+  const credentialsProvider = () => getCredentials(primary.accountId);
+  const googlePersonalAdapter = createGooglePersonalAdapter({ oauth: personalOauth, credentialsProvider });
+  // Adaptateur Tasks MULTI-LISTES pour le domaine communications (liste dédiée « Mina — Appels & SMS »),
+  // partageant l'OAuth/les credentials du compte Google primaire.
+  const googleTasksListAdapter = createGoogleTasksListAdapter({ oauth: personalOauth, credentialsProvider });
   return Object.freeze({
     mailAdapters: Object.freeze(mailAdapters),
     googlePersonalAdapter,
+    googleTasksListAdapter,
     operationalAccountIds: Object.freeze(googleAccounts.map((account) => account.accountId)),
     reason: null,
   });

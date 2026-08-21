@@ -468,6 +468,7 @@ let lessonsStore = null;
 // Domaine de sauvegarde chiffrée de la mémoire (Firebase) — composé au déverrouillage du coffre.
 let backupDomain = null;
 let communicationsDomain = null;
+let communicationsTaskApi = null; // adaptateur Google Tasks multi-listes, posé quand le compte Google connecte
 // État RÉEL du domaine maison connectée, résolu à la composition, rapporté honnêtement au catalogue.
 let homeCapabilityLevel = 'degraded';
 let homeCapabilityReason = 'aucun_connecteur_configure';
@@ -2796,7 +2797,9 @@ app.whenReady().then(async () => {
           masterKey,
           filename: path.join(app.getPath('userData'), 'mina-communications.sqlite'),
           nativeBinding,
-          taskApi: null,
+          // Résolution lazy : le drain SMS→Tasks devient réel dès que le compte Google est connecté (§13),
+          // sans redémarrage. Tant qu'il ne l'est pas, les tâches s'accumulent dans l'outbox durable.
+          taskApiProvider: () => communicationsTaskApi,
         });
         void activityJournal?.append('communications_domain', { state: communicationsDomain.state, reason: communicationsDomain.reason });
       } catch (error) {
@@ -3146,6 +3149,9 @@ app.whenReady().then(async () => {
     mailSyncServiceRef = mailSyncService;
     mailPolicyRef = mailPolicy;
     if (googleRuntime.googlePersonalAdapter) {
+      // Le domaine communications résout ce taskApi paresseusement au moment du drain (§13) : le compte
+      // Google se connecte APRÈS la composition du domaine, sans redémarrage.
+      communicationsTaskApi = googleRuntime.googleTasksListAdapter ?? null;
       const personalHub = createPersonalDataHub({ adapters: [googleRuntime.googlePersonalAdapter] });
       const confirmationService = { confirm: async ({ reason }) => confirmSensitiveAction({ reason, action: { name: 'personal.write' } }) };
       const simpleActionVerifier = { verify: async ({ receipt }) => ({ confirmed: Boolean(receipt) }) };
